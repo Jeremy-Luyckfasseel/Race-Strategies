@@ -12,12 +12,11 @@ import {
 
 // Color map for tire compounds
 const COMPOUND_COLORS = {
-  RH:  '#5b9bd5',
-  RM:  '#ed7d31',
-  RS:  '#ff0000',
-  RSS: '#c00000',
-  IM:  '#92d050',
-  WW:  '#4ea6dc',
+  H: '#5b9bd5',
+  M: '#ed7d31',
+  S: '#ff0000',
+  IM: '#92d050',
+  W: '#4ea6dc',
 };
 
 const DEFAULT_COLOR = '#aaaaaa';
@@ -36,41 +35,69 @@ function CustomTooltip({ active, payload }) {
       <div>Laps: {stint.startLap} – {stint.endLap}</div>
       <div>Count: {stint.lapsInStint} laps</div>
       <div>Compound: {stint.compoundName}</div>
-      {stint.fuelToAdd > 0 && <div>Fuel added: +{stint.fuelToAdd.toFixed(1)} L</div>}
+      {stint.fuelToAddLiters > 0 && <div>Fuel added: +{stint.fuelToAddLiters.toFixed(1)} L</div>}
       {stint.tiresChanged && <div>🔄 Tires changed</div>}
+      {stint.pitStopTimeSecs > 0 && <div>Pit time: {stint.pitStopTimeSecs.toFixed(1)}s</div>}
       {stint.warning && <div className="tt-warning">⚠ {stint.warning}</div>}
     </div>
   );
+}
+
+/**
+ * Filter pit lap labels to avoid overlap: if two pit laps are within 5 laps
+ * of each other, only show every other label.
+ */
+function filterPitLabels(pitLaps) {
+  if (pitLaps.length <= 1) return pitLaps.map(lap => ({ lap, showLabel: true }));
+
+  const result = [];
+  let lastShown = -Infinity;
+
+  for (let i = 0; i < pitLaps.length; i++) {
+    const lap = pitLaps[i];
+    const showLabel = (lap - lastShown) >= 5;
+    result.push({ lap, showLabel });
+    if (showLabel) lastShown = lap;
+  }
+
+  return result;
 }
 
 export default function StrategyTimeline({ stints, totalLaps }) {
   if (!stints || stints.length === 0) return null;
 
   // Transform stints into Recharts horizontal bar data
-  // Each stint: { stintNum, start, width, ... }
   const data = stints.map(s => ({
     ...s,
-    // recharts stacked: offset = startLap - 1, width = lapsInStint
     offset: s.startLap - 1,
     width: s.lapsInStint,
     name: `S${s.stintNum}`,
   }));
 
-  // Pit stop lap markers
-  const pitLaps = stints.filter(s => s.pitLap !== null).map(s => s.pitLap);
+  // Pit stop lap markers with overlap filtering
+  const rawPitLaps = stints.filter(s => s.pitLap !== null).map(s => s.pitLap);
+  const pitLabels = filterPitLabels(rawPitLaps);
+
+  // Dynamic chart height for many stints
+  const chartHeight = Math.max(120, stints.length * 52 + 40);
+
+  // Filter legend to only show compounds that appear in the stints array
+  const usedCompounds = new Set(stints.map(s => s.compound));
 
   return (
     <div className="timeline-wrapper">
       <h2 className="section-heading">Strategy Timeline</h2>
       <div className="timeline-legend">
-        {Object.entries(COMPOUND_COLORS).map(([id, color]) => (
-          <span key={id} className="legend-item">
-            <span className="legend-swatch" style={{ background: color }} />
-            {id}
-          </span>
-        ))}
+        {Object.entries(COMPOUND_COLORS)
+          .filter(([id]) => usedCompounds.has(id))
+          .map(([id, color]) => (
+            <span key={id} className="legend-item">
+              <span className="legend-swatch" style={{ background: color }} />
+              {id}
+            </span>
+          ))}
       </div>
-      <ResponsiveContainer width="100%" height={Math.max(120, stints.length * 52 + 40)}>
+      <ResponsiveContainer width="100%" height={chartHeight}>
         <BarChart
           layout="vertical"
           data={data}
@@ -112,15 +139,18 @@ export default function StrategyTimeline({ stints, totalLaps }) {
             ))}
           </Bar>
 
-          {/* Pit stop markers */}
-          {pitLaps.map(lap => (
+          {/* Pit stop markers with overlap-aware labels */}
+          {pitLabels.map(({ lap, showLabel }) => (
             <ReferenceLine
               key={lap}
               x={lap}
               stroke="#FFD700"
               strokeDasharray="4 2"
               strokeWidth={1.5}
-              label={{ value: `P${lap}`, position: 'top', fill: '#FFD700', fontSize: 9 }}
+              label={showLabel
+                ? { value: `P${lap}`, position: 'top', fill: '#FFD700', fontSize: 9 }
+                : undefined
+              }
             />
           ))}
         </BarChart>
