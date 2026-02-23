@@ -39,9 +39,18 @@
 }
 
 /* ── Reset ── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
-html { font-size: 16px; scroll-behavior: smooth; }
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
 
 body {
   font-family: var(--font-ui);
@@ -69,19 +78,22 @@ body {
   position: sticky;
   top: 0;
   z-index: 100;
-  box-shadow: 0 4px 32px rgba(0,0,0,0.5), var(--accent-glow);
+  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.5), var(--accent-glow);
 }
 
 .header-inner {
   max-width: 1600px;
-  margin: 0 auto;
+  margin: 0;
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 14px 0;
 }
 
-.header-logo { font-size: 2rem; line-height: 1; }
+.header-logo {
+  font-size: 2rem;
+  line-height: 1;
+}
 
 .header-title {
   font-family: var(--font-display);
@@ -108,7 +120,7 @@ body {
   flex: 1;
   max-width: 1600px;
   width: 100%;
-  margin: 0 auto;
+  margin: 0;
   align-items: start;
 }
 
@@ -219,12 +231,15 @@ input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
 }
 
-input:focus, select:focus {
+input:focus,
+select:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(255,215,0,0.18);
+  box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.18);
 }
 
-select option { background: var(--bg-3); }
+select option {
+  background: var(--bg-3);
+}
 
 /* Slider */
 .slider-row {
@@ -254,7 +269,7 @@ input[type="range"]::-webkit-slider-thumb {
   border-radius: 50%;
   background: var(--accent);
   cursor: pointer;
-  box-shadow: 0 0 6px rgba(255,215,0,0.5);
+  box-shadow: 0 0 6px rgba(255, 215, 0, 0.5);
   transition: transform var(--transition);
 }
 
@@ -286,7 +301,11 @@ input[type="range"]::-webkit-slider-thumb:hover {
   cursor: pointer;
 }
 
-.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
 
 .toggle-slider {
   position: absolute;
@@ -309,12 +328,12 @@ input[type="range"]::-webkit-slider-thumb:hover {
   transition: transform var(--transition), background var(--transition);
 }
 
-.toggle-switch input:checked + .toggle-slider {
+.toggle-switch input:checked+.toggle-slider {
   background: var(--accent-dim);
   border-color: var(--accent);
 }
 
-.toggle-switch input:checked + .toggle-slider::before {
+.toggle-switch input:checked+.toggle-slider::before {
   transform: translateX(20px);
   background: var(--accent);
 }
@@ -354,7 +373,9 @@ input[type="range"]::-webkit-slider-thumb:hover {
   transition: color var(--transition);
 }
 
-.preset-delete:hover { color: var(--danger); }
+.preset-delete:hover {
+  color: var(--danger);
+}
 
 .save-preset-row {
   display: flex;
@@ -386,6 +407,32 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: var(--bg-0);
 }
 
+.btn-cta {
+  background: var(--accent);
+  color: var(--bg-0);
+  border: none;
+  padding: 12px 20px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition);
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.btn-cta:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 0 12px var(--accent-dim);
+}
+
+.calculate-btn {
+  width: 100%;
+  margin-top: 16px;
+}
+
 .btn-ghost {
   background: transparent;
   border: 1px solid var(--border-light);
@@ -404,7 +451,10 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: var(--text-secondary);
 }
 
-.reset-btn { width: 100%; margin-top: 4px; }
+.reset-btn {
+  width: 100%;
+  margin-top: 4px;
+}
 
 /* ========================================================================
    Results Summary — KPI Cards
@@ -529,7 +579,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
   font-size: 0.8rem;
   color: var(--text-primary);
   line-height: 1.7;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
 .tt-title {
@@ -547,8 +597,13 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 
 /* Recharts overrides */
-.recharts-surface { overflow: visible; }
-.recharts-text { font-family: var(--font-ui) !important; }
+.recharts-surface {
+  overflow: visible;
+}
+
+.recharts-text {
+  font-family: var(--font-ui) !important;
+}
 
 /* ========================================================================
    Stint Table
@@ -601,7 +656,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 
 .stint-table tbody tr:hover {
-  background: rgba(255,255,255,0.03);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .stint-table tbody tr:last-child td {
@@ -612,7 +667,9 @@ input[type="range"]::-webkit-slider-thumb:hover {
   background: var(--danger-bg) !important;
 }
 
-.row-warning td { color: #ffb3b3; }
+.row-warning td {
+  color: #ffb3b3;
+}
 
 .stint-num {
   font-family: var(--font-display);
@@ -663,18 +720,184 @@ input[type="range"]::-webkit-slider-thumb:hover {
   letter-spacing: 0.06em;
 }
 
-.compound-RH  { background: rgba(91,155,213,0.2);  color: #5b9bd5; border: 1px solid #5b9bd5; }
-.compound-RM  { background: rgba(237,125,49,0.2);  color: #ed7d31; border: 1px solid #ed7d31; }
-.compound-RS  { background: rgba(255,0,0,0.18);    color: #ff6060; border: 1px solid #ff4444; }
-.compound-RSS { background: rgba(192,0,0,0.2);     color: #ff8080; border: 1px solid #c00000; }
-.compound-IM  { background: rgba(146,208,80,0.18); color: #92d050; border: 1px solid #92d050; }
-.compound-WW  { background: rgba(78,166,220,0.18); color: #4ea6dc; border: 1px solid #4ea6dc; }
+.compound-H {
+  background: rgba(91, 155, 213, 0.2);
+  color: #5b9bd5;
+  border: 1px solid #5b9bd5;
+}
+
+.compound-M {
+  background: rgba(237, 125, 49, 0.2);
+  color: #ed7d31;
+  border: 1px solid #ed7d31;
+}
+
+.compound-S {
+  background: rgba(255, 0, 0, 0.18);
+  color: #ff6060;
+  border: 1px solid #ff4444;
+}
+
+.compound-IM {
+  background: rgba(146, 208, 80, 0.18);
+  color: #92d050;
+  border: 1px solid #92d050;
+}
+
+.compound-W {
+  background: rgba(78, 166, 220, 0.18);
+  color: #4ea6dc;
+  border: 1px solid #4ea6dc;
+}
 
 .table-hint {
   font-size: 0.72rem;
   color: var(--text-muted);
   margin-top: 12px;
   text-align: right;
+}
+
+/* ========================================================================
+   Compound Input Table
+   ======================================================================== */
+
+.compound-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.compound-table th {
+  padding: 6px 8px;
+  text-align: left;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.compound-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.compound-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.compound-name-label {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  margin-left: 6px;
+}
+
+.compound-life-input,
+.compound-laptime-input {
+  width: 64px !important;
+  padding: 4px 6px !important;
+  font-size: 0.82rem !important;
+  text-align: center;
+}
+
+.compound-mandatory-cell {
+  text-align: center;
+}
+
+.toggle-sm {
+  width: 34px;
+  height: 18px;
+}
+
+.toggle-sm .toggle-slider::before {
+  height: 12px;
+  width: 12px;
+  left: 2px;
+  top: 2px;
+}
+
+.toggle-sm input:checked+.toggle-slider::before {
+  transform: translateX(16px);
+}
+
+/* ========================================================================
+   Strategy Comparison Cards
+   ======================================================================== */
+
+.strategy-comparison {
+  margin-top: 4px;
+}
+
+.comparison-title {
+  font-size: 1rem;
+}
+
+.comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.comparison-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  position: relative;
+}
+
+.comparison-card:hover {
+  border-color: var(--border-light);
+}
+
+.comparison-best {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 1px var(--accent-dim), var(--accent-glow);
+}
+
+.best-badge {
+  position: absolute;
+  top: -8px;
+  right: 10px;
+  background: var(--accent);
+  color: var(--bg-0);
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  letter-spacing: 0.04em;
+}
+
+.comparison-compound {
+  display: flex;
+  gap: 4px;
+}
+
+.comparison-label {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.comparison-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.comparison-stats .stat-val {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ========================================================================
@@ -727,8 +950,13 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 
 @keyframes pulse-fade {
-  from { opacity: 0.5; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0.5;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 
@@ -736,16 +964,29 @@ input[type="range"]::-webkit-slider-thumb:hover {
    Scrollbar Styling
    ======================================================================== */
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--bg-4); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-4);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-light);
+}
 
 /* ========================================================================
    Responsive
    ======================================================================== */
 
-@media (max-width: 900px) {
+@media (max-width: 768px) {
   .app-main {
     grid-template-columns: 1fr;
   }
@@ -765,7 +1006,13 @@ input[type="range"]::-webkit-slider-thumb:hover {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .header-title { font-size: 1.4rem; }
+  .comparison-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .header-title {
+    font-size: 1.4rem;
+  }
 }
 
 @media (max-width: 560px) {
@@ -773,9 +1020,15 @@ input[type="range"]::-webkit-slider-thumb:hover {
     grid-template-columns: 1fr 1fr;
   }
 
-  .kpi-value { font-size: 1.5rem; }
+  .kpi-value {
+    font-size: 1.5rem;
+  }
 
-  .header-subtitle { display: none; }
+  .header-subtitle {
+    display: none;
+  }
 
-  .input-panel { padding: 10px; }
+  .input-panel {
+    padding: 10px;
+  }
 }
