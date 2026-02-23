@@ -7,13 +7,19 @@ import { useStrategy } from './hooks/useStrategy';
 
 const DEFAULT_INPUTS = {
   raceDurationHours: 8,
-  lapTime: '2:00',
   tankSize: 100,
-  fuelPerLap: 3.5,
+  lapsPerFullTank: 28,
   fuelMap: 1.0,
-  tireWearLaps: 30,
-  compoundId: 'RH',
-  pitTimeLoss: 60,
+  compounds: [
+    { id: 'H', name: 'Hard', tireLife: 60, mandatory: false, startLapTime: '2:00', halfLapTime: '2:01', endLapTime: '2:03' },
+    { id: 'M', name: 'Medium', tireLife: 40, mandatory: false, startLapTime: '1:58', halfLapTime: '2:00', endLapTime: '2:03' },
+    { id: 'S', name: 'Soft', tireLife: 25, mandatory: false, startLapTime: '1:56', halfLapTime: '1:59', endLapTime: '2:03' },
+    { id: 'IM', name: 'Intermediate', tireLife: 0, mandatory: false, startLapTime: '2:05', halfLapTime: '2:07', endLapTime: '2:10' },
+    { id: 'W', name: 'Wet', tireLife: 0, mandatory: false, startLapTime: '2:10', halfLapTime: '2:13', endLapTime: '2:17' },
+  ],
+  pitBaseSecs: 25,
+  tireChangeSecs: 5,
+  fuelRateLitersPerSec: 4.0,
   mandatoryStops: 1,
   midRaceMode: false,
   currentLap: '',
@@ -26,7 +32,9 @@ export default function App() {
     setInputs(prev => typeof updater === 'function' ? updater(prev) : updater);
   }, []);
 
-  const { strategy, calculating } = useStrategy(inputs);
+  const { result, calculating, calculate } = useStrategy(inputs);
+  const best = result?.best ?? null;
+  const ranked = result?.ranked ?? [];
 
   return (
     <div className="app-root">
@@ -42,23 +50,23 @@ export default function App() {
 
       <main className="app-main">
         <aside className="sidebar">
-          <InputPanel inputs={inputs} onChange={handleChange} />
+          <InputPanel inputs={inputs} onChange={handleChange} onCalculate={calculate} />
         </aside>
 
         <section className={`results-area${calculating ? ' results-calculating' : ''}`}>
-          {calculating && strategy && (
+          {calculating && best && (
             <div className="recalc-badge">⟳ Recalculating…</div>
           )}
-          {!strategy ? (
+          {!best ? (
             <div className="empty-state">
               <span className="empty-icon">📊</span>
-              <p>Enter your race parameters on the left to generate a strategy.</p>
+              <p>Enter your race parameters and click <strong>Calculate Strategy</strong>.</p>
             </div>
           ) : (
             <>
-              <ResultsSummary strategy={strategy} pitTimeLoss={inputs.pitTimeLoss} />
-              <StrategyTimeline stints={strategy.stints} totalLaps={strategy.totalLaps} />
-              <StintTable stints={strategy.stints} />
+              <ResultsSummary ranked={ranked} best={best} />
+              <StrategyTimeline stints={best.strategy.stints} totalLaps={best.strategy.totalLaps} />
+              <StintTable stints={best.strategy.stints} />
             </>
           )}
         </section>
