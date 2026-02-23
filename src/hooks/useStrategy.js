@@ -1,85 +1,81 @@
-import { useState, useEffect } from 'react';
-import { buildStrategy, parseLapTime } from '../logic/strategy';
+import { useState, useCallback } from 'react';
+import { findBestStrategies } from '../logic/strategy';
 
-const DEBOUNCE_MS = 300;
-
+/**
+ * Run findBestStrategies with validated, coerced inputs.
+ * Returns { ranked, best } or null if inputs are invalid.
+ */
 function compute(inputs) {
   const {
     raceDurationHours,
-    lapTime,
     tankSize,
-    fuelPerLap,
+    lapsPerFullTank,
     fuelMap,
-    tireWearLaps,
-    compoundId,
-    pitTimeLoss,
+    compounds,
+    pitBaseSecs,
+    tireChangeSecs,
+    fuelRateLitersPerSec,
     mandatoryStops,
     midRaceMode,
     currentLap,
     currentFuel,
   } = inputs;
 
-  const lapTimeSecs = parseLapTime(lapTime);
-
+  // Basic validation
   if (
-    !raceDurationHours || raceDurationHours <= 0 ||
-    !lapTimeSecs       || lapTimeSecs <= 0 ||
-    !tankSize          || tankSize <= 0 ||
-    !fuelPerLap        || fuelPerLap <= 0
+    !raceDurationHours || Number(raceDurationHours) <= 0 ||
+    !tankSize || Number(tankSize) <= 0 ||
+    !lapsPerFullTank || Number(lapsPerFullTank) <= 0
   ) {
     return null;
   }
 
-  return buildStrategy({
+  // Ensure compounds array has at least one active compound
+  const activeCompounds = (compounds || []).filter(c => c.tireLife > 0);
+  if (activeCompounds.length === 0) return null;
+
+  const ranked = findBestStrategies({
     raceDurationHours: Number(raceDurationHours),
-    lapTimeSecs,
-    tankSize:       Number(tankSize),
-    fuelPerLap:     Number(fuelPerLap),
-    fuelMap:        Number(fuelMap) || 1.0,
-    tireWearLaps:   Number(tireWearLaps) || 30,
-    compoundId,
-    pitTimeLoss:    Number(pitTimeLoss) || 60,
+    tankSize: Number(tankSize),
+    lapsPerFullTank: Number(lapsPerFullTank),
+    fuelMap: Number(fuelMap) || 1.0,
+    compounds: activeCompounds,
+    pitBaseSecs: Number(pitBaseSecs) || 25,
+    tireChangeSecs: Number(tireChangeSecs) || 27,
+    fuelRateLitersPerSec: Number(fuelRateLitersPerSec) || 4.0,
     mandatoryStops: Number(mandatoryStops) || 0,
-    currentLap:     midRaceMode ? Number(currentLap) || 0 : 0,
-    currentFuel:    midRaceMode ? Number(currentFuel) : null,
+    midRaceMode: !!midRaceMode,
+    currentLap: midRaceMode ? Number(currentLap) || 0 : 0,
+    currentFuel: midRaceMode && currentFuel !== '' && currentFuel !== null && !isNaN(currentFuel) ? Number(currentFuel) : null,
   });
+
+  if (!ranked || ranked.length === 0) return null;
+
+  return {
+    ranked,
+    best: ranked[0],
+  };
 }
 
 /**
- * Custom hook that debounces user inputs and returns computed strategy results.
- * The calculation only runs 300ms after the user stops changing values,
- * preventing UI freezes on fast keystrokes.
+ * Custom hook — only computes strategy when `calculate()` is called.
+ * No auto-recalculation on input changes.
  *
  * @param {object} inputs - All user-configurable race inputs
- * @returns {{ strategy: object|null, calculating: boolean }}
+ * @returns {{ result: {ranked, best}|null, calculating: boolean, calculate: () => void }}
  */
 export function useStrategy(inputs) {
-  const [strategy, setStrategy] = useState(() => compute(inputs));
+  const [result, setResult] = useState(null);
   const [calculating, setCalculating] = useState(false);
 
-  useEffect(() => {
+  const calculate = useCallback(() => {
     setCalculating(true);
-    const id = setTimeout(() => {
-      setStrategy(compute(inputs));
+    // Use requestAnimationFrame so the "calculating" state renders first
+    requestAnimationFrame(() => {
+      setResult(compute(inputs));
       setCalculating(false);
-    }, DEBOUNCE_MS);
+    });
+  }, [inputs]);
 
-    return () => clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    inputs.raceDurationHours,
-    inputs.lapTime,
-    inputs.tankSize,
-    inputs.fuelPerLap,
-    inputs.fuelMap,
-    inputs.tireWearLaps,
-    inputs.compoundId,
-    inputs.pitTimeLoss,
-    inputs.mandatoryStops,
-    inputs.midRaceMode,
-    inputs.currentLap,
-    inputs.currentFuel,
-  ]);
-
-  return { strategy, calculating };
+  return { result, calculating, calculate };
 }
