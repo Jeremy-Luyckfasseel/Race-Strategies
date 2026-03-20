@@ -3,7 +3,7 @@ import { formatRaceTime } from '../logic/strategy';
 /**
  * ResultsSummary — KPI cards for the best strategy + comparison grid for top 6.
  */
-export default function ResultsSummary({ ranked, best }) {
+export default function ResultsSummary({ ranked, best, selectedIndex, onSelect }) {
   if (!best) return null;
 
   const strat = best.strategy;
@@ -59,9 +59,18 @@ export default function ResultsSummary({ ranked, best }) {
               const s = entry.strategy;
               const isBest = idx === 0;
               return (
-                <div
-                  key={entry.label}
-                  className={`comparison-card${isBest ? ' comparison-best' : ''}`}
+                  <div
+                  key={`${entry.label}-${idx}`}
+                  className={`comparison-card${isBest ? ' comparison-best' : ''}${idx === selectedIndex ? ' comparison-selected' : ''}`}
+                  onClick={() => onSelect(idx)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSelect(idx);
+                    }
+                  }}
                 >
                   {isBest && <span className="best-badge">★ Best</span>}
                   <div className="comparison-compound">

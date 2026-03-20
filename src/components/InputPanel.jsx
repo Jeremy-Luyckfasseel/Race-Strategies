@@ -144,7 +144,10 @@ export default function InputPanel({ inputs, onChange, onCalculate }) {
         <h3 className="section-title">Race Settings</h3>
 
         <div className="field-group">
-          <label htmlFor="raceDuration">Race Duration (hours)</label>
+          <label htmlFor="raceDuration">
+            {inputs.midRaceMode ? 'Time Remaining (hours)' : 'Race Duration (hours)'}
+            {inputs.midRaceMode && <span className="hint"> (enter time left, not full race)</span>}
+          </label>
           <input
             id="raceDuration"
             type="number"

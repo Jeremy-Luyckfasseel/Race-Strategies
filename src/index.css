@@ -4,7 +4,7 @@
    ======================================================================== */
 
 /* ── Google Font ── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Rajdhani:wght@500;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Rajdhani:wght@500;700&display=swap");
 
 /* ── Custom Properties ── */
 :root {
@@ -20,7 +20,7 @@
   --text-secondary: #9090a8;
   --text-muted: #5a5a72;
 
-  --accent: #FFD700;
+  --accent: #ffd700;
   --accent-dim: rgba(255, 215, 0, 0.15);
   --accent-glow: 0 0 20px rgba(255, 215, 0, 0.25);
 
@@ -34,8 +34,8 @@
 
   --transition: 0.18s ease;
 
-  --font-ui: 'Inter', system-ui, sans-serif;
-  --font-display: 'Rajdhani', 'Inter', sans-serif;
+  --font-ui: "Inter", system-ui, sans-serif;
+  --font-display: "Rajdhani", "Inter", sans-serif;
 }
 
 /* ── Reset ── */
@@ -78,7 +78,9 @@ body {
   position: sticky;
   top: 0;
   z-index: 100;
-  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.5), var(--accent-glow);
+  box-shadow:
+    0 4px 32px rgba(0, 0, 0, 0.5),
+    var(--accent-glow);
 }
 
 .header-inner {
@@ -187,7 +189,7 @@ body {
 }
 
 .section-title::after {
-  content: '';
+  content: "";
   flex: 1;
   height: 1px;
   background: var(--border-light);
@@ -221,7 +223,9 @@ select {
   font-size: 0.88rem;
   font-family: var(--font-ui);
   width: 100%;
-  transition: border-color var(--transition), box-shadow var(--transition);
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition);
   outline: none;
   -moz-appearance: textfield;
 }
@@ -317,7 +321,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 
 .toggle-slider::before {
-  content: '';
+  content: "";
   position: absolute;
   height: 16px;
   width: 16px;
@@ -325,15 +329,17 @@ input[type="range"]::-webkit-slider-thumb:hover {
   top: 3px;
   background: var(--text-muted);
   border-radius: 50%;
-  transition: transform var(--transition), background var(--transition);
+  transition:
+    transform var(--transition),
+    background var(--transition);
 }
 
-.toggle-switch input:checked+.toggle-slider {
+.toggle-switch input:checked + .toggle-slider {
   background: var(--accent-dim);
   border-color: var(--accent);
 }
 
-.toggle-switch input:checked+.toggle-slider::before {
+.toggle-switch input:checked + .toggle-slider::before {
   transform: translateX(20px);
   background: var(--accent);
 }
@@ -491,7 +497,9 @@ input[type="range"]::-webkit-slider-thumb:hover {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  transition: border-color var(--transition), box-shadow var(--transition);
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition);
 }
 
 .kpi-card:hover {
@@ -819,7 +827,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
   top: 2px;
 }
 
-.toggle-sm input:checked+.toggle-slider::before {
+.toggle-sm input:checked + .toggle-slider::before {
   transform: translateX(16px);
 }
 
@@ -849,17 +857,28 @@ input[type="range"]::-webkit-slider-thumb:hover {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  transition: border-color var(--transition), box-shadow var(--transition);
+  transition: all var(--transition);
   position: relative;
+  cursor: pointer;
+  user-select: none;
 }
 
 .comparison-card:hover {
   border-color: var(--border-light);
+  background: rgba(255, 255, 255, 0.02);
+  transform: translateY(-2px);
 }
 
-.comparison-best {
+.comparison-best:not(.comparison-selected) {
+  border-color: var(--border-light);
+}
+
+.comparison-selected {
   border-color: var(--accent) !important;
-  box-shadow: 0 0 0 1px var(--accent-dim), var(--accent-glow);
+  box-shadow:
+    0 0 0 1px var(--accent-dim),
+    var(--accent-glow);
+  background: rgba(255, 215, 0, 0.05);
 }
 
 .best-badge {
@@ -958,7 +977,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
     opacity: 1;
   }
 }
-
 
 /* ========================================================================
    Scrollbar Styling
