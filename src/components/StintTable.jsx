@@ -1,3 +1,5 @@
+import { formatLapTime } from '../logic/strategy';
+
 /**
  * StintTable — renders each stint as a table row.
  * Last stint (pitLap === null) shows FINISH label and dashes for pit-related columns.
@@ -5,6 +7,8 @@
  */
 export default function StintTable({ stints }) {
   if (!stints || stints.length === 0) return null;
+
+  const multiDriver = new Set(stints.map(s => s.driverId).filter(Boolean)).size > 1;
 
   return (
     <div className="stint-table-wrapper">
@@ -14,6 +18,7 @@ export default function StintTable({ stints }) {
           <thead>
             <tr>
               <th>Stint</th>
+              {multiDriver && <th>Driver</th>}
               <th>Start Lap</th>
               <th>End Lap</th>
               <th>Lap Count</th>
@@ -21,6 +26,7 @@ export default function StintTable({ stints }) {
               <th>Fuel to Add (L)</th>
               <th>Tires Changed</th>
               <th>Compound</th>
+              <th>Avg Lap</th>
               <th>Pit Time (s)</th>
             </tr>
           </thead>
@@ -34,6 +40,7 @@ export default function StintTable({ stints }) {
                   title={stint.warning || undefined}
                 >
                   <td className="stint-num">{stint.stintNum}</td>
+                  {multiDriver && <td className="driver-cell">{stint.driverName}</td>}
                   <td>{stint.startLap}</td>
                   <td>{stint.endLap}</td>
                   <td>{stint.lapsInStint}</td>
@@ -56,6 +63,9 @@ export default function StintTable({ stints }) {
                     <span className={`compound-tag compound-${stint.compound}`}>
                       {stint.compound}
                     </span>
+                  </td>
+                  <td className="avg-lap-cell">
+                    {stint.avgLapTimeSecs ? formatLapTime(stint.avgLapTimeSecs) : '—'}
                   </td>
                   <td>
                     {isLast ? '—' : (

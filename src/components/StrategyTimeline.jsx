@@ -8,6 +8,7 @@ import {
   ResponsiveContainer,
   Cell,
   ReferenceLine,
+  ReferenceArea,
 } from 'recharts';
 
 // Color map for tire compounds
@@ -38,6 +39,9 @@ function CustomTooltip({ active, payload }) {
       {stint.fuelToAddLiters > 0 && <div>Fuel added: +{stint.fuelToAddLiters.toFixed(1)} L</div>}
       {stint.tiresChanged && <div>🔄 Tires changed</div>}
       {stint.pitStopTimeSecs > 0 && <div>Pit time: {stint.pitStopTimeSecs.toFixed(1)}s</div>}
+      {stint.pitWindowLatestLap && stint.pitWindowLatestLap > stint.endLap && (
+        <div className="tt-window">Window: pit by L{stint.pitWindowLatestLap}</div>
+      )}
       {stint.warning && <div className="tt-warning">⚠ {stint.warning}</div>}
     </div>
   );
@@ -153,10 +157,24 @@ export default function StrategyTimeline({ stints, totalLaps }) {
               }
             />
           ))}
+          {/* Pit window: shaded area showing how far each stint could be extended */}
+          {stints
+            .filter(s => s.pitLap !== null && s.pitWindowLatestLap && s.pitWindowLatestLap > s.endLap)
+            .map(s => (
+              <ReferenceArea
+                key={`win-${s.stintNum}`}
+                x1={s.endLap}
+                x2={Math.min(s.pitWindowLatestLap, totalLaps)}
+                fill="rgba(255, 215, 0, 0.08)"
+                stroke="rgba(255, 215, 0, 0.25)"
+                strokeDasharray="3 3"
+                strokeWidth={1}
+              />
+            ))}
         </BarChart>
       </ResponsiveContainer>
       <p className="timeline-hint">
-        Gold dashed lines = pit stops · Red outline = warning
+        Gold dashed lines = pit stops · Red outline = warning · Gold shaded region = pit window (how far you could extend)
       </p>
     </div>
   );

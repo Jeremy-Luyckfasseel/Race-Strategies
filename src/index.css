@@ -457,6 +457,8 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: var(--text-secondary);
 }
 
+.print-btn { margin-left: auto; display: block; margin-bottom: 12px; }
+
 .reset-btn {
   width: 100%;
   margin-top: 4px;
@@ -815,6 +817,28 @@ input[type="range"]::-webkit-slider-thumb:hover {
   text-align: center;
 }
 
+.input-invalid {
+  border-color: #e55 !important;
+  box-shadow: 0 0 0 2px rgba(220, 80, 80, 0.25) !important;
+}
+
+.compound-select {
+  width: 100%;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 0.88rem;
+  font-family: var(--font-ui);
+  cursor: pointer;
+}
+
+.compound-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .toggle-sm {
   width: 34px;
   height: 18px;
@@ -892,6 +916,27 @@ input[type="range"]::-webkit-slider-thumb:hover {
   padding: 2px 8px;
   border-radius: 10px;
   letter-spacing: 0.04em;
+}
+
+.delta-badge {
+  position: absolute;
+  top: -8px;
+  right: 10px;
+  background: var(--bg-4);
+  color: var(--text-secondary);
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border-light);
+  letter-spacing: 0.03em;
+}
+
+.show-more-btn {
+  display: block;
+  margin: 12px auto 0;
+  font-size: 0.8rem;
+  padding: 6px 18px;
 }
 
 .comparison-compound {
@@ -1049,4 +1094,261 @@ input[type="range"]::-webkit-slider-thumb:hover {
   .input-panel {
     padding: 10px;
   }
+}
+
+/* ── Drivers ── */
+.driver-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+
+.driver-row {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+}
+
+.driver-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.driver-name-input {
+  flex: 1;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 5px 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.driver-name-input:focus { outline: none; border-color: var(--accent); }
+
+.driver-remove-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+.driver-remove-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+.driver-times-details { margin-top: 6px; }
+.driver-times-summary {
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  padding: 2px 0;
+  user-select: none;
+}
+.driver-times-summary:hover { color: var(--text-primary); }
+
+.driver-compound-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 6px;
+  font-size: 0.78rem;
+}
+.driver-compound-table th, .driver-compound-table td {
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  text-align: center;
+}
+.driver-compound-table th { background: var(--bg-2); color: var(--text-secondary); font-weight: 500; }
+
+.driver-laptime-input { width: 72px; font-size: 0.78rem; padding: 2px 4px; }
+
+.add-driver-btn { width: 100%; margin-top: 4px; }
+
+/* Driver cell in StintTable */
+.driver-cell { color: var(--accent); font-weight: 500; font-size: 0.82rem; }
+
+/* Driver summary chips in ResultsSummary */
+.driver-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 0;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.driver-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 0.82rem;
+}
+.driver-chip-warn { border-color: var(--danger); background: var(--danger-bg); }
+.driver-chip-name { font-weight: 600; color: var(--text-primary); }
+.driver-chip-time { color: var(--accent); }
+.driver-chip-flag { color: var(--danger); font-size: 0.75rem; }
+
+/* ── GT7 Telemetry Section ── */
+.section-title { position: relative; }
+
+.telem-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  margin-left: 8px;
+  vertical-align: middle;
+  transition: background var(--transition), box-shadow var(--transition);
+}
+.telem-status-dot.telem-dot-on {
+  background: var(--success);
+  box-shadow: 0 0 6px rgba(76, 217, 152, 0.6);
+}
+
+.telem-ip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.telem-ip-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.telem-ip-input {
+  flex: 1;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  padding: 6px 10px;
+  font-family: monospace;
+  transition: border-color var(--transition);
+}
+.telem-ip-input:focus { outline: none; border-color: var(--accent); }
+.telem-ip-remove {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 1rem;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--transition), border-color var(--transition);
+}
+.telem-ip-remove:hover { color: var(--danger); border-color: var(--danger); }
+.telem-ip-add { font-size: 0.8rem; padding: 4px 10px; }
+
+.telem-connect-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.telem-url-input {
+  flex: 1;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  padding: 6px 10px;
+  font-family: monospace;
+}
+.telem-url-input:disabled { opacity: 0.5; }
+.telem-btn { white-space: nowrap; padding: 6px 12px; font-size: 0.8rem; }
+
+.telem-waiting { margin-top: 8px; }
+
+.telem-teams { margin-top: 12px; }
+.telem-teams-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.telem-team-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.telem-team-card {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+}
+.telem-team-card:hover { border-color: var(--accent); background: var(--bg-4); }
+.telem-team-card.telem-team-selected {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.telem-team-card.telem-team-pit { opacity: 0.7; }
+
+.telem-team-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.telem-team-num {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--accent);
+  min-width: 24px;
+}
+.telem-team-ip {
+  font-family: monospace;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  flex: 1;
+}
+.telem-track-badge {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+.telem-track-badge.on-track { background: rgba(76, 217, 152, 0.15); color: var(--success); }
+.telem-track-badge.in-pit { background: rgba(255, 215, 0, 0.1); color: var(--accent); }
+
+.telem-team-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 12px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+.telem-team-stats strong { color: var(--text-primary); font-weight: 600; }
+
+/* ── Print ── */
+@media print {
+  .sidebar, .app-header, .app-footer, .print-btn,
+  .show-more-btn, .strategy-comparison, .recalc-badge { display: none !important; }
+  .app-main { display: block; }
+  .results-area { width: 100%; padding: 0; }
+  body { background: white; color: black; }
+  .stint-table th, .stint-table td { border-color: #ccc; color: black; }
+  .section-heading { color: black; }
+  .kpi-card { border: 1px solid #ccc; background: #f5f5f5; }
+  .kpi-value, .kpi-label, .kpi-unit { color: black !important; }
+  .timeline-wrapper { page-break-inside: avoid; }
 }

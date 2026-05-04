@@ -1,9 +1,10 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import InputPanel from "./components/InputPanel";
 import ResultsSummary from "./components/ResultsSummary";
 import StintTable from "./components/StintTable";
 import StrategyTimeline from "./components/StrategyTimeline";
 import { useStrategy } from "./hooks/useStrategy";
+import { useTelemetry } from "./hooks/useTelemetry";
 
 const DEFAULT_INPUTS = {
   raceDurationHours: 8,
@@ -58,17 +59,23 @@ const DEFAULT_INPUTS = {
     },
   ],
   pitBaseSecs: 25,
-  tireChangeSecs: 5,
+  tireChangeSecs: 27,
   fuelRateLitersPerSec: 4.0,
+  fuelWeightPenaltyPerLiter: 0.03,
+  drivers: [{ id: 'd1', name: 'Driver 1', compounds: {} }],
+  minDriverTimeSecs: 7200,
   mandatoryStops: 1,
   midRaceMode: false,
   currentLap: "",
   currentFuel: "",
+  currentCompoundId: "",
+  currentTireAgeLaps: "",
 };
 
 export default function App() {
   const [inputs, setInputs] = useState(DEFAULT_INPUTS);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [telemSelectedIp, setTelemSelectedIp] = useState('');
 
   const handleChange = useCallback((updater) => {
     setInputs((prev) =>
@@ -76,7 +83,25 @@ export default function App() {
     );
   }, []);
 
+  const telem = useTelemetry();
   const { result, calculating, calculate } = useStrategy(inputs);
+
+  // Auto-fill mid-race inputs whenever the selected team sends new telemetry
+  useEffect(() => {
+    if (!telemSelectedIp) return;
+    const data = telem.teams.get(telemSelectedIp);
+    if (!data) return;
+    setInputs(prev => {
+      if (!prev.midRaceMode) return prev;
+      return {
+        ...prev,
+        currentLap: data.currentLap ?? prev.currentLap,
+        currentFuel: data.fuelLiters != null
+          ? Math.round(data.fuelLiters * 10) / 10
+          : prev.currentFuel,
+      };
+    });
+  }, [telem.teams, telemSelectedIp]);
 
 
   const best = result?.best ?? null;
@@ -104,6 +129,9 @@ export default function App() {
               setSelectedIndex(0);
               calculate();
             }}
+            telem={telem}
+            telemSelectedIp={telemSelectedIp}
+            onTelemSelect={setTelemSelectedIp}
           />
         </aside>
 
@@ -123,6 +151,7 @@ export default function App() {
             </div>
           ) : (
             <>
+              <button className="btn-ghost print-btn" onClick={() => window.print()}>Print Strategy</button>
               <ResultsSummary
                 ranked={ranked}
                 best={best}

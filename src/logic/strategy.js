@@ -119,6 +119,24 @@ export function calcPitStopTime(pitBaseSecs, tiresChanged, tireChangeSecs, fuelT
 }
 
 // ---------------------------------------------------------------------------
+// Multi-driver helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Pick which driver should take the next stint.
+ * Priority: driver who still has the most unfulfilled minimum time.
+ * Tie-break: driver with least total accumulated time.
+ */
+function pickNextDriver(drivers, driverTimeSecs, minDriverTimeSecs) {
+  if (drivers.length === 1) return 0;
+  const min = minDriverTimeSecs || 0;
+  const owed = drivers.map((_, i) => Math.max(0, min - driverTimeSecs[i]));
+  const maxOwed = Math.max(...owed);
+  if (maxOwed > 0) return owed.indexOf(maxOwed);
+  return driverTimeSecs.indexOf(Math.min(...driverTimeSecs));
+}
+
+// ---------------------------------------------------------------------------
 // Multi-compound strategy engine (simulation-based)
 // ---------------------------------------------------------------------------
 
@@ -141,15 +159,17 @@ function simulateStrategy(p) {
     startLapOffset,
     initialFuel,
     initialCompound,
-    currentTireAgeLaps
+    currentTireAgeLaps,
+    fuelWeightPenaltyPerLiter,
+    processedDrivers,
+    minDriverTimeSecs,
   } = p;
 
   const stints = [];
   let currentLap = startLapOffset || 1;
   let elapsedSecs = 0;
   let activeComp = initialCompound || compoundPlan[0];
-  let activeTireLifeCap = Math.floor(activeComp.tireLife * 0.9);
-  let tireLapsLeft = currentTireAgeLaps !== undefined ? Math.max(1, activeTireLifeCap - currentTireAgeLaps) : activeTireLifeCap;
+  let tireLapsLeft = Math.max(1, activeComp.tireLife - (currentTireAgeLaps || 0));
 
   // Mid-race logic: use initialFuel to cap Stint 1 fuel limits
   let currentFuelLiters = initialFuel !== null ? initialFuel : tankSize;
@@ -158,10 +178,23 @@ function simulateStrategy(p) {
   let totalDrivingTimeSecs = 0;
   let pitsDone = 0;
 
+  // Multi-driver state
+  const driverTimeSecs = processedDrivers.map(() => 0);
+  let currentDriverIdx = 0;
+
+  const FUEL_ROUND_EPSILON = 0.0001;
+
   while (elapsedSecs < targetRaceTimeSecs) {
-    let fuelLapsLeft = Math.floor((currentFuelLiters / effectiveLitersPerLap) + 1e-9);
+    // Pick driver for this stint before any planning
+    currentDriverIdx = pickNextDriver(processedDrivers, driverTimeSecs, minDriverTimeSecs || 0);
+    const currentDriver = processedDrivers[currentDriverIdx];
+
+    let fuelLapsLeft = Math.floor(currentFuelLiters / effectiveLitersPerLap + FUEL_ROUND_EPSILON);
     if (fuelLapsLeft > effectiveLPT) fuelLapsLeft = effectiveLPT;
     if (fuelLapsLeft < 1) fuelLapsLeft = 1;
+
+    // Latest lap we could push this stint to (fuel OR tires, whichever runs first)
+    const pitWindowLatestLap = currentLap + Math.min(fuelLapsLeft, tireLapsLeft) - 1;
 
     // Per-lap metric logic happens inside the lap loop now
 
@@ -182,11 +215,11 @@ function simulateStrategy(p) {
     let trueT = currentLap + tireLapsLeft - 1;
     let targetStopLap;
     let changeTires = false;
+    const tireChangeMargin = Math.max(1, Math.ceil(activeComp.tireLife * 0.1));
 
     if (limitForMandatory < fuelLapsLeft && limitForMandatory < tireLapsLeft) {
       targetStopLap = currentLap + limitForMandatory - 1;
-      // Change tires if we are close to tire life limits
-      if (targetStopLap >= trueT - 3) changeTires = true;
+      if (targetStopLap >= trueT - tireChangeMargin) changeTires = true;
     } else {
       // Change tires only when tires run out before or simultaneously with fuel
       if (trueT <= trueF) {
@@ -198,7 +231,6 @@ function simulateStrategy(p) {
       }
     }
 
-    // Defensive programming
     if (targetStopLap < currentLap) targetStopLap = currentLap;
 
     let lapsInStint = 0;
@@ -207,24 +239,25 @@ function simulateStrategy(p) {
 
     // Simulate laps sequentially for precision against time buffer
     for (let lap = currentLap; lap <= targetStopLap; lap++) {
-      let tireAge = Math.floor(activeComp.tireLife * 0.9) - tireLapsLeft + lapsInStint;
+      let tireAge = activeComp.tireLife - tireLapsLeft + lapsInStint;
       let tireRatio = tireAge / activeComp.tireLife;
+      // Use current driver's compound times; fall back to global compound times
+      const ct = currentDriver.compTimes[activeComp.id] ?? activeComp;
       let baseLapTime = 0;
       if (tireRatio <= 0.5) {
         let r = tireRatio / 0.5;
-        baseLapTime = activeComp.startSecs + r * (activeComp.halfSecs - activeComp.startSecs);
+        baseLapTime = ct.startSecs + r * (ct.halfSecs - ct.startSecs);
       } else {
         let r = (tireRatio - 0.5) / 0.5;
         if (r > 1.0) r = 1.0;
-        baseLapTime = activeComp.halfSecs + r * (activeComp.endSecs - activeComp.halfSecs);
+        baseLapTime = ct.halfSecs + r * (ct.endSecs - ct.halfSecs);
       }
 
-      let currentFuelThisLap = currentFuelLiters - lapsInStint * effectiveLitersPerLap;
-      let missingFuelLiters = tankSize - currentFuelThisLap;
-      if (missingFuelLiters < 0) missingFuelLiters = 0;
-      let stintTimeGainSecs = missingFuelLiters * 0.01;
-
-      let dynamicLapTime = baseLapTime - stintTimeGainSecs;
+      // Fuel weight correction: full-tank reference times adjusted for current fuel.
+      // As fuel burns the car gets lighter → faster. Correction is negative (speeds up lap).
+      let fuelAtStartOfLap = Math.max(0, currentFuelLiters - lapsInStint * effectiveLitersPerLap);
+      let fuelWeightCorrection = (fuelAtStartOfLap - tankSize) * fuelWeightPenaltyPerLiter;
+      let dynamicLapTime = Math.max(1, baseLapTime + fuelWeightCorrection);
       stintDrivingSecs += dynamicLapTime;
       lapsInStint++;
       if (elapsedSecs + stintDrivingSecs >= targetRaceTimeSecs) {
@@ -254,22 +287,24 @@ function simulateStrategy(p) {
     let fuelToAddLiters = 0;
     let tiresActuallyChanged = false;
     
-    // Capture the compound used for this stint before pit stop swaps it
+    // Capture the compound and driver used for this stint before pit stop swaps them
     let stintCompoundId = activeComp.id;
     let stintCompoundName = activeComp.name;
-    let stintAvgLapTimeSecs = activeComp.avgLapTimeSecs;
+    let stintAvgLapTimeSecs = lapsInStint > 0 ? stintDrivingSecs / lapsInStint : activeComp.avgLapTimeSecs;
+    const stintDriverId = currentDriver.id;
+    const stintDriverName = currentDriver.name;
 
     if (!isLast) {
       pitsDone++;
       let timeRemainingAtPit = targetRaceTimeSecs - elapsedSecs;
       
-      let nextComp = compoundPlan[pitsDone] || compoundPlan[compoundPlan.length - 1];
-      // Find the fastest possible lap time to safely cap remaining laps
-      let fastestLapTime = activeComp.startSecs;
-      let estRemainingLaps = Math.ceil(timeRemainingAtPit / fastestLapTime);
+      let nextComp = compoundPlan[pitsDone % compoundPlan.length];
+      let estRemainingLaps = Math.ceil(timeRemainingAtPit / activeComp.avgLapTimeSecs);
+      // Use next compound's pace for fuel planning — avoids underfueling when switching to a faster compound
+      let estRemainingLapsForFuel = Math.ceil(timeRemainingAtPit / nextComp.avgLapTimeSecs);
 
-      let currentTireAge = Math.floor(activeComp.tireLife * 0.9) - tireLapsLeft + lapsInStint;
-      let currentTireLifeLeft = Math.floor(activeComp.tireLife * 0.9) - currentTireAge;
+      let currentTireAge = activeComp.tireLife - tireLapsLeft + lapsInStint;
+      let currentTireLifeLeft = activeComp.tireLife - currentTireAge;
 
       let isDifferentCompound = activeComp.id !== nextComp.id;
       
@@ -286,7 +321,7 @@ function simulateStrategy(p) {
         nextLimit = Math.ceil(estRemainingLaps / (nextReqStops + 1));
       }
 
-      let nextTireCap = tiresActuallyChanged ? Math.floor(nextComp.tireLife * 0.9) : (tireLapsLeft - lapsInStint);
+      let nextTireCap = tiresActuallyChanged ? nextComp.tireLife : (tireLapsLeft - lapsInStint);
       if (nextTireCap < 1) nextTireCap = 1;
 
       let nextF = effectiveLPT;
@@ -300,7 +335,7 @@ function simulateStrategy(p) {
         else nextStintLaps = nextF;
       }
 
-      let lapsInNextStint = Math.min(nextStintLaps, estRemainingLaps);
+      let lapsInNextStint = Math.min(nextStintLaps, estRemainingLapsForFuel);
 
       // The required total fuel in the tank for the next stint
       let targetFuelLiters = lapsInNextStint * effectiveLitersPerLap + 0.5;
@@ -324,13 +359,16 @@ function simulateStrategy(p) {
 
         if (tiresActuallyChanged) {
           activeComp = nextComp;
-          tireLapsLeft = Math.floor(activeComp.tireLife * 0.9);
+          tireLapsLeft = activeComp.tireLife;
         } else {
           tireLapsLeft -= lapsInStint;
         }
       }
 
     }
+
+    // Accumulate driver time for this stint (driving + pit stop time)
+    driverTimeSecs[currentDriverIdx] += stintDrivingSecs + (isLast ? 0 : pitStopTimeSecs);
 
     stints.push({
       stintNum: stints.length + 1,
@@ -344,27 +382,40 @@ function simulateStrategy(p) {
       compoundName: stintCompoundName,
       pitStopTimeSecs,
       warning,
-      avgLapTimeSecs: stintAvgLapTimeSecs // Correct lap time for this stint
+      pitWindowLatestLap: isLast ? null : pitWindowLatestLap,
+      driverId: stintDriverId,
+      driverName: stintDriverName,
+      avgLapTimeSecs: stintAvgLapTimeSecs,
     });
 
     if (isLast) break;
     currentLap = endLap + 1;
   }
 
-  let maxLapsPerSet = 0;
-  for (let s of stints) {
-    if (s.lapsInStint > maxLapsPerSet) maxLapsPerSet = s.lapsInStint;
-  }
+  // Primary compound = the one used in the most stints; show its tire life as the KPI
+  const compoundUsageCount = {};
+  for (const s of stints) compoundUsageCount[s.compound] = (compoundUsageCount[s.compound] || 0) + 1;
+  const primaryCompoundId = Object.entries(compoundUsageCount).sort((a, b) => b[1] - a[1])[0]?.[0];
+  const primaryCompound = compoundPlan.find(c => c.id === primaryCompoundId);
+  const maxLapsPerSet = primaryCompound ? primaryCompound.tireLife : 0;
+
+  const driverSummary = processedDrivers.map((d, i) => ({
+    id: d.id,
+    name: d.name,
+    totalTimeSecs: driverTimeSecs[i],
+    metMinimum: !minDriverTimeSecs || driverTimeSecs[i] >= minDriverTimeSecs,
+  }));
 
   return {
-    totalLaps: stints[stints.length > 0 ? stints.length - 1 : 0].endLap,
+    totalLaps: stints.length > 0 ? stints[stints.length - 1].endLap : 0,
     effectiveLapsPerTank: effectiveLPT,
     lapsPerTireSet: maxLapsPerSet,
     numPitStops: stints.filter(s => s.pitLap !== null).length,
     totalTimeLostSecs,
     totalDrivingTimeSecs,
     estTotalRaceTimeSecs: elapsedSecs,
-    stints
+    driverSummary,
+    stints,
   };
 }
 
@@ -381,8 +432,10 @@ export function findBestStrategies(params) {
   const {
     raceDurationHours, tankSize, lapsPerFullTank, fuelMap,
     compounds, pitBaseSecs, tireChangeSecs, fuelRateLitersPerSec,
-    mandatoryStops, midRaceMode, currentLap, currentFuel
+    mandatoryStops, midRaceMode, currentLap, currentFuel,
+    fuelWeightPenaltyPerLiter, drivers, minDriverTimeSecs,
   } = params;
+  const penalty = Number(fuelWeightPenaltyPerLiter) || 0;
 
   if (!compounds || compounds.length === 0) return [];
   const targetRaceTimeSecs = Number(raceDurationHours) * 3600;
@@ -399,62 +452,96 @@ export function findBestStrategies(params) {
     .filter(c => c.tireLife > 0)
     .map(c => {
       const info = TIRE_COMPOUNDS.find(tc => tc.id === c.id);
+      const tireLife = Number(c.tireLife);
       const startSecs = parseLapTime(c.startLapTime);
-      const halfSecs = parseLapTime(c.halfLapTime);
-      const endSecs = parseLapTime(c.endLapTime);
+      const halfSecs  = parseLapTime(c.halfLapTime);
+      const endSecs   = parseLapTime(c.endLapTime);
+
+      // Correct user-observed (in-game) lap times to full-tank equivalents so
+      // the piecewise curve isolates tire degradation. The simulation then
+      // re-applies -(tankSize - currentFuel) * penalty each lap.
+      //
+      // t(start) is always observed at full tank → no correction.
+      // t(mid) was observed after (tireLife/2) laps of fuel burn.
+      // t(end) was observed after min(tireLife, effectiveLPT) laps of burn
+      //   (capped at one tank because the user refuelled for long-life compounds).
+      const lapsToMid = Math.min(tireLife / 2, effectiveLPT);
+      const lapsToEnd = Math.min(tireLife,      effectiveLPT);
+      const fuelAtMid = Math.max(0, tankSize - lapsToMid * effectiveLitersPerLap);
+      const fuelAtEnd = Math.max(0, tankSize - lapsToEnd * effectiveLitersPerLap);
+
+      const startFT = startSecs;
+      const halfFT  = halfSecs  + (tankSize - fuelAtMid) * penalty;
+      const endFT   = endSecs   + (tankSize - fuelAtEnd) * penalty;
+
       return {
         id: c.id,
         name: info?.name || c.name,
-        tireLife: Number(c.tireLife),
-        startSecs,
-        halfSecs,
-        endSecs,
-        // Trapezoidal average across 3 points
-        avgLapTimeSecs: (startSecs / 4 + halfSecs / 2 + endSecs / 4),
+        tireLife,
+        startSecs: startFT,
+        halfSecs:  halfFT,
+        endSecs:   endFT,
+        avgLapTimeSecs: (startFT / 4 + halfFT / 2 + endFT / 4),
       };
     });
 
   if (activeCompounds.length === 0) return [];
 
-  // Bounding MAX_STINTS mathematically prevents combinatorial explosion in 4-compound plans
-  const absoluteMinLapTime = Math.min(...activeCompounds.map(c => c.startSecs));
-  const absoluteMaxLaps = Math.ceil(targetRaceTimeSecs / absoluteMinLapTime);
-  const minStintLaps = Math.min(effectiveLPT, Math.min(...activeCompounds.map(c => c.tireLife)));
-  const MAX_STINTS = Math.max(10, Math.ceil(absoluteMaxLaps / minStintLaps) + 2);
+  // Build per-driver compound times with the same full-tank correction applied above.
+  // If no drivers are defined, fall back to a single anonymous driver using global times.
+  function driverCompTimes(rawCompounds) {
+    const out = {};
+    for (const comp of activeCompounds) {
+      const dc = rawCompounds?.[comp.id];
+      if (dc?.startLapTime) {
+        const s = parseLapTime(dc.startLapTime);
+        const h = parseLapTime(dc.halfLapTime);
+        const e = parseLapTime(dc.endLapTime);
+        const lapsToMid = Math.min(comp.tireLife / 2, effectiveLPT);
+        const lapsToEnd = Math.min(comp.tireLife,     effectiveLPT);
+        const fuelAtMid = Math.max(0, tankSize - lapsToMid * effectiveLitersPerLap);
+        const fuelAtEnd = Math.max(0, tankSize - lapsToEnd * effectiveLitersPerLap);
+        out[comp.id] = {
+          startSecs: s,
+          halfSecs:  h + (tankSize - fuelAtMid) * penalty,
+          endSecs:   e + (tankSize - fuelAtEnd) * penalty,
+        };
+      } else {
+        out[comp.id] = { startSecs: comp.startSecs, halfSecs: comp.halfSecs, endSecs: comp.endSecs };
+      }
+    }
+    return out;
+  }
 
+  const processedDrivers = (drivers && drivers.length > 0)
+    ? drivers.map(d => ({ id: d.id, name: d.name, compTimes: driverCompTimes(d.compounds) }))
+    : [{ id: 'default', name: 'Driver', compTimes: driverCompTimes(null) }];
+
+  const minDriveTimeSecs = Number(minDriverTimeSecs) || 0;
+
+  // Generate all cyclic patterns up to MAX_PATTERN_LENGTH elements.
+  // A pattern [H, S] means: pit 1 → H, pit 2 → S, pit 3 → H, pit 4 → S … (repeating).
+  // This naturally covers single-compound, alternating, and complex cycling strategies
+  // without any transition limit. Pattern count = sum(N^k, k=1..MAX_PATTERN_LENGTH)
+  // which stays small even for 5 compounds (< 4000 patterns at length 5).
+  const MAX_PATTERN_LENGTH = 5;
   const plans = [];
-  const maxPracticalStints = Math.min(MAX_STINTS, absoluteMaxLaps);
-  const MAX_TRANSITIONS = 3; 
 
-  function generatePlans(currentSeq, transitions) {
-    if (currentSeq.length === maxPracticalStints) {
-      plans.push([...currentSeq]);
-      return;
-    }
-    let lastComp = currentSeq.length > 0 ? currentSeq[currentSeq.length - 1] : null;
-
-    if (transitions >= MAX_TRANSITIONS && lastComp) {
-      const remainder = maxPracticalStints - currentSeq.length;
-      const tail = Array(remainder).fill(lastComp);
-      plans.push([...currentSeq, ...tail]);
-      return;
-    }
-
+  function generatePatterns(current) {
+    if (current.length >= 1) plans.push([...current]);
+    if (current.length >= MAX_PATTERN_LENGTH) return;
     for (const c of activeCompounds) {
-      const isNewTransition = (lastComp !== null && c.id !== lastComp.id);
-      if (isNewTransition && transitions >= MAX_TRANSITIONS) continue;
-      
-      currentSeq.push(c);
-      generatePlans(currentSeq, transitions + (isNewTransition ? 1 : 0));
-      currentSeq.pop();
+      current.push(c);
+      generatePatterns(current);
+      current.pop();
     }
   }
-  
-  generatePlans([], 0);
+
+  generatePatterns([]);
 
   const mandatoryIds = new Set(compounds.filter(c => c.mandatory).map(c => c.id));
   const startLapOffset = midRaceMode && currentLap ? Number(currentLap) : 1;
-  const initialFuel = midRaceMode && currentFuel !== '' ? Number(currentFuel) : null;
+  const initialFuel = midRaceMode && currentFuel !== null && currentFuel !== '' ? Number(currentFuel) : null;
   const currentCompoundId = midRaceMode && params.currentCompoundId ? params.currentCompoundId : null;
   const currentTireAgeLaps = midRaceMode && params.currentTireAgeLaps !== undefined ? Number(params.currentTireAgeLaps) : 0;
   
@@ -474,7 +561,10 @@ export function findBestStrategies(params) {
       startLapOffset,
       initialFuel,
       initialCompound,
-      currentTireAgeLaps
+      currentTireAgeLaps,
+      fuelWeightPenaltyPerLiter: penalty,
+      processedDrivers,
+      minDriverTimeSecs: minDriveTimeSecs,
     });
 
     // Label generation based on what was actually used
@@ -498,20 +588,14 @@ export function findBestStrategies(params) {
     };
   });
 
-  // Apply time penalties for missed mandatory requirements instead of completely filtering them out
-  let filtered = strategies;
-  for (let s of filtered) {
-    let penaltySecs = Math.max(0, mandatoryStops - s.strategy.numPitStops) * 60;
-    if (mandatoryIds.size > 0) {
-      for (const req of mandatoryIds) {
-        if (!s.compoundIds.includes(req)) penaltySecs += 60;
-      }
+  // Hard filter: remove strategies that violate mandatory compound or minimum stop rules
+  const filtered = strategies.filter(s => {
+    if (s.strategy.numPitStops < Number(mandatoryStops)) return false;
+    for (const req of mandatoryIds) {
+      if (!s.compoundIds.includes(req)) return false;
     }
-    s.strategy.estTotalRaceTimeSecs += penaltySecs;
-    if (penaltySecs > 0 && s.strategy.stints.length > 0) {
-      s.strategy.stints[s.strategy.stints.length - 1].warning = `Penalty: +${penaltySecs}s for missed mandatory rules`;
-    }
-  }
+    return true;
+  });
 
   // Deduplicate by identical stint history to avoid duplicate outputs
   const uniqueStrats = [];
@@ -534,25 +618,3 @@ export function findBestStrategies(params) {
   return uniqueStrats;
 }
 
-/*
- * Scenario A Trace Comment:
- * - 8h = 28800s
- * - Hard tires: start 120s, half 121s, end 123s. avgLapTimeSecs = 121.25s. tireLife 60, safe cap 54.
- * - tankSize 75, lapsPerFullTank 22. fuelMap 1.0. effectiveLPT 22. effectiveLitersPerLap 3.409.
- * - Pit: 25s base, +27s tires, 4L/s fuel.
- * 
- * Stint 1: 1 -> 22. End lap 22. Laps=22. 
- * Next limits: Fuel 22, Tire 32 (54-22). Diff=10. Target next stint = 22 laps.
- * Add fuel = 22 * 3.409 + 0.5 = 75.5 capped at 75L. Pit time = 25 + 0 + (75/4) = 43.75s.
- * 
- * Stint 2: 23 -> 44. Laps=22. 
- * Next limits: Fuel 22, Tire 10. Target next stint is 10 laps.
- * Add fuel = 10 * 3.409 + 0.5 = 34.59L. Pit time = 25 + 0 + (34.59/4) = 33.65s.
- * 
- * Stint 3: 45 -> 54. Laps=10.
- * End of this stint triggers both tire (out of 54 cap) and fuel (only loaded 10 laps worth).
- * Target next stint = 22 laps.
- * Add fuel 75L. Change tires. Pit time = 25 + 27 + (75/4) = 70.75s.
- * 
- * Repeats loop until time expires.
- */

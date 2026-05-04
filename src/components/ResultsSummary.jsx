@@ -1,9 +1,17 @@
+import { useState } from 'react';
 import { formatRaceTime } from '../logic/strategy';
 
-/**
- * ResultsSummary — KPI cards for the best strategy + comparison grid for top 6.
- */
+function formatDriveTime(secs) {
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  return `${h}h ${String(m).padStart(2, '0')}m`;
+}
+
+const INITIAL_SHOW = 6;
+
 export default function ResultsSummary({ ranked, best, selectedIndex, onSelect }) {
+  const [showAll, setShowAll] = useState(false);
+
   if (!best) return null;
 
   const strat = best.strategy;
@@ -14,7 +22,9 @@ export default function ResultsSummary({ ranked, best, selectedIndex, onSelect }
     lapsPerTireSet,
     totalTimeLostSecs,
     estTotalRaceTimeSecs,
+    driverSummary,
   } = strat;
+  const multiDriver = driverSummary && driverSummary.length > 1;
 
   const totalTimeLostMins = (totalTimeLostSecs / 60).toFixed(1);
   const hasWarnings = strat.stints.some(s => s.warning);
@@ -28,14 +38,26 @@ export default function ResultsSummary({ ranked, best, selectedIndex, onSelect }
     { label: 'Est. Race Time', value: formatRaceTime(estTotalRaceTimeSecs), unit: '' },
   ];
 
-  // Top 6 strategies for comparison (if more than 1)
-  const topStrategies = ranked.slice(0, 6);
+  const visibleStrategies = showAll ? ranked : ranked.slice(0, INITIAL_SHOW);
 
   return (
     <div className="results-summary">
       {hasWarnings && (
         <div className="warning-banner">
           ⚠ Strategy has warnings — check the stint table below
+        </div>
+      )}
+
+      {/* Driver time summary */}
+      {multiDriver && (
+        <div className="driver-summary">
+          {driverSummary.map(d => (
+            <div key={d.id} className={`driver-chip${d.metMinimum ? '' : ' driver-chip-warn'}`}>
+              <span className="driver-chip-name">{d.name}</span>
+              <span className="driver-chip-time">{formatDriveTime(d.totalTimeSecs)}</span>
+              {!d.metMinimum && <span className="driver-chip-flag">⚠ min not met</span>}
+            </div>
+          ))}
         </div>
       )}
 
@@ -51,15 +73,17 @@ export default function ResultsSummary({ ranked, best, selectedIndex, onSelect }
       </div>
 
       {/* Strategy comparison grid (if multiple strategies) */}
-      {topStrategies.length > 1 && (
+      {ranked.length > 1 && (
         <div className="strategy-comparison">
           <h3 className="section-heading comparison-title">Strategy Comparison</h3>
           <div className="comparison-grid">
-            {topStrategies.map((entry, idx) => {
+            {visibleStrategies.map((entry, idx) => {
               const s = entry.strategy;
               const isBest = idx === 0;
+              const lapDelta = s.totalLaps - best.strategy.totalLaps;
+              const timeDeltaSecs = s.estTotalRaceTimeSecs - best.strategy.estTotalRaceTimeSecs;
               return (
-                  <div
+                <div
                   key={`${entry.label}-${idx}`}
                   className={`comparison-card${isBest ? ' comparison-best' : ''}${idx === selectedIndex ? ' comparison-selected' : ''}`}
                   onClick={() => onSelect(idx)}
@@ -73,6 +97,13 @@ export default function ResultsSummary({ ranked, best, selectedIndex, onSelect }
                   }}
                 >
                   {isBest && <span className="best-badge">★ Best</span>}
+                  {!isBest && (
+                    <span className="delta-badge">
+                      {lapDelta !== 0
+                        ? `${lapDelta > 0 ? '+' : ''}${lapDelta} laps`
+                        : `+${timeDeltaSecs.toFixed(0)}s`}
+                    </span>
+                  )}
                   <div className="comparison-compound">
                     <span className={`compound-tag compound-${entry.compoundIds[0]}`}>
                       {entry.compoundIds.join('+')}
@@ -88,6 +119,15 @@ export default function ResultsSummary({ ranked, best, selectedIndex, onSelect }
               );
             })}
           </div>
+
+          {ranked.length > INITIAL_SHOW && (
+            <button
+              className="btn-ghost show-more-btn"
+              onClick={() => setShowAll(v => !v)}
+            >
+              {showAll ? `Show top ${INITIAL_SHOW}` : `Show all ${ranked.length} strategies`}
+            </button>
+          )}
         </div>
       )}
     </div>
