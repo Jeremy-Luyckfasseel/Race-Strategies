@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node tests/test_comprehensive.js && node tests/test_invariants.js",
+    "test:smoke": "node tests/test.js",
+    "telemetry": "node server/telemetry-server.js"
   },
   "dependencies": {
     "react": "^19.2.0",
