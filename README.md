@@ -51,16 +51,16 @@
 
 <br>
 
-| | Feature | What it means at race pace |
-| :---: | :--- | :--- |
-| 🔢 | **Full strategy enumeration** | Every valid pit + compound sequence tested — up to 5-element cyclic patterns, ~4 000 combinations for 5 compounds. If spamming Softs beats running Hards, it finds that. |
-| ⚖️ | **Fuel weight model** | Corrects per-lap time for a progressively lighter car as fuel burns. Enter your times at full tank — the engine handles the conversion every lap. |
-| 💧 | **Exact fuel carry-over** | Leftover fuel from a stint is rolled into the next refuel calculation, so you never top up more than necessary. |
-| 🟨 | **Pit window bands** | Visualised on the strategy timeline. Always see the absolute latest lap you can pit without running dry or destroying tyres. |
-| 👥 | **Multi-driver support** | Per-driver lap times per compound, configurable minimum drive time, greedy stint assignment that guarantees every driver meets their requirement. |
-| 🔄 | **Mid-race recalculation** | Enter current lap + fuel for an updated strategy on the fly. Connects directly to live PS5 telemetry for automatic updates. |
-| 📡 | **Live PS5 telemetry** | Monitor all PS5s in the room simultaneously — lap, fuel remaining, speed, last lap time, and pit / on-track status. |
-| 🖨️ | **Print export** | Full stint plan printed via browser print dialog — hand it to your co-driver. |
+| Feature | What it means at race pace |
+| :--- | :--- |
+| **Full strategy enumeration** | Every valid pit + compound sequence tested — up to 5-element cyclic patterns, ~4 000 combinations for 5 compounds. If spamming Softs beats running Hards, it finds that. |
+| **Fuel weight model** | Corrects per-lap time for a progressively lighter car as fuel burns. Enter your times at full tank — the engine handles the conversion every lap. |
+| **Exact fuel carry-over** | Leftover fuel from a stint is rolled into the next refuel calculation, so you never top up more than necessary. |
+| **Pit window bands** | Visualised on the strategy timeline. Always see the absolute latest lap you can pit without running dry or destroying tyres. |
+| **Multi-driver support** | Per-driver lap times per compound, configurable minimum drive time, greedy stint assignment that guarantees every driver meets their requirement. |
+| **Mid-race recalculation** | Enter current lap + fuel for an updated strategy on the fly. Connects directly to live PS5 telemetry for automatic updates. |
+| **Live PS5 telemetry** | Monitor all PS5s in the room simultaneously — lap, fuel remaining, speed, last lap time, and pit / on-track status. |
+| **Print export** | Full stint plan printed via browser print dialog — hand it to your co-driver. |
 
 <br><br>
 
@@ -71,56 +71,26 @@
 
 `src/logic/strategy.js` is pure JavaScript with **zero React dependency** — it runs in the browser and directly in Node.js for testing. The entry point is `findBestStrategies(inputs)`.
 
-```
-findBestStrategies(inputs)
-│
-├─ 1. Build active compound list
-│     Apply fuel-weight full-tank correction to all user-observed lap times
-│
-├─ 2. Generate compound patterns  (MAX_PATTERN_LENGTH = 5)
-│     [H]  [M]  [S]  [H,S]  [H,M]  [M,S]  [H,M,S]  [H,S,H,S]  …
-│     Cyclic variants  →  H S H S H S …
-│     Non-cyclic variants  →  H S S S S …  (permanent compound switch)
-│
-├─ 3. Simulate each plan lap-by-lap
-│     ├─ Piecewise tyre degradation  (0–50% soft, 50–100% harder)
-│     ├─ Fuel weight correction per lap  (car lightens → faster)
-│     ├─ Exact fuel carry-over between stints
-│     ├─ Tyre change decision  (different compound OR tyre won't last)
-│     ├─ Mandatory stop enforcement via stint-length capping
-│     └─ Greedy multi-driver assignment  (owes most time → drives next)
-│
-├─ 4. Hard filter
-│     Remove plans that miss mandatory compounds or minimum stop count
-│
-├─ 5. Deduplicate
-│     Collapse strategies with identical stint signatures
-│
-└─ 6. Sort  →  totalLaps DESC  ·  estRaceTime ASC
-```
-
-<br>
-
 ```mermaid
 flowchart LR
-    subgraph IN["⌨ Input"]
+    subgraph IN["Input"]
         CAR["Car data\nfuel · tyres · drivers"]
         MID["Mid-race\ncurrentLap · currentFuel"]
     end
 
-    subgraph CORE["⚙ Strategy Engine  src/logic/strategy.js"]
+    subgraph CORE["Strategy Engine  —  src/logic/strategy.js"]
         direction TB
-        PAT["Generate patterns\n~4 000 sequences"]
-        SIM["Simulate\nlap-by-lap"]
-        FILT["Filter + deduplicate"]
-        SORT["Sort\nmax laps → min time"]
+        PAT["1  Build + generate\n~4 000 compound patterns"]
+        SIM["2  Simulate each plan\nlap-by-lap"]
+        FILT["3  Filter + deduplicate"]
+        SORT["4  Sort\nmax laps · min time"]
         PAT --> SIM --> FILT --> SORT
     end
 
-    subgraph VIS["📊 React UI"]
+    subgraph VIS["React UI"]
         KPI["KPI Strip"]
         CARDS["Strategy Cards"]
-        CHART["Stint Timeline\nRecharts"]
+        CHART["Stint Timeline"]
         TABLE["Lap Table"]
     end
 
@@ -128,6 +98,19 @@ flowchart LR
     MID --> CORE
     CORE --> KPI & CARDS & CHART & TABLE
 ```
+
+<br>
+
+Each simulated plan runs the following per lap:
+
+| Step | What the engine computes |
+| :--- | :--- |
+| Tyre degradation | Piecewise curve: `start → half` over 0–50% tyre life, `half → end` over 50–100% |
+| Fuel weight | `dynamicLapTime = base + (fuelNow − tankSize) × penalty` — car gets faster every lap as fuel burns |
+| Fuel carry-over | Leftover fuel rolls into the next stint's refuel calculation |
+| Tyre change decision | Changed when compound differs, or remaining life won't cover the next stint |
+| Mandatory stop capping | Stint length shortened to guarantee the required number of pit stops |
+| Multi-driver assignment | Driver with the most outstanding minimum-time debt gets the next stint |
 
 <br>
 
@@ -178,29 +161,29 @@ GT7 streams live **Salsa20-encrypted UDP packets** from the PS5 to any machine o
 
 ```mermaid
 flowchart LR
-    subgraph LAN["Local Network  (same router / switch)"]
+    subgraph LAN["Local Network  —  same router / switch"]
         P1["PS5 #1\n192.168.x.1"]
         P2["PS5 #2\n192.168.x.2"]
-        PN["PS5 #N\n…"]
+        PN["PS5 #N\n..."]
     end
 
-    subgraph RELAY["server/telemetry-server.js  (Node.js)"]
+    subgraph RELAY["server/telemetry-server.js  —  Node.js"]
         HB["Heartbeat sender\nUDP :33739 · 100 ms"]
         UDP["UDP listener\n:33740"]
-        DEC["Salsa20\ndecrypt"]
+        DEC["Salsa20 decrypt"]
         WSS["WebSocket server\n:20777"]
     end
 
-    subgraph APP["Browser  (React)"]
+    subgraph APP["Browser  —  React"]
         HOOK["useTelemetry hook"]
         CARDS["Live PS5 cards\nlap · fuel · speed · status"]
         FILL["Auto-fill\ncurrentLap · currentFuel"]
     end
 
-    HB -- heartbeat "A" --> P1 & P2 & PN
-    P1 & P2 & PN -- encrypted UDP --> UDP
+    HB -->|heartbeat| P1 & P2 & PN
+    P1 & P2 & PN -->|encrypted UDP| UDP
     UDP --> DEC --> WSS
-    WSS -- WebSocket --> HOOK
+    WSS -->|WebSocket| HOOK
     HOOK --> CARDS & FILL
 ```
 
@@ -210,13 +193,13 @@ flowchart LR
 <summary><b>Network requirements</b></summary>
 <br>
 
-| | Requirement | Detail |
-| :---: | :--- | :--- |
-| 🌐 | **Same LAN** | PS5 and laptop on the same router or switch |
-| 🔓 | **Laptop firewall** | Allow UDP inbound `:33740`, outbound `:33739` |
-| 🎮 | **PS5** | Nothing to install — GT7 streams natively |
-| 📶 | **Wi-Fi vs wired** | Both work; wired is more reliable at events |
-| 🔗 | **Online lobbies** | Telemetry is local — works in private online races regardless of session routing |
+| Requirement | Detail |
+| :--- | :--- |
+| **Same LAN** | PS5 and laptop on the same router or switch |
+| **Laptop firewall** | Allow UDP inbound `:33740`, outbound `:33739` |
+| **PS5** | Nothing to install — GT7 streams natively |
+| **Wi-Fi vs wired** | Both work; wired is more reliable at events |
+| **Online lobbies** | Telemetry is local — works in private online races regardless of session routing |
 
 </details>
 
