@@ -1,42 +1,39 @@
-import { formatLapTime } from '../logic/strategy';
+import { formatLapTime } from "../logic/strategy";
 
-/**
- * StintTable — renders each stint as a table row.
- * Last stint (pitLap === null) shows FINISH label and dashes for pit-related columns.
- * Rows with warnings get red highlighting.
- */
 export default function StintTable({ stints }) {
   if (!stints || stints.length === 0) return null;
 
-  const multiDriver = new Set(stints.map(s => s.driverId).filter(Boolean)).size > 1;
+  const multiDriver = new Set(stints.map((s) => s.driverId).filter(Boolean)).size > 1;
 
   return (
-    <div className="stint-table-wrapper">
-      <h2 className="section-heading">Stint Plan</h2>
+    <div className="card">
+      <div className="card-header">
+        <span className="card-title">Stint Plan</span>
+      </div>
       <div className="table-scroll">
-        <table className="stint-table">
+        <table className="stint-table" aria-label="Lap-by-stint breakdown">
           <thead>
             <tr>
-              <th>Stint</th>
+              <th>#</th>
               {multiDriver && <th>Driver</th>}
-              <th>Start Lap</th>
-              <th>End Lap</th>
-              <th>Lap Count</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Laps</th>
               <th>Pit Lap</th>
-              <th>Fuel to Add (L)</th>
-              <th>Tires Changed</th>
+              <th>Fuel Add</th>
+              <th>Tyres</th>
               <th>Compound</th>
               <th>Avg Lap</th>
-              <th>Pit Time (s)</th>
+              <th>Pit (s)</th>
             </tr>
           </thead>
           <tbody>
-            {stints.map(stint => {
+            {stints.map((stint) => {
               const isLast = stint.pitLap === null;
               return (
                 <tr
                   key={stint.stintNum}
-                  className={stint.warning ? 'row-warning' : ''}
+                  className={stint.warning ? "row-warning" : ""}
                   title={stint.warning || undefined}
                 >
                   <td className="stint-num">{stint.stintNum}</td>
@@ -44,18 +41,22 @@ export default function StintTable({ stints }) {
                   <td>{stint.startLap}</td>
                   <td>{stint.endLap}</td>
                   <td>{stint.lapsInStint}</td>
-                  <td>{isLast ? <span className="finish-label">FINISH</span> : stint.pitLap}</td>
                   <td>
-                    {isLast ? '—' : (
-                      <span className={stint.fuelToAddLiters > 0 ? 'fuel-positive' : ''}>
-                        {stint.fuelToAddLiters > 0 ? `+${stint.fuelToAddLiters.toFixed(1)}` : '—'}
+                    {isLast
+                      ? <span className="finish-label">Finish</span>
+                      : stint.pitLap}
+                  </td>
+                  <td>
+                    {isLast ? "—" : (
+                      <span className={stint.fuelToAddLiters > 0 ? "fuel-positive" : ""}>
+                        {stint.fuelToAddLiters > 0 ? `+${stint.fuelToAddLiters.toFixed(1)} L` : "—"}
                       </span>
                     )}
                   </td>
                   <td>
-                    {isLast ? '—' : (
-                      <span className={`tire-badge ${stint.tiresChanged ? 'changed' : 'not-changed'}`}>
-                        {stint.tiresChanged ? 'Yes' : 'No'}
+                    {isLast ? "—" : (
+                      <span className={`tire-badge ${stint.tiresChanged ? "changed" : "not-changed"}`}>
+                        {stint.tiresChanged ? "Yes" : "No"}
                       </span>
                     )}
                   </td>
@@ -65,12 +66,10 @@ export default function StintTable({ stints }) {
                     </span>
                   </td>
                   <td className="avg-lap-cell">
-                    {stint.avgLapTimeSecs ? formatLapTime(stint.avgLapTimeSecs) : '—'}
+                    {stint.avgLapTimeSecs ? formatLapTime(stint.avgLapTimeSecs) : "—"}
                   </td>
-                  <td>
-                    {isLast ? '—' : (
-                      <span>{stint.pitStopTimeSecs.toFixed(1)}</span>
-                    )}
+                  <td className="pit-time-cell">
+                    {isLast ? "—" : stint.pitStopTimeSecs.toFixed(1)}
                   </td>
                 </tr>
               );
@@ -78,7 +77,11 @@ export default function StintTable({ stints }) {
           </tbody>
         </table>
       </div>
-      <p className="table-hint">⚠ Rows highlighted in red indicate fuel or tire warnings. Hover for details.</p>
+      {stints.some((s) => s.warning) && (
+        <p className="field-note" style={{ marginTop: 10, textAlign: "right" }}>
+          Rows highlighted in red indicate fuel or tyre warnings — hover for details.
+        </p>
+      )}
     </div>
   );
 }

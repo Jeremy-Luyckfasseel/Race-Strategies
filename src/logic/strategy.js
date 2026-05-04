@@ -163,6 +163,7 @@ function simulateStrategy(p) {
     fuelWeightPenaltyPerLiter,
     processedDrivers,
     minDriverTimeSecs,
+    cyclic = true,
   } = p;
 
   const stints = [];
@@ -221,7 +222,6 @@ function simulateStrategy(p) {
       targetStopLap = currentLap + limitForMandatory - 1;
       if (targetStopLap >= trueT - tireChangeMargin) changeTires = true;
     } else {
-      // Change tires only when tires run out before or simultaneously with fuel
       if (trueT <= trueF) {
         targetStopLap = trueT;
         changeTires = true;
@@ -298,7 +298,9 @@ function simulateStrategy(p) {
       pitsDone++;
       let timeRemainingAtPit = targetRaceTimeSecs - elapsedSecs;
       
-      let nextComp = compoundPlan[pitsDone % compoundPlan.length];
+      let nextComp = cyclic
+        ? compoundPlan[pitsDone % compoundPlan.length]
+        : compoundPlan[Math.min(pitsDone, compoundPlan.length - 1)];
       let estRemainingLaps = Math.ceil(timeRemainingAtPit / activeComp.avgLapTimeSecs);
       // Use next compound's pace for fuel planning — avoids underfueling when switching to a faster compound
       let estRemainingLapsForFuel = Math.ceil(timeRemainingAtPit / nextComp.avgLapTimeSecs);
@@ -307,13 +309,10 @@ function simulateStrategy(p) {
       let currentTireLifeLeft = activeComp.tireLife - currentTireAge;
 
       let isDifferentCompound = activeComp.id !== nextComp.id;
-      
-      // "if the tires would survive to the finish without dropping below 10%, do NOT schedule a tire change"
-      if (changeTires && !isDifferentCompound && estRemainingLaps <= currentTireLifeLeft) {
-        changeTires = false;
-      }
 
-      tiresActuallyChanged = changeTires || isDifferentCompound;
+      // Always change tires when pitting — cost is ~4s in GT7, almost always worth fresh rubber.
+      // Only skip if the current set will comfortably reach the finish line.
+      tiresActuallyChanged = isDifferentCompound || (estRemainingLaps > currentTireLifeLeft);
 
       let nextReqStops = mandatoryStops - pitsDone;
       let nextLimit = 9999;
@@ -547,7 +546,17 @@ export function findBestStrategies(params) {
   
   const initialCompound = currentCompoundId ? activeCompounds.find(c => c.id === currentCompoundId) : null;
 
-  const strategies = plans.map(plan => {
+  // For each compound pattern, simulate both modes:
+  //   cyclic=true  → [H,S] repeats as H S H S H S … (already handled before)
+  //   cyclic=false → [H,S] holds last as H S S S S … (new: covers permanent compound switches)
+  // Single-compound plans produce the same result in both modes, so only multi-compound plans get the second variant.
+  // Deduplication below removes any variants that produce identical stint sequences.
+  const allVariants = [
+    ...plans.map(plan => ({ plan, cyclic: true })),
+    ...plans.filter(plan => plan.length > 1).map(plan => ({ plan, cyclic: false })),
+  ];
+
+  const strategies = allVariants.map(({ plan, cyclic }) => {
     const strategy = simulateStrategy({
       targetRaceTimeSecs,
       tankSize: Number(tankSize),
@@ -565,6 +574,7 @@ export function findBestStrategies(params) {
       fuelWeightPenaltyPerLiter: penalty,
       processedDrivers,
       minDriverTimeSecs: minDriveTimeSecs,
+      cyclic,
     });
 
     // Label generation based on what was actually used

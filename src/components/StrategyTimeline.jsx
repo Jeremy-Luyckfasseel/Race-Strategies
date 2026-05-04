@@ -1,180 +1,162 @@
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-  ReferenceLine,
-  ReferenceArea,
-} from 'recharts';
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Cell, ReferenceLine, ReferenceArea,
+} from "recharts";
 
-// Color map for tire compounds
 const COMPOUND_COLORS = {
-  H: '#5b9bd5',
-  M: '#ed7d31',
-  S: '#ff0000',
-  IM: '#92d050',
-  W: '#4ea6dc',
+  H:  "#4A9EDE",
+  M:  "#F08420",
+  S:  "#E53535",
+  IM: "#22CC6E",
+  W:  "#14BBCE",
 };
 
-const DEFAULT_COLOR = '#aaaaaa';
+const DEFAULT_COLOR = "#666";
 
-function getCompoundColor(compoundId) {
-  return COMPOUND_COLORS[compoundId] || DEFAULT_COLOR;
+function getColor(id) {
+  return COMPOUND_COLORS[id] || DEFAULT_COLOR;
 }
 
 function CustomTooltip({ active, payload }) {
-  if (!active || !payload || !payload.length) return null;
-  const stint = payload[0]?.payload;
-  if (!stint) return null;
+  if (!active || !payload?.length) return null;
+  const s = payload[0]?.payload;
+  if (!s) return null;
   return (
     <div className="timeline-tooltip">
-      <div className="tt-title">Stint {stint.stintNum}</div>
-      <div>Laps: {stint.startLap} – {stint.endLap}</div>
-      <div>Count: {stint.lapsInStint} laps</div>
-      <div>Compound: {stint.compoundName}</div>
-      {stint.fuelToAddLiters > 0 && <div>Fuel added: +{stint.fuelToAddLiters.toFixed(1)} L</div>}
-      {stint.tiresChanged && <div>🔄 Tires changed</div>}
-      {stint.pitStopTimeSecs > 0 && <div>Pit time: {stint.pitStopTimeSecs.toFixed(1)}s</div>}
-      {stint.pitWindowLatestLap && stint.pitWindowLatestLap > stint.endLap && (
-        <div className="tt-window">Window: pit by L{stint.pitWindowLatestLap}</div>
+      <div className="tt-title">Stint {s.stintNum} — {s.compoundName}</div>
+      <div>Laps {s.startLap}–{s.endLap}&nbsp;({s.lapsInStint} laps)</div>
+      {s.fuelToAddLiters > 0 && <div>Fuel added: +{s.fuelToAddLiters.toFixed(1)} L</div>}
+      {s.tiresChanged && <div>Tyres changed</div>}
+      {s.pitStopTimeSecs > 0 && <div>Pit time: {s.pitStopTimeSecs.toFixed(1)} s</div>}
+      {s.pitWindowLatestLap && s.pitWindowLatestLap > s.endLap && (
+        <div>Window: pit by L{s.pitWindowLatestLap}</div>
       )}
-      {stint.warning && <div className="tt-warning">⚠ {stint.warning}</div>}
+      {s.warning && <div className="tt-warning">{s.warning}</div>}
     </div>
   );
 }
 
-/**
- * Filter pit lap labels to avoid overlap: if two pit laps are within 5 laps
- * of each other, only show every other label.
- */
 function filterPitLabels(pitLaps) {
-  if (pitLaps.length <= 1) return pitLaps.map(lap => ({ lap, showLabel: true }));
-
+  if (pitLaps.length <= 1) return pitLaps.map((lap) => ({ lap, showLabel: true }));
   const result = [];
   let lastShown = -Infinity;
-
-  for (let i = 0; i < pitLaps.length; i++) {
-    const lap = pitLaps[i];
-    const showLabel = (lap - lastShown) >= 5;
-    result.push({ lap, showLabel });
-    if (showLabel) lastShown = lap;
+  for (const lap of pitLaps) {
+    const show = lap - lastShown >= 5;
+    result.push({ lap, showLabel: show });
+    if (show) lastShown = lap;
   }
-
   return result;
 }
 
 export default function StrategyTimeline({ stints, totalLaps }) {
   if (!stints || stints.length === 0) return null;
 
-  // Transform stints into Recharts horizontal bar data
-  const data = stints.map(s => ({
+  const data = stints.map((s) => ({
     ...s,
     offset: s.startLap - 1,
     width: s.lapsInStint,
     name: `S${s.stintNum}`,
   }));
 
-  // Pit stop lap markers with overlap filtering
-  const rawPitLaps = stints.filter(s => s.pitLap !== null).map(s => s.pitLap);
-  const pitLabels = filterPitLabels(rawPitLaps);
+  const pitLabels = filterPitLabels(
+    stints.filter((s) => s.pitLap !== null).map((s) => s.pitLap)
+  );
 
-  // Dynamic chart height for many stints
-  const chartHeight = Math.max(120, stints.length * 52 + 40);
-
-  // Filter legend to only show compounds that appear in the stints array
-  const usedCompounds = new Set(stints.map(s => s.compound));
+  const chartHeight = Math.max(130, stints.length * 52 + 48);
+  const usedCompounds = new Set(stints.map((s) => s.compound));
 
   return (
-    <div className="timeline-wrapper">
-      <h2 className="section-heading">Strategy Timeline</h2>
-      <div className="timeline-legend">
-        {Object.entries(COMPOUND_COLORS)
-          .filter(([id]) => usedCompounds.has(id))
-          .map(([id, color]) => (
-            <span key={id} className="legend-item">
-              <span className="legend-swatch" style={{ background: color }} />
-              {id}
-            </span>
-          ))}
+    <div className="card">
+      <div className="card-header">
+        <span className="card-title">Strategy Timeline</span>
+        <div className="timeline-legend">
+          {Object.entries(COMPOUND_COLORS)
+            .filter(([id]) => usedCompounds.has(id))
+            .map(([id, color]) => (
+              <span key={id} className="legend-item">
+                <span className="legend-swatch" style={{ background: color }} />
+                {id}
+              </span>
+            ))}
+        </div>
       </div>
+
       <ResponsiveContainer width="100%" height={chartHeight}>
         <BarChart
           layout="vertical"
           data={data}
-          margin={{ top: 10, right: 40, bottom: 10, left: 50 }}
+          margin={{ top: 4, right: 48, bottom: 4, left: 40 }}
           barCategoryGap="30%"
         >
-          <CartesianGrid horizontal={false} stroke="#333" />
+          <CartesianGrid horizontal={false} stroke="rgba(255,255,255,0.03)" />
           <XAxis
             type="number"
             domain={[0, totalLaps]}
-            tickCount={Math.min(totalLaps, 10) + 1}
-            tickFormatter={v => `L${v}`}
-            tick={{ fill: '#aaa', fontSize: 11 }}
-            axisLine={{ stroke: '#444' }}
+            tickCount={Math.min(totalLaps, 12) + 1}
+            tickFormatter={(v) => `L${v}`}
+            tick={{ fill: "#555", fontSize: 9, fontFamily: "var(--font-mono, monospace)" }}
+            axisLine={{ stroke: "#222" }}
+            tickLine={false}
           />
           <YAxis
             type="category"
             dataKey="name"
-            width={44}
-            tick={{ fill: '#ccc', fontSize: 12 }}
+            width={34}
+            tick={{ fill: "#555", fontSize: 10, fontFamily: "var(--font-mono, monospace)" }}
             axisLine={false}
             tickLine={false}
           />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.025)" }} />
 
-          {/* Transparent offset bar to shift the visible bar right */}
+          {/* Invisible offset bar to position each stint */}
           <Bar dataKey="offset" stackId="a" fill="transparent" />
 
-          {/* Actual stint bar */}
-          <Bar dataKey="width" stackId="a" name="Stint" radius={[3, 3, 3, 3]}>
+          {/* Visible stint bars */}
+          <Bar dataKey="width" stackId="a" name="Stint" radius={[2, 2, 2, 2]}>
             {data.map((entry) => (
               <Cell
                 key={`cell-${entry.stintNum}`}
-                fill={getCompoundColor(entry.compound)}
-                opacity={entry.warning ? 0.5 : 1}
-                stroke={entry.warning ? '#ff4444' : 'none'}
-                strokeWidth={entry.warning ? 2 : 0}
+                fill={getColor(entry.compound)}
+                opacity={entry.warning ? 0.4 : 0.85}
+                stroke={entry.warning ? "#E53535" : "none"}
+                strokeWidth={entry.warning ? 1.5 : 0}
               />
             ))}
           </Bar>
 
-          {/* Pit stop markers with overlap-aware labels */}
+          {/* Pit stop reference lines */}
           {pitLabels.map(({ lap, showLabel }) => (
             <ReferenceLine
               key={lap}
               x={lap}
-              stroke="#FFD700"
-              strokeDasharray="4 2"
-              strokeWidth={1.5}
+              stroke="rgba(255,255,255,0.35)"
+              strokeDasharray="2 3"
+              strokeWidth={1}
               label={showLabel
-                ? { value: `P${lap}`, position: 'top', fill: '#FFD700', fontSize: 9 }
-                : undefined
-              }
+                ? { value: `P${lap}`, position: "top", fill: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: "monospace" }
+                : undefined}
             />
           ))}
-          {/* Pit window: shaded area showing how far each stint could be extended */}
+
+          {/* Pit window shading */}
           {stints
-            .filter(s => s.pitLap !== null && s.pitWindowLatestLap && s.pitWindowLatestLap > s.endLap)
-            .map(s => (
+            .filter((s) => s.pitLap !== null && s.pitWindowLatestLap && s.pitWindowLatestLap > s.endLap)
+            .map((s) => (
               <ReferenceArea
                 key={`win-${s.stintNum}`}
                 x1={s.endLap}
                 x2={Math.min(s.pitWindowLatestLap, totalLaps)}
-                fill="rgba(255, 215, 0, 0.08)"
-                stroke="rgba(255, 215, 0, 0.25)"
-                strokeDasharray="3 3"
+                fill="rgba(255,255,255,0.03)"
+                stroke="rgba(255,255,255,0.1)"
+                strokeDasharray="2 4"
                 strokeWidth={1}
               />
             ))}
         </BarChart>
       </ResponsiveContainer>
+
       <p className="timeline-hint">
-        Gold dashed lines = pit stops · Red outline = warning · Gold shaded region = pit window (how far you could extend)
+        Dashed lines = pit stops · Shaded area = pit window · Red outline = warning
       </p>
     </div>
   );
