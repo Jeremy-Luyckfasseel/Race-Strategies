@@ -1,4 +1,4 @@
-import { findBestStrategies } from './src/logic/strategy.js';
+import { findBestStrategies } from '../src/logic/strategy.js';
 
 console.time('findBestStrategies');
 const res = findBestStrategies({

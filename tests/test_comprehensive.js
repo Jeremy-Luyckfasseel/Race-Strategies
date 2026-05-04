@@ -1,7 +1,7 @@
 /**
  * Comprehensive test suite for src/logic/strategy.js
- * Run with: node --experimental-vm-modules test_comprehensive.js
- * (or node test_comprehensive.js if package.json has "type":"module")
+ * Run with: node --experimental-vm-modules tests/test_comprehensive.js
+ * (or node tests/test_comprehensive.js if package.json has "type":"module")
  */
 import {
   parseLapTime,
@@ -9,7 +9,7 @@ import {
   formatRaceTime,
   calcPitStopTime,
   findBestStrategies,
-} from './src/logic/strategy.js';
+} from '../src/logic/strategy.js';
 
 let passed = 0;
 let failed = 0;

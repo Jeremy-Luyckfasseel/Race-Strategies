@@ -6,11 +6,11 @@
  * browser tab connected via WebSocket.
  *
  * Usage:
- *   node telemetry-server.js
+ *   node server/telemetry-server.js
  *
  * PS5 IP addresses are managed from the browser UI — no CLI args needed.
  * You can still pass IPs as CLI args for a quick start:
- *   node telemetry-server.js 192.168.1.10 192.168.1.11
+ *   node server/telemetry-server.js 192.168.1.10 192.168.1.11
  *
  * Requirements:
  *   npm install ws   (already in package.json)
