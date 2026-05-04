@@ -76,7 +76,8 @@ This means you can run **all 10 PS5s in the same room** (connected to the same r
 **1. Start the relay server**
 
 ```bash
-node telemetry-server.js
+npm run telemetry
+# or: node server/telemetry-server.js
 ```
 
 No arguments needed. The server starts listening and waits for the browser to tell it which PS5s to track.
@@ -135,9 +136,8 @@ If it responds, the hostname will work in the app too. If it times out, use the 
 The strategy engine has no React dependency and can be tested directly with Node:
 
 ```bash
-node test.js                   # Basic 1-hour race smoke test
-node test_comprehensive.js     # Full suite — 129 tests
-node validate_scenario_A.js    # Detailed trace output for algorithm validation
+npm test                       # Full suite — 129 tests
+npm run test:smoke             # Basic 1-hour race smoke test
 ```
 
 ---
@@ -153,8 +153,8 @@ App.jsx  (state: inputs, selectedIndex, telemSelectedIp)
   ├── StrategyTimeline  — Recharts bar chart with pit window bands
   └── StintTable        — lap-by-lap stint detail
 
-src/logic/strategy.js   — pure JS engine, no React dependency
-telemetry-server.js     — Node.js UDP relay server (run separately)
+src/logic/strategy.js          — pure JS engine, no React dependency
+server/telemetry-server.js     — Node.js UDP relay server (run separately)
 ```
 
 ---
