@@ -59,7 +59,11 @@
 | **Pit window bands** | Visualised on the strategy timeline. Always see the absolute latest lap you can pit without running dry or destroying tyres. |
 | **Multi-driver support** | Per-driver lap times per compound, configurable minimum drive time, greedy stint assignment that guarantees every driver meets their requirement. |
 | **Mid-race recalculation** | Enter current lap + fuel for an updated strategy on the fly. Connects directly to live PS5 telemetry for automatic updates. |
-| **Live PS5 telemetry** | Monitor all PS5s in the room simultaneously — lap, fuel remaining, speed, last lap time, and pit / on-track status. |
+| **Live PS5 telemetry** | Full Télémétrie tab: dedicated live dashboard per team with speed, gear, RPM/throttle/brake bars, tyre temp + wear per corner, last/best lap times, and fuel level. |
+| **Multi-team leaderboard** | All PS5s in the room on one sortable table — position, lap gap to leader, compound, fuel bar, and pit/on-track status. |
+| **GPS track map** | SVG circuit drawn live from PS5 position data at 60 Hz. Pit lane auto-detected. All tracked cars shown as colour-coded dots. |
+| **Compound tracking** | Pit exit detected from telemetry — app prompts to confirm which compound was fitted. Tracks each team's current tyre independently. |
+| **LAN PS5 scan** | One click scans the local network for active GT7 PS5s and adds them automatically, with DNS hostname resolution. |
 | **Print export** | Full stint plan printed via browser print dialog — hand it to your co-driver. |
 
 <br><br>
@@ -174,9 +178,12 @@ flowchart LR
         WSS["WebSocket server\n:20777"]
     end
 
-    subgraph APP["Browser  —  React"]
-        HOOK["useTelemetry hook"]
-        CARDS["Live PS5 cards\nlap · fuel · speed · status"]
+    subgraph APP["Browser  —  React  (Télémétrie tab)"]
+        HOOK["useTelemetry hook\nteams Map — scan support"]
+        DET["useCompoundDetector\npit exit → confirm prompt"]
+        LB["TelemetryLeaderboard\npos · lap · gap · times · fuel"]
+        DASH["LiveDashboard\nspeed · RPM · pedals · tyres · track map"]
+        CTRL["TelemetryControls\nURL · IPs · LAN scan"]
         FILL["Auto-fill\ncurrentLap · currentFuel"]
     end
 
@@ -184,7 +191,7 @@ flowchart LR
     P1 & P2 & PN -->|encrypted UDP| UDP
     UDP --> DEC --> WSS
     WSS -->|WebSocket| HOOK
-    HOOK --> CARDS & FILL
+    HOOK --> DET & LB & DASH & CTRL & FILL
 ```
 
 <br>
@@ -214,15 +221,19 @@ npm run telemetry
 # or: node server/telemetry-server.js
 ```
 
-**2. Open the app → GT7 Live Telemetry section**
+**2. Open the app → Télémétrie tab**
 
-Add each PS5's IP, leave the server URL as `ws://localhost:20777`, click **Connect**.
+Leave the server URL as `ws://localhost:20777`, click **Connecter**. Then add each PS5's IP manually — or click **⟳ Scanner Réseau** to auto-detect every active GT7 PS5 on the LAN.
 
 > Find a PS5's IP: **Settings → Network → View Connection Status → IP Address**
 
-**3. Enable auto-fill (optional)**
+**3. Track tyres**
 
-Enable **Mid-Race Recalculation** in the sidebar, then click a PS5 card to pin it. Current lap and fuel update automatically every telemetry packet — strategy recalculates in real time.
+After each pit stop the app detects the pit exit and shows a confirmation prompt. Click the compound the driver fitted (H / M / S / IM / W) to start tracking tyre wear for that team.
+
+**4. Enable auto-fill (optional)**
+
+Enable **Mid-Race Recalculation** in the sidebar, then click a team row in the leaderboard to pin it. Current lap and fuel update automatically every telemetry packet — strategy recalculates in real time.
 
 > **All 10 PS5s in one room?** One laptop, one relay server instance. It handles all of them simultaneously.
 
@@ -310,16 +321,21 @@ npm run test:smoke    # 1-hour race smoke test
  ┃ ┃ ┣ 📄 InputPanel.jsx          sidebar form — car presets, compounds, drivers, telemetry
  ┃ ┃ ┣ 📄 ResultsSummary.jsx      KPI strip + top-6 strategy comparison cards
  ┃ ┃ ┣ 📄 StrategyTimeline.jsx    Recharts bar chart with pit-window bands
- ┃ ┃ ┗ 📄 StintTable.jsx          lap-by-lap stint detail table
+ ┃ ┃ ┣ 📄 StintTable.jsx          lap-by-lap stint detail table
+ ┃ ┃ ┣ 📄 LiveDashboard.jsx       ⭐ single-team widget — speed/gear, RPM/pedals, tyre temps/wear, GPS track map
+ ┃ ┃ ┣ 📄 TelemetryControls.jsx   connection panel — server URL, PS5 IPs, LAN scan
+ ┃ ┃ ┗ 📄 TelemetryLeaderboard.jsx multi-team table — pos, lap gap, times, compound, fuel, status
  ┃ ┣ 📂 hooks/
  ┃ ┃ ┣ 📄 useStrategy.js          debounced wrapper around findBestStrategies() (600 ms)
- ┃ ┃ ┗ 📄 useTelemetry.js         WebSocket hook — auto-fills currentLap / currentFuel
+ ┃ ┃ ┣ 📄 useTelemetry.js         WebSocket hook — multi-team Map, scan support
+ ┃ ┃ ┗ 📄 useCompoundDetector.js  pit-exit detection → compound confirmation prompt
  ┃ ┣ 📂 logic/
- ┃ ┃ ┗ 📄 strategy.js             ⭐ pure-JS engine · zero React · testable with node
- ┃ ┣ 📄 App.jsx                   root component — owns all state
+ ┃ ┃ ┣ 📄 strategy.js             ⭐ pure-JS engine · zero React · testable with node
+ ┃ ┃ ┗ 📄 compoundDetector.js     note: GT7 UDP has no compound ID — tracking is user-driven
+ ┃ ┣ 📄 App.jsx                   root component — owns all state, two-tab UI
  ┃ ┗ 📄 index.css                 dark racing theme (gold #FFD700)
  ┣ 📂 server/
- ┃ ┗ 📄 telemetry-server.js       Node.js UDP relay — Salsa20 decrypt → WebSocket
+ ┃ ┗ 📄 telemetry-server.js       Node.js UDP relay — Salsa20 decrypt → WebSocket + LAN scan
  ┣ 📂 tests/
  ┃ ┣ 📄 test.js                   smoke test
  ┃ ┣ 📄 test_comprehensive.js     129 unit tests
@@ -329,7 +345,7 @@ npm run test:smoke    # 1-hour race smoke test
 
 <br>
 
-State lives exclusively in `App.jsx` — no Redux, no Context. The strategy engine is intentionally decoupled from React so it can be tested with plain `node` and stays portable to any environment.
+State lives exclusively in `App.jsx` — no Redux, no Context. The app is split into two tabs: **Stratégie** (plan calculator) and **Télémétrie** (live PS5 data). The strategy engine is intentionally decoupled from React so it can be tested with plain `node` and stays portable to any environment.
 
 <br><br>
 

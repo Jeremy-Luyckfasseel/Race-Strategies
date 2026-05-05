@@ -38,13 +38,20 @@ The React integration layer is `src/hooks/useStrategy.js`, which wraps `findBest
 ### Data flow
 
 ```
-App.jsx  (state: inputs, selectedIndex, telemSelectedIp)
-  ├── InputPanel        → collects all parameters; localStorage presets + PS5 IPs
-  ├── useStrategy hook  → calls findBestStrategies(inputs); debounced; returns sorted array
-  ├── useTelemetry hook → WebSocket to relay server; auto-fills currentLap/currentFuel
-  ├── ResultsSummary    → KPI strip, driver summary, top-6 strategy comparison cards
-  ├── StrategyTimeline  → Recharts horizontal bar chart (stints + pit windows)
-  └── StintTable        → lap-by-lap stint detail for selected strategy
+App.jsx  (state: inputs, selectedIndex, telemSelectedIp, activeTab, teamLabels, teamCompounds)
+  ├── InputPanel            → collects all parameters; localStorage presets + PS5 IPs
+  ├── useStrategy hook      → calls findBestStrategies(inputs); debounced; returns sorted array
+  ├── useTelemetry hook     → WebSocket to relay server; multi-team Map<ip, packet>; scan support
+  ├── useCompoundDetector   → watches pitExit flag; prompts user to confirm tire compound
+  ├── [Strategy tab]
+  │     ├── ResultsSummary  → KPI strip, driver summary, top-6 strategy comparison cards
+  │     ├── StrategyTimeline → Recharts horizontal bar chart (stints + pit windows)
+  │     └── StintTable      → lap-by-lap stint detail for selected strategy
+  └── [Télémétrie tab]
+        ├── TelemetryControls   → server URL field, PS5 IP list, network scan button
+        ├── TelemetryLeaderboard → multi-team table: pos, lap, gap, times, compound, fuel, status
+        └── LiveDashboard       → single-team widget: speed/gear, RPM/pedals/fuel bars,
+                                   tire temps/wear, compound picker, SVG track map with car dots
 ```
 
 State lives only in `App.jsx` — no Redux, no Context.
@@ -73,15 +80,20 @@ The `no-unused-vars` rule ignores variables whose names start with an uppercase 
 | File | Purpose |
 |------|---------|
 | `src/logic/strategy.js` | Pure-JS strategy engine (~620 lines); exports `findBestStrategies`, `TIRE_COMPOUNDS`, `CAR_PRESETS`, `formatLapTime`, `formatRaceTime`, `parseLapTime` |
+| `src/logic/compoundDetector.js` | Placeholder/note: GT7 UDP does not expose compound ID; compound tracking is user-driven only |
 | `src/hooks/useStrategy.js` | React hook wrapping the engine; 600ms debounce + manual `calculate()` |
-| `src/hooks/useTelemetry.js` | React hook managing WebSocket to relay server; tracks per-PS5 telemetry packets |
-| `src/App.jsx` | Root component; owns all state; auto-fills currentLap/currentFuel from telemetry |
-| `src/components/InputPanel.jsx` | Full sidebar form: car presets, race settings, pit timings, fuel, tire compounds, mid-race mode, drivers, live telemetry (~740 lines) |
+| `src/hooks/useTelemetry.js` | WebSocket hook; exposes `connect`, `disconnect`, `sendIPs`, `scan`; returns `teams` Map<ip, packet>, `scanning`, `scanResults` |
+| `src/hooks/useCompoundDetector.js` | Watches `data.pitExit` per team; returns `pendingIps` Set + `confirmCompound(ip)` / `stopDetecting(ip)` |
+| `src/App.jsx` | Root component; owns all state; two-tab UI (Strategy / Télémétrie); wires telemetry→strategy autofill |
+| `src/components/InputPanel.jsx` | Full sidebar form: car presets, race settings, pit timings, fuel, tire compounds, mid-race mode, drivers, live telemetry |
 | `src/components/ResultsSummary.jsx` | KPI cards + driver summary chips + strategy comparison grid (top-6, expandable) |
 | `src/components/StrategyTimeline.jsx` | Recharts horizontal bar chart with pit markers, pit-window shading, compound colors |
 | `src/components/StintTable.jsx` | Stint detail table; highlights warning rows in red |
+| `src/components/LiveDashboard.jsx` | Single-team telemetry widget: gear/speed, RPM/throttle/brake bars, fuel bar, tire temp+wear per corner, compound picker, SVG track map (GPS recorded at 60Hz RAF) with pit lane detection and multi-car dots |
+| `src/components/TelemetryControls.jsx` | Collapsible panel: server URL + connect/disconnect, PS5 IP list management, network scan button and results |
+| `src/components/TelemetryLeaderboard.jsx` | Multi-team table sorted by race position: lap/gap, last/best lap times, compound picker, fuel bar, pit/track status |
 | `src/index.css` | Global dark racing theme (gold accent `#FFD700`; CSS vars for all colors) |
-| `server/telemetry-server.js` | Node.js UDP relay: receives Salsa20-encrypted GT7 packets on port 33740, relays to browser via WebSocket on port 20777 |
+| `server/telemetry-server.js` | Node.js UDP relay: receives Salsa20-encrypted GT7 packets on port 33740, relays to browser via WebSocket on port 20777; supports LAN scan for PS5s and DNS hostname resolution |
 | `tests/test.js` | Smoke test (1h race) |
 | `tests/test_comprehensive.js` | Full test suite (~129 tests) |
 
@@ -95,8 +107,16 @@ The `no-unused-vars` rule ignores variables whose names start with an uppercase 
 
 **Protocol (browser ↔ relay):**
 - Browser → Server: `{ type: 'setIPs', ips: ['192.168.1.x', ...] }` to start/update tracking
-- Server → Browser: `{ type: 'ips', ips: [...] }` (current tracked IPs)
-- Server → Browser: `{ ps5ip, fuelLiters, currentLap, speedKmh, onTrack, lastLapMs, tireWear[], ... }` per packet
+- Browser → Server: `{ type: 'scan' }` — trigger LAN scan for active PS5s
+- Server → Browser: `{ type: 'ips', ips: [...] }` — current tracked IPs
+- Server → Browser: `{ type: 'scanning' }` — scan started
+- Server → Browser: `{ type: 'scanResult', results: [{ip, hostname}] }` — scan complete
+- Server → Browser: `{ ps5ip, fuelLiters, fuelRatio, currentLap, totalLaps, speedKmh, onTrack, lastLapMs, bestLapMs, racePos, totalCars, gear, suggestedGear, rpm, rpmLimiter, rpmWarning, throttle, brake, waterTemp, oilTemp, boost, tireTemp[], tireWear[], posX, posZ, paused, pitDetected, pitExit }` per packet
+
+**Pit and compound detection:**
+- `pitDetected` — set for one packet when the car enters the pit lane (App clears the compound selection)
+- `pitExit` — set for one packet when the car exits the pit (triggers `useCompoundDetector` to request compound confirmation from user)
+- GT7 UDP does not expose compound ID; it must be set manually via the compound picker buttons after each stop
 
 ## Default inputs (App.jsx)
 
