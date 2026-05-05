@@ -8,22 +8,22 @@ export default function StintTable({ stints }) {
   return (
     <div className="card">
       <div className="card-header">
-        <span className="card-title">Stint Plan</span>
+        <span className="card-title">Plan de Relais</span>
       </div>
       <div className="table-scroll">
         <table className="stint-table" aria-label="Lap-by-stint breakdown">
           <thead>
             <tr>
               <th>#</th>
-              {multiDriver && <th>Driver</th>}
-              <th>Start</th>
-              <th>End</th>
-              <th>Laps</th>
-              <th>Pit Lap</th>
-              <th>Fuel Add</th>
-              <th>Tyres</th>
-              <th>Compound</th>
-              <th>Avg Lap</th>
+              {multiDriver && <th>Pilote</th>}
+              <th>Début</th>
+              <th>Fin</th>
+              <th>Tours</th>
+              <th>Tour Pit</th>
+              <th>Carbu. Ajouté</th>
+              <th>Pneus</th>
+              <th>Composé</th>
+              <th>Tour Moy.</th>
               <th>Pit (s)</th>
             </tr>
           </thead>
@@ -43,7 +43,7 @@ export default function StintTable({ stints }) {
                   <td>{stint.lapsInStint}</td>
                   <td>
                     {isLast
-                      ? <span className="finish-label">Finish</span>
+                      ? <span className="finish-label">Arrivée</span>
                       : stint.pitLap}
                   </td>
                   <td>
@@ -56,7 +56,7 @@ export default function StintTable({ stints }) {
                   <td>
                     {isLast ? "—" : (
                       <span className={`tire-badge ${stint.tiresChanged ? "changed" : "not-changed"}`}>
-                        {stint.tiresChanged ? "Yes" : "No"}
+                        {stint.tiresChanged ? "Oui" : "Non"}
                       </span>
                     )}
                   </td>
@@ -79,7 +79,7 @@ export default function StintTable({ stints }) {
       </div>
       {stints.some((s) => s.warning) && (
         <p className="field-note" style={{ marginTop: 10, textAlign: "right" }}>
-          Rows highlighted in red indicate fuel or tyre warnings — hover for details.
+          Les lignes en rouge indiquent des alertes carburant ou pneus — survolez pour les détails.
         </p>
       )}
     </div>

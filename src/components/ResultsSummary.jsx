@@ -60,12 +60,12 @@ export default function ResultsSummary({ ranked, best, selectedIndex, onSelect }
   const hasWarnings = strat.stints.some((s) => s.warning);
 
   const kpiCards = [
-    { label: "Race Laps",      value: totalLaps,              unit: "laps" },
-    { label: "Pit Stops",      value: numPitStops,            unit: "stops" },
-    { label: "Est. Race Time", value: formatRaceTime(estTotalRaceTimeSecs), unit: "" },
-    { label: "Time in Pits",   value: totalTimeLostMins,      unit: "min" },
-    { label: "Fuel Laps",      value: effectiveLapsPerTank,   unit: "laps" },
-    { label: "Tyre Laps",      value: lapsPerTireSet,         unit: "laps" },
+    { label: "Tours Course",    value: totalLaps,              unit: "tours" },
+    { label: "Arrêts Pit",     value: numPitStops,            unit: "arrêts" },
+    { label: "Temps Est.",     value: formatRaceTime(estTotalRaceTimeSecs), unit: "" },
+    { label: "Temps aux Stands", value: totalTimeLostMins,    unit: "min" },
+    { label: "Tours Carburant", value: effectiveLapsPerTank,  unit: "tours" },
+    { label: "Tours Pneus",    value: lapsPerTireSet,         unit: "tours" },
   ];
 
   const visibleStrategies = showAll ? ranked : ranked.slice(0, INITIAL_SHOW);
@@ -74,7 +74,7 @@ export default function ResultsSummary({ ranked, best, selectedIndex, onSelect }
     <div className="results-summary">
       {hasWarnings && (
         <div className="warning-banner" role="alert">
-          Strategy has warnings — check the stint table below
+          La stratégie a des avertissements — vérifiez le tableau des relais
         </div>
       )}
 
@@ -85,7 +85,7 @@ export default function ResultsSummary({ ranked, best, selectedIndex, onSelect }
               <span className="driver-chip-name">{d.name}</span>
               <span className="driver-chip-time">{formatDriveTime(d.totalTimeSecs)}</span>
               {!d.metMinimum && (
-                <span className="driver-chip-flag">min not met</span>
+                <span className="driver-chip-flag">min non atteint</span>
               )}
             </div>
           ))}
@@ -108,7 +108,7 @@ export default function ResultsSummary({ ranked, best, selectedIndex, onSelect }
       {/* Strategy Alternatives */}
       {ranked.length > 1 && (
         <div className="strategy-comparison">
-          <div className="comparison-heading">Strategy Alternatives</div>
+          <div className="comparison-heading">Alternatives de Stratégie</div>
           <div className="comparison-grid">
             {visibleStrategies.map((entry, idx) => {
               const s = entry.strategy;
@@ -135,10 +135,10 @@ export default function ResultsSummary({ ranked, best, selectedIndex, onSelect }
                   <div className="comparison-card-body">
                     <div>
                       {isBest
-                        ? <span className="best-badge">Best</span>
+                        ? <span className="best-badge">Meilleure</span>
                         : <span className="delta-badge">
                             {lapDelta !== 0
-                              ? `${lapDelta > 0 ? "+" : ""}${lapDelta} laps`
+                              ? `${lapDelta > 0 ? "+" : ""}${lapDelta} tours`
                               : `+${timeDeltaSecs.toFixed(0)}s`}
                           </span>}
                     </div>
@@ -152,8 +152,8 @@ export default function ResultsSummary({ ranked, best, selectedIndex, onSelect }
                     <div className="comparison-label">{entry.label}</div>
 
                     <div className="comparison-stats">
-                      <div><span className="stat-val">{s.numPitStops}</span> stops</div>
-                      <div><span className="stat-val">{(s.totalTimeLostSecs / 60).toFixed(1)}</span> min lost</div>
+                      <div><span className="stat-val">{s.numPitStops}</span> arrêts</div>
+                      <div><span className="stat-val">{(s.totalTimeLostSecs / 60).toFixed(1)}</span> min perdues</div>
                       <div><span className="stat-val">{formatRaceTime(s.estTotalRaceTimeSecs)}</span></div>
                     </div>
                   </div>
@@ -167,7 +167,7 @@ export default function ResultsSummary({ ranked, best, selectedIndex, onSelect }
               className="btn-ghost show-more-btn"
               onClick={() => setShowAll((v) => !v)}
             >
-              {showAll ? `Show top ${INITIAL_SHOW}` : `Show all ${ranked.length} strategies`}
+              {showAll ? `Afficher top ${INITIAL_SHOW}` : `Afficher toutes les ${ranked.length} stratégies`}
             </button>
           )}
         </div>

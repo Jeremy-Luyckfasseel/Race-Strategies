@@ -23,13 +23,13 @@ function CustomTooltip({ active, payload }) {
   if (!s) return null;
   return (
     <div className="timeline-tooltip">
-      <div className="tt-title">Stint {s.stintNum} — {s.compoundName}</div>
-      <div>Laps {s.startLap}–{s.endLap}&nbsp;({s.lapsInStint} laps)</div>
-      {s.fuelToAddLiters > 0 && <div>Fuel added: +{s.fuelToAddLiters.toFixed(1)} L</div>}
-      {s.tiresChanged && <div>Tyres changed</div>}
-      {s.pitStopTimeSecs > 0 && <div>Pit time: {s.pitStopTimeSecs.toFixed(1)} s</div>}
+      <div className="tt-title">Relais {s.stintNum} — {s.compoundName}</div>
+      <div>Tours {s.startLap}–{s.endLap}&nbsp;({s.lapsInStint} tours)</div>
+      {s.fuelToAddLiters > 0 && <div>Carbu. ajouté : +{s.fuelToAddLiters.toFixed(1)} L</div>}
+      {s.tiresChanged && <div>Pneus changés</div>}
+      {s.pitStopTimeSecs > 0 && <div>Temps pit : {s.pitStopTimeSecs.toFixed(1)} s</div>}
       {s.pitWindowLatestLap && s.pitWindowLatestLap > s.endLap && (
-        <div>Window: pit by L{s.pitWindowLatestLap}</div>
+        <div>Fenêtre : pit avant T{s.pitWindowLatestLap}</div>
       )}
       {s.warning && <div className="tt-warning">{s.warning}</div>}
     </div>
@@ -68,7 +68,7 @@ export default function StrategyTimeline({ stints, totalLaps }) {
   return (
     <div className="card">
       <div className="card-header">
-        <span className="card-title">Strategy Timeline</span>
+        <span className="card-title">Chronologie Stratégie</span>
         <div className="timeline-legend">
           {Object.entries(COMPOUND_COLORS)
             .filter(([id]) => usedCompounds.has(id))
@@ -156,7 +156,7 @@ export default function StrategyTimeline({ stints, totalLaps }) {
       </ResponsiveContainer>
 
       <p className="timeline-hint">
-        Dashed lines = pit stops · Shaded area = pit window · Red outline = warning
+        Tirets = arrêts pit · Zone hachurée = fenêtre pit · Contour rouge = alerte
       </p>
     </div>
   );
