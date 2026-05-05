@@ -1,10 +1,15 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import InputPanel from "./components/InputPanel";
 import ResultsSummary from "./components/ResultsSummary";
 import StintTable from "./components/StintTable";
 import StrategyTimeline from "./components/StrategyTimeline";
 import { useStrategy } from "./hooks/useStrategy";
 import { useTelemetry } from "./hooks/useTelemetry";
+import { useCompoundDetector } from "./hooks/useCompoundDetector";
+import { useTrackMap } from "./hooks/useTrackMap";
+import LiveDashboard, { TrackMap } from "./components/LiveDashboard";
+import TelemetryLeaderboard from "./components/TelemetryLeaderboard";
+import TelemetryControls from "./components/TelemetryControls";
 
 const DEFAULT_INPUTS = {
   raceDurationHours: 8,
@@ -134,13 +139,78 @@ export default function App() {
   const [inputs, setInputs] = useState(DEFAULT_INPUTS);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [telemSelectedIp, setTelemSelectedIp] = useState("");
+  const [activeTab, setActiveTab] = useState("strategy");
+
+  const [ps5IPs, setPS5IPs] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("gt7-ps5-ips") || '[""]'); }
+    catch { return [""]; }
+  });
+  const [telemUrl, setTelemUrl] = useState("ws://localhost:20777");
+
+  const [teamLabels, setTeamLabels] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("gt7-team-labels") || "{}"); }
+    catch { return {}; }
+  });
+
+  const [teamCompounds, setTeamCompounds] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("gt7-team-compounds") || "{}"); }
+    catch { return {}; }
+  });
+
+  const handledPitsRef = useRef(new Set());
+  const telem    = useTelemetry();
+  const detector = useCompoundDetector(telem.teams);
+  const { result, calculating, calculate } = useStrategy(inputs);
+
+  const savePS5IPs = useCallback((ips) => {
+    setPS5IPs(ips);
+    localStorage.setItem("gt7-ps5-ips", JSON.stringify(ips));
+    if (telem.connected) telem.sendIPs(ips.map(ip => ip.trim()).filter(Boolean));
+  }, [telem.connected, telem.sendIPs]);
+
+  const updateTeamCompound = useCallback((ip, compound, persist = true) => {
+    if (compound !== null) detector.confirmCompound(ip);
+    else detector.stopDetecting(ip);
+    setTeamCompounds(prev => {
+      const next = { ...prev, [ip]: compound };
+      if (persist && compound !== null) localStorage.setItem("gt7-team-compounds", JSON.stringify(next));
+      return next;
+    });
+  }, [detector]);
+
+  const teamKeys = useMemo(() => [...telem.teams.keys()], [telem.teams]);
+  const getTeamLabel = useCallback((ip) => teamLabels[ip] || ip, [teamLabels]);
+
+  const activeIp = telemSelectedIp || (teamKeys.length === 1 ? teamKeys[0] : null);
+
+  const { mapRef, resetMap } = useTrackMap(
+    telem.teams.get(activeIp ?? ''),
+    () => activeIp && updateTeamCompound(activeIp, null, false),
+  );
+
+  const updateTeamLabel = useCallback((ip, label) => {
+    setTeamLabels(prev => {
+      const next = { ...prev, [ip]: label };
+      localStorage.setItem("gt7-team-labels", JSON.stringify(next));
+      return next;
+    });
+  }, []);
 
   const handleChange = useCallback((updater) => {
     setInputs((prev) => typeof updater === "function" ? updater(prev) : updater);
   }, []);
 
-  const telem = useTelemetry();
-  const { result, calculating, calculate } = useStrategy(inputs);
+  // Auto-clear compound picker when a pit stop is detected for any team
+  useEffect(() => {
+    for (const [ip, data] of telem.teams) {
+      if (!data.pitDetected) continue;
+      const key = `${ip}-${data.currentLap}`;
+      if (!handledPitsRef.current.has(key)) {
+        handledPitsRef.current.add(key);
+        updateTeamCompound(ip, null);
+      }
+    }
+  }, [telem.teams, updateTeamCompound]);
 
   useEffect(() => {
     if (!telemSelectedIp) return;
@@ -162,30 +232,32 @@ export default function App() {
   const ranked = result?.ranked ?? [];
   const selectedStrategy = ranked[selectedIndex] ?? best;
 
+  const displayIp = activeIp;
+
   return (
     <div className="app-root">
       <header className="app-header">
         <CheckeredFlag />
         <div className="header-titles">
-          <h1 className="header-title">GT7 Race Strategy</h1>
-          <p className="header-subtitle">Endurance Pit Calculator</p>
+          <h1 className="header-title">GT7 Stratégie Course</h1>
+          <p className="header-subtitle">Calculateur Arrêt Pit</p>
         </div>
         <div className="header-actions">
           {telem && (
             <div className={`telem-badge${telem.connected ? " live" : ""}`}>
               <span className={`telem-dot${telem.connected ? " live" : ""}`} />
-              {telem.connected ? "Live Telemetry" : "Telemetry Offline"}
+              {telem.connected ? "Télémétrie En Direct" : "Télémétrie Hors Ligne"}
             </div>
           )}
           {best && (
             <button className="btn-header-ghost" onClick={() => window.print()}>
-              Print
+              Imprimer
             </button>
           )}
         </div>
       </header>
 
-      <main className="app-main">
+      <main className={`app-main${activeTab === 'telemetry' ? ' app-main--telemetry' : ''}`}>
         <aside className="sidebar">
           <InputPanel
             inputs={inputs}
@@ -194,47 +266,148 @@ export default function App() {
             telem={telem}
             telemSelectedIp={telemSelectedIp}
             onTelemSelect={setTelemSelectedIp}
+            teamLabels={teamLabels}
           />
         </aside>
 
-        <section className={`results-area${calculating ? " results-calculating" : ""}`}>
-          {calculating && best && (
-            <div className="recalc-badge">Recalculating&hellip;</div>
+        <section className="results-area">
+          <div className="tab-bar">
+            <button
+              className={`tab-btn${activeTab === "strategy" ? " tab-active" : ""}`}
+              onClick={() => setActiveTab("strategy")}
+            >
+              Stratégie
+            </button>
+            <button
+              className={`tab-btn${activeTab === "telemetry" ? " tab-active" : ""}`}
+              onClick={() => setActiveTab("telemetry")}
+            >
+              Télémétrie
+              {telem.connected && telem.teams.size > 0 && (
+                <span className="tab-live-dot" />
+              )}
+            </button>
+          </div>
+
+          {activeTab === "strategy" && (
+            <div className={`tab-content${calculating ? " results-calculating" : ""}`}>
+              {calculating && best && (
+                <div className="recalc-badge">Recalculating&hellip;</div>
+              )}
+              {!best ? (
+                <div className="empty-state">
+                  <div className="empty-circuit-wrap">
+                    <CircuitSVG />
+                  </div>
+                  <div className="empty-text-block">
+                    <p className="empty-title">Aucune Donnée</p>
+                    <p className="empty-text">
+                      Configurez vos paramètres dans le panneau et appuyez sur{" "}
+                      <strong>Calculer la Stratégie</strong> pour énumérer toutes les séquences valides.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <ResultsSummary
+                    ranked={ranked}
+                    best={best}
+                    selectedIndex={selectedIndex}
+                    onSelect={setSelectedIndex}
+                  />
+                  <StrategyTimeline
+                    stints={selectedStrategy.strategy.stints}
+                    totalLaps={selectedStrategy.strategy.totalLaps}
+                  />
+                  <StintTable stints={selectedStrategy.strategy.stints} />
+                </>
+              )}
+            </div>
           )}
 
-          {!best ? (
-            <div className="empty-state">
-              <div className="empty-circuit-wrap">
-                <CircuitSVG />
+          {activeTab === "telemetry" && (() => {
+            const cars = teamKeys.map((ip, i) => {
+              const d = telem.teams.get(ip);
+              const raw = teamLabels[ip];
+              return {
+                label: raw ? raw.slice(0, 9) : `T${i + 1}`,
+                posX: d?.posX, posZ: d?.posZ, onTrack: d?.onTrack,
+                isOwn: ip === displayIp,
+                colorIdx: i,
+              };
+            });
+            const lbProps = {
+              teams: telem.teams,
+              teamLabels,
+              teamCompounds,
+              pendingIps: detector.pendingIps,
+              selectedIp: displayIp,
+              onSelect: setTelemSelectedIp,
+              onCompoundChange: (ip, c) => updateTeamCompound(ip, c),
+            };
+            return (
+              <div className="tab-content tab-content--telemetry">
+                <TelemetryControls
+                  telem={telem}
+                  ps5IPs={ps5IPs}
+                  onSavePS5IPs={savePS5IPs}
+                  telemUrl={telemUrl}
+                  setTelemUrl={setTelemUrl}
+                  teamLabels={teamLabels}
+                  onTeamLabelChange={updateTeamLabel}
+                />
+                {telem.teams.size === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-text-block">
+                      <p className="empty-title">
+                        {telem.connected ? "En attente de données PS5" : "Télémétrie Hors Ligne"}
+                      </p>
+                      <p className="empty-text">
+                        {telem.connected
+                          ? "Ajoutez une IP PS5 ci-dessus et commencez à rouler dans GT7."
+                          : "Connectez-vous au serveur relais, puis ajoutez les IPs PS5."}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="telem-3col">
+                    <div className="telem-3col-lb">
+                      <TelemetryLeaderboard {...lbProps} />
+                    </div>
+                    <div className="telem-3col-map">
+                      <TrackMap
+                        currentLap={telem.teams.get(displayIp)?.currentLap ?? 0}
+                        cars={cars}
+                        mapRef={mapRef}
+                        onReset={resetMap}
+                      />
+                    </div>
+                    <div className="telem-3col-data">
+                      {displayIp ? (
+                        <LiveDashboard
+                          data={telem.teams.get(displayIp)}
+                          label={`T${teamKeys.indexOf(displayIp) + 1} · ${getTeamLabel(displayIp)}`}
+                          compound={teamCompounds[displayIp] || null}
+                          pendingConfirmation={detector.pendingIps.has(displayIp)}
+                          onCompoundChange={(c) => updateTeamCompound(displayIp, c)}
+                          onPitEntry={() => updateTeamCompound(displayIp, null, false)}
+                        />
+                      ) : (
+                        <div className="telem-no-sel">
+                          <p>Sélectionnez une équipe dans le tableau</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="empty-text-block">
-                <p className="empty-title">No Race Data</p>
-                <p className="empty-text">
-                  Configure your race parameters in the sidebar and press{" "}
-                  <strong>Calculate Strategy</strong> to enumerate all valid pit sequences.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <>
-              <ResultsSummary
-                ranked={ranked}
-                best={best}
-                selectedIndex={selectedIndex}
-                onSelect={setSelectedIndex}
-              />
-              <StrategyTimeline
-                stints={selectedStrategy.strategy.stints}
-                totalLaps={selectedStrategy.strategy.totalLaps}
-              />
-              <StintTable stints={selectedStrategy.strategy.stints} />
-            </>
-          )}
+            );
+          })()}
         </section>
       </main>
 
       <footer className="app-footer">
-        GT7 Strategy Calculator &middot; Estimates only &mdash; verify with in-game data
+        Calculateur Stratégie GT7 &middot; Estimations uniquement &mdash; vérifier avec les données du jeu
       </footer>
     </div>
   );
