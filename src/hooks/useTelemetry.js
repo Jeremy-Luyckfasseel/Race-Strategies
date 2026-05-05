@@ -15,11 +15,21 @@ export function useTelemetry() {
   const [connected, setConnected] = useState(false);
   const [teams, setTeams] = useState(new Map());
   const [serverIPs, setServerIPs] = useState([]);
+  const [scanning, setScanning] = useState(false);
+  const [scanResults, setScanResults] = useState([]);
   const wsRef = useRef(null);
 
   const sendIPs = useCallback((ips) => {
     if (wsRef.current?.readyState === 1 /* OPEN */) {
       wsRef.current.send(JSON.stringify({ type: 'setIPs', ips }));
+    }
+  }, []);
+
+  const scan = useCallback(() => {
+    if (wsRef.current?.readyState === 1 /* OPEN */) {
+      setScanResults([]);
+      setScanning(true);
+      wsRef.current.send(JSON.stringify({ type: 'scan' }));
     }
   }, []);
 
@@ -45,6 +55,11 @@ export function useTelemetry() {
         if (!pkt) return;
         if (pkt.type === 'ips') {
           setServerIPs(pkt.ips || []);
+        } else if (pkt.type === 'scanning') {
+          setScanning(true);
+        } else if (pkt.type === 'scanResult') {
+          setScanning(false);
+          setScanResults(pkt.results || []);
         } else if (pkt.ps5ip) {
           setTeams(prev => new Map(prev).set(pkt.ps5ip, { ...pkt, ts: Date.now() }));
         }
@@ -63,5 +78,5 @@ export function useTelemetry() {
 
   useEffect(() => () => { wsRef.current?.close(); }, []);
 
-  return { connected, teams, serverIPs, connect, disconnect, sendIPs };
+  return { connected, teams, serverIPs, connect, disconnect, sendIPs, scan, scanning, scanResults };
 }
