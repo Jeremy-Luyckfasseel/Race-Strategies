@@ -144,7 +144,10 @@ export default function App() {
   const [inputs, setInputs] = useState(DEFAULT_INPUTS);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [telemSelectedIp, setTelemSelectedIp] = useState("");
-  const [activeTab, setActiveTab] = useState("strategy");
+  // Single-team is the default landing experience (Phase 2, Task 2.2). The
+  // multi-team leaderboard still exists but is demoted behind an Advanced toggle.
+  const [activeTab, setActiveTab] = useState("now");
+  const [showAdvancedLb, setShowAdvancedLb] = useState(false);
 
   const [ps5IPs, setPS5IPs] = useState(() => {
     try { return JSON.parse(localStorage.getItem("gt7-ps5-ips") || '[""]'); }
@@ -438,6 +441,16 @@ export default function App() {
                   teamLabels={teamLabels}
                   onTeamLabelChange={updateTeamLabel}
                 />
+                {telem.teams.size > 0 && (
+                  <button
+                    className={`advanced-lan-toggle${showAdvancedLb ? " is-open" : ""}`}
+                    onClick={() => setShowAdvancedLb((v) => !v)}
+                  >
+                    {showAdvancedLb
+                      ? "Masquer le classement multi-équipes"
+                      : "Avancé · Événement LAN — classement multi-équipes"}
+                  </button>
+                )}
                 {telem.teams.size === 0 ? (
                   <div className="empty-state">
                     <div className="empty-text-block">
@@ -453,9 +466,11 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="telem-3col">
-                    <div className="telem-3col-lb">
-                      <TelemetryLeaderboard {...lbProps} />
-                    </div>
+                    {showAdvancedLb && (
+                      <div className="telem-3col-lb">
+                        <TelemetryLeaderboard {...lbProps} />
+                      </div>
+                    )}
                     <div className="telem-3col-map">
                       <TrackMap
                         currentLap={telem.teams.get(displayIp)?.currentLap ?? 0}

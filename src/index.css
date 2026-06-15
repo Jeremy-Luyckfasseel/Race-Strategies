@@ -3166,3 +3166,25 @@ input[type="range"]::-moz-range-thumb {
   font-family: var(--font-display);
   padding: 20px;
 }
+
+/* Advanced / LAN event — multi-team leaderboard toggle (Phase 2, Task 2.2).
+   Single-team is the default; the multi-team board is demoted behind this. */
+.advanced-lan-toggle {
+  flex-shrink: 0;
+  width: 100%;
+  text-align: left;
+  padding: 8px 14px;
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  margin-bottom: 8px;
+  transition: color var(--t-fast), border-color var(--t-fast);
+}
+.advanced-lan-toggle:hover { color: var(--text-primary); border-color: var(--rule-bright, var(--text-muted)); }
+.advanced-lan-toggle.is-open { color: var(--accent); border-color: var(--accent); }
