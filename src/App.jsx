@@ -15,6 +15,8 @@ import TelemetryLeaderboard from "./components/TelemetryLeaderboard";
 import TelemetryControls from "./components/TelemetryControls";
 import LearnerRecommendations from "./components/LearnerRecommendations";
 import NowView from "./components/NowView";
+import Onboarding from "./components/Onboarding";
+import { CAR_PRESETS } from "./logic/strategy";
 import { DEFAULT_LANG, t } from "./i18n/strings";
 
 const DEFAULT_INPUTS = {
@@ -149,6 +151,12 @@ export default function App() {
   // multi-team leaderboard still exists but is demoted behind an Advanced toggle.
   const [activeTab, setActiveTab] = useState("now");
   const [showAdvancedLb, setShowAdvancedLb] = useState(false);
+
+  // First-run onboarding gate (Phase 3, Task 3.3).
+  const [onboarded, setOnboarded] = useState(() => {
+    try { return localStorage.getItem("gt7-onboarded") === "1"; }
+    catch { return true; }
+  });
 
   const [ps5IPs, setPS5IPs] = useState(() => {
     try { return JSON.parse(localStorage.getItem("gt7-ps5-ips") || '[""]'); }
@@ -311,8 +319,35 @@ export default function App() {
     ? Number(inputs.compounds.find((c) => c.id === nowCompoundId)?.tireLife) || 0
     : 0;
 
+  // --- Onboarding (Phase 3, Task 3.3) ---
+  const detectedIp = activeIp || pickAutoConnectIp(telem.scanResults);
+  const completeOnboarding = useCallback(() => {
+    try { localStorage.setItem("gt7-onboarded", "1"); } catch { /* ignore */ }
+    setOnboarded(true);
+    setActiveTab("now");
+  }, []);
+  const applyCarPreset = useCallback((preset) => {
+    setInputs((prev) => ({
+      ...prev,
+      tankSize: preset.tankSize,
+      lapsPerFullTank: preset.lapsPerFullTank,
+      raceDurationHours: preset.raceDurationHours,
+    }));
+  }, []);
+
   return (
     <div className="app-root">
+      {!onboarded && (
+        <Onboarding
+          telem={telem}
+          detectedIp={detectedIp}
+          carPresets={CAR_PRESETS}
+          onApplyCarPreset={applyCarPreset}
+          onRescan={() => telem.scan()}
+          onComplete={completeOnboarding}
+          lang={DEFAULT_LANG}
+        />
+      )}
       <header className="app-header">
         <CheckeredFlag />
         <div className="header-titles">
