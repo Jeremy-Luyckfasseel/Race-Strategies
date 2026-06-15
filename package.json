@@ -3,14 +3,18 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node tests/test_comprehensive.js && node tests/test_invariants.js && node tests/test_telemetry_learner.js && node tests/test_recommendations.js && node tests/test_race_state.js",
+    "test": "node tests/test_comprehensive.js && node tests/test_invariants.js && node tests/test_telemetry_learner.js && node tests/test_recommendations.js && node tests/test_race_state.js && node tests/test_connection.js",
     "test:smoke": "node tests/test.js",
-    "telemetry": "node server/telemetry-server.js"
+    "telemetry": "node server/telemetry-server.js",
+    "electron:build": "npm run build && electron .",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder --win"
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -23,10 +27,37 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "vite": "^7.3.1"
+  },
+  "build": {
+    "appId": "com.placeholder.race-strategies",
+    "productName": "Race Strategies",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "server/**",
+      "package.json"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "server/**",
+      "node_modules/ws/**"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

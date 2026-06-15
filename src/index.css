@@ -3188,3 +3188,143 @@ input[type="range"]::-moz-range-thumb {
 }
 .advanced-lan-toggle:hover { color: var(--text-primary); border-color: var(--rule-bright, var(--text-muted)); }
 .advanced-lan-toggle.is-open { color: var(--accent); border-color: var(--accent); }
+
+/* ---------------------------------------------------------------------------
+   First-run onboarding overlay (Phase 3, Task 3.3)
+   --------------------------------------------------------------------------- */
+
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(3, 5, 10, 0.92);
+  backdrop-filter: blur(3px);
+  padding: 24px;
+}
+
+.onboarding-card {
+  width: 100%;
+  max-width: 460px;
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ob-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-primary);
+}
+
+.ob-firewall {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  padding: 10px 12px;
+  border-left: 3px solid var(--accent);
+  background: var(--bg-field);
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+}
+
+.ob-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.ob-status--ok { color: var(--text-primary); }
+
+.ob-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+.ob-dot--scan { background: var(--warning); animation: ob-pulse 1s ease-in-out infinite; }
+.ob-dot--ok { background: var(--success); box-shadow: 0 0 6px var(--success); }
+
+@keyframes ob-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+
+.ob-rescan {
+  align-self: flex-start;
+  padding: 5px 12px;
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.ob-rescan:disabled { opacity: 0.5; cursor: default; }
+
+.ob-car {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ob-car-label {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.ob-car-select {
+  padding: 8px 10px;
+  background: var(--bg-field);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+}
+
+.ob-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+.ob-go {
+  flex: 1;
+  padding: 11px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-xs);
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+}
+.ob-skip {
+  padding: 11px 14px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.ob-skip:hover { color: var(--text-secondary); }

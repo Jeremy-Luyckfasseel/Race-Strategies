@@ -43,6 +43,7 @@ selected) still runs alongside. Manual inputs remain the source of truth.
 | `telemetryLearner.js` | **Phase 1.** `createLearner({tankSize, compounds, tireLife, compoundId})` → `{ingest, ingestAll, setCompound, getEstimates}`. Learns `litersPerLap` (tank-delta), the global fuel-weight penalty + per-compound 3-point degradation (joint block least-squares), with per-estimate trust payloads. Emits the engine's input shape. `LEARNER_CONFIG`. |
 | `recommendations.js` | **Phase 1.** `buildRecommendations(estimates, inputs, dismissed)` (confident + meaningfully-differs gating, no re-nag after ignore), `applyRecommendation(inputs, rec)` (new object, only path a learned value enters inputs), `dismissSnapshot`, `RECOMMEND_CONFIG`. |
 | `raceState.js` | **Phase 2.** Live "Now" decision logic: `currentStint`, `nextAction`, `fuelMarginLaps`, `liftAndCoastVerdict`, `fuelExhaustionLap`, `pitNowTrigger` (earliest-of + reason), `medianRecent` smoothing, `RACE_STATE_CONFIG`. |
+| `connection.js` | **Phase 3.** Auto-connect helpers: `backoffDelay` (capped exponential), `isSessionActive` (onTrack AND moving), `pickAutoConnectIp` (auto-pick only a single PS5), `RECONNECT_CONFIG`. |
 | `compoundDetector.js` | Doc-only stub. States that GT7 UDP does **not** expose tire compound; compound must be set by the user. No runnable code. |
 
 ### React hooks — `src/hooks/`
@@ -50,7 +51,7 @@ selected) still runs alongside. Manual inputs remain the source of truth.
 | File | Role |
 |------|------|
 | `useStrategy.js` | Wraps `findBestStrategies`. 600 ms debounce on input change + immediate `calculate()`. Validates/coerces inputs in `compute()`. Returns `{ result: {ranked, best} \| null, calculating, calculate }`. |
-| `useTelemetry.js` | WebSocket client to the relay. Returns `{ connected, teams: Map<ip,packet>, serverIPs, connect, disconnect, sendIPs, scan, scanning, scanResults }`. Each team packet is stamped with `ts: Date.now()`. **No auto-reconnect** — `onclose` just sets `connected=false`. |
+| `useTelemetry.js` | WebSocket client to the relay. Returns `{ connected, reconnecting, teams: Map<ip,packet>, serverIPs, connect, disconnect, sendIPs, scan, scanning, scanResults }`. Each team packet is stamped with `ts: Date.now()`. **Phase 3: auto-reconnect** with capped exponential backoff (re-sends last IPs), suppressed after an explicit `disconnect()`. |
 | `useCompoundDetector.js` | Watches each team packet's `pitExit` flag. Adds the IP to a `pendingIps` Set so the UI can prompt for a one-tap compound confirmation. `confirmCompound(ip)` / `stopDetecting(ip)` clear it. Dedupes by `${ip}-${currentLap}`. |
 | `useTrackMap.js` | App-level `requestAnimationFrame` loop that records GPS (`posX`/`posZ`) into segments + an occupancy grid, persisted to `localStorage` (`gt7_track_map_v1`). Detects the pit lane from a sustained slow zone and fires `onPitEntry`. Returns `{ mapRef, resetMap }`. |
 | `useTelemetryLearner.js` | **Phase 1.** Runs `createLearner` against the selected car's live packets (resets only when the car changes), throttles `getEstimates()` to once per new lap, pushes the confirmed compound in, and manages ignore/dismiss state. Returns `{ estimates, recommendations, ignore, clearDismiss }`. Never writes to `inputs`. |
@@ -68,6 +69,7 @@ selected) still runs alongside. Manual inputs remain the source of truth.
 | `TelemetryLeaderboard.jsx` | Multi-team table sorted by race position: lap/gap, last/best lap, compound picker, fuel bar, pit/track status. **Phase 2: now mounted only behind the Télémétrie tab's "Advanced / LAN event" toggle (hidden by default).** |
 | `NowView.jsx` | **Phase 2.** The glanceable in-race "Now" view (dumb renderer over `raceState.js`): current plan, big stint countdown, next action (box lap + fuel + tyres + next compound), lift-and-coast/push verdict + pit reason, and a "freeze plan" toggle. |
 | `LearnerRecommendations.jsx` | **Phase 1.** Propose-and-accept cards (Accept / Ignore + sample-size/volatility trust line) for the learner's confident, meaningfully-different estimates. |
+| `Onboarding.jsx` | **Phase 3.** First-run overlay: firewall explainer → auto-scan → detected PS5 → optional car preset → into the Now view. Gated by a `gt7-onboarded` localStorage flag. |
 
 ### Root — `src/App.jsx`
 
@@ -102,11 +104,12 @@ Standalone Node process, **not** part of the Vite build. Run with
 | `test_telemetry_learner.js` | **Phase 1.** Synthetic seed+race sessions from known ground truth; tight (synthetic) vs live-trust tolerance bands; recovery, engine round-trip, confidence gating, single-stint non-identifiability, multi-compound segmentation. |
 | `test_recommendations.js` | **Phase 1.** Propose-and-accept gating, no-mutation, ignore/material-shift re-surface, accepted value → valid ranked strategy. |
 | `test_race_state.js` | **Phase 2.** `raceState` helpers: stint/next-action, fuel margin + lift-and-coast verdict, earliest-of pit trigger, smoothing. |
+| `test_connection.js` | **Phase 3.** `connection` helpers: backoff schedule, session-active detection, single-PS5 auto-pick. |
 
 `npm test` runs `test_comprehensive.js`, `test_invariants.js`,
-`test_telemetry_learner.js`, `test_recommendations.js`, then `test_race_state.js`.
-All are pure node; they print `✓/✗` lines and exit non-zero on failure.
-**These are the guardrail — keep every assertion green.**
+`test_telemetry_learner.js`, `test_recommendations.js`, `test_race_state.js`,
+then `test_connection.js`. All are pure node; they print `✓/✗` lines and exit
+non-zero on failure. **These are the guardrail — keep every assertion green.**
 
 ---
 
@@ -242,14 +245,18 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
   propose-and-accept flow (`telemetryLearner.js` + `recommendations.js` +
   `useTelemetryLearner.js` + `LearnerRecommendations.jsx`). The legacy
   `currentLap` + `fuelLiters` mid-race auto-fill still runs alongside.
-- **No auto-reconnect / auto-connect.** The browser must be told the server URL
-  and IPs; a dropped socket stays dropped until manual reconnect.
+- **Auto-connect / auto-reconnect exist (Phase 3, done).** App auto-connects on
+  launch, auto-scans, auto-picks a single PS5, and reconnects with capped backoff
+  (`connection.js` + `useTelemetry.js` + `App.jsx`). Manual override still works.
 - **`tireWear` is radius-derived and unproven.** Whether it is stable/monotonic
   enough to drive a degradation model is unverified (a Phase 1 open question).
 - **Salsa20 key is version-sensitive.** A GT7 update can change it and silently
   break decoding.
-- **No packaging.** Running the app needs clone + `npm` + a separate relay
-  process + firewall allowance. No double-click distributable (Phase 3).
+- **Packaging scaffolded (Phase 3, build not yet run).** Electron
+  (`electron/main.cjs` + electron-builder config in `package.json`) bundles the UI
+  + relay into a Windows installer; steps in `docs/PACKAGING.md`. The installer
+  itself has not been built/smoke-tested yet — `npm run dist` on Windows. The dev
+  workflow (`npm run dev` / `telemetry` / `test`) is unchanged.
 - **Multi-team scaffolding is present** (leaderboard, `Map<ip,packet>`, scan)
   even though the MVP is single-team. The build plan says keep it but
   de-emphasize it (Phase 2.2), not delete it.
