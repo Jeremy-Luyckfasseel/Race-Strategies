@@ -125,3 +125,38 @@ The `no-unused-vars` rule ignores variables whose names start with an uppercase 
 - Pit: 25s base, 27s tire change, 4.0 L/s fuel rate
 - Tire compounds: H, M, S, IM, W (all active by default)
 - Drivers: 1 driver, 2h minimum drive time
+
+## MVP scope & working rules
+
+These are the locked guardrails for the current build. They override convenience.
+The full rationale lives in `docs/DECISIONS.md` (source of truth); the live module
+map is `docs/CURRENT_STATE.md`; the task checklist is `docs/BACKLOG.md`.
+
+### Locked MVP scope
+
+- **MVP = single-team / single-car / local.** GT7 on PS5, with strategy inputs
+  **auto-derived from live telemetry** (the differentiator). It must work with no
+  servers and no cooperation from anyone else.
+
+### Out of scope (v2 — do NOT build now)
+
+- Distributed multi-car aggregation.
+- Cloud server for at-home leagues.
+- Whole-field / organizer / spectator board.
+- F1-game support.
+
+(Existing multi-team scaffolding — leaderboard, `Map<ip,packet>`, LAN scan — stays
+but is de-emphasized, not deleted.)
+
+### Working rules
+
+- **Always run `npm test` after changes.** Keep every existing assertion passing.
+  **Never delete or weaken a test to make it pass** — fix the code or the test's
+  premise, never silence the guardrail.
+- **`src/logic/` stays pure JS** with zero React dependency, runnable under plain
+  `node`. The engine is portable and node-testable by design.
+- **One feature per git branch.** Each phase / feature gets its own branch.
+- **English is primary; wire i18n as a strings file** so French + Dutch are added
+  later without a rewrite (the app currently has hardcoded French strings).
+- **Product name is a placeholder.** `Race-Strategies` is the repo name only — do
+  not hardcode a brand string anywhere it's hard to swap later.
