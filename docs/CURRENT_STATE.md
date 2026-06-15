@@ -16,15 +16,20 @@ endurance race and ranks them by laps completed, then race time. It also has a
 **live telemetry** tab that reads real-time data from one or more PS5s running
 GT7 via a standalone Node UDP→WebSocket relay.
 
-Two tabs today: **Stratégie** (the calculator) and **Télémétrie** (live dashboard
-+ multi-team leaderboard + track map). UI strings are in French.
+Three tabs (Phase 2): **Course** (the live single-team "Now" view — default
+landing), **Stratégie** (the calculator), and **Télémétrie** (live dashboard +
+track map; the multi-team leaderboard is demoted behind an "Advanced / LAN event"
+toggle, hidden by default). UI strings are mostly French; a lightweight
+English-primary i18n layer (`src/i18n/strings.js`) was seeded for the Now view.
 
-**Today the telemetry and the strategy engine are only loosely connected.** The
-only auto-fill path: when mid-race mode is on AND a team is selected, the app
-copies the live `currentLap` and `fuelLiters` into the mid-race inputs (see
-`App.jsx` effect at lines ~215-229). Everything else — lap times per compound,
-fuel burn, tire life, fuel-weight penalty — is **typed by hand**. Closing that
-gap is the whole point of Phase 1.
+**The telemetry→engine learning path now exists (Phase 1).** A pure learner
+(`src/logic/telemetryLearner.js`) derives fuel burn, the fuel-weight penalty, and
+per-compound degradation from live packets and **proposes** them as
+recommendations the engineer accepts or ignores (`src/logic/recommendations.js`,
+`src/hooks/useTelemetryLearner.js`) — telemetry never silently overwrites the
+active inputs (DECISION 7). The older mid-race auto-fill (live `currentLap` /
+`fuelLiters` into the mid-race inputs when mid-race mode is on and a team is
+selected) still runs alongside. Manual inputs remain the source of truth.
 
 ---
 
@@ -35,6 +40,9 @@ gap is the whole point of Phase 1.
 | File | Role |
 |------|------|
 | `strategy.js` | The engine (~630 lines). Exports `findBestStrategies`, `simulateStrategy` (internal), `calcPitStopTime`, `parseLapTime`, `formatLapTime`, `formatRaceTime`, `TIRE_COMPOUNDS`, `CAR_PRESETS`. |
+| `telemetryLearner.js` | **Phase 1.** `createLearner({tankSize, compounds, tireLife, compoundId})` → `{ingest, ingestAll, setCompound, getEstimates}`. Learns `litersPerLap` (tank-delta), the global fuel-weight penalty + per-compound 3-point degradation (joint block least-squares), with per-estimate trust payloads. Emits the engine's input shape. `LEARNER_CONFIG`. |
+| `recommendations.js` | **Phase 1.** `buildRecommendations(estimates, inputs, dismissed)` (confident + meaningfully-differs gating, no re-nag after ignore), `applyRecommendation(inputs, rec)` (new object, only path a learned value enters inputs), `dismissSnapshot`, `RECOMMEND_CONFIG`. |
+| `raceState.js` | **Phase 2.** Live "Now" decision logic: `currentStint`, `nextAction`, `fuelMarginLaps`, `liftAndCoastVerdict`, `fuelExhaustionLap`, `pitNowTrigger` (earliest-of + reason), `medianRecent` smoothing, `RACE_STATE_CONFIG`. |
 | `compoundDetector.js` | Doc-only stub. States that GT7 UDP does **not** expose tire compound; compound must be set by the user. No runnable code. |
 
 ### React hooks — `src/hooks/`
@@ -45,6 +53,7 @@ gap is the whole point of Phase 1.
 | `useTelemetry.js` | WebSocket client to the relay. Returns `{ connected, teams: Map<ip,packet>, serverIPs, connect, disconnect, sendIPs, scan, scanning, scanResults }`. Each team packet is stamped with `ts: Date.now()`. **No auto-reconnect** — `onclose` just sets `connected=false`. |
 | `useCompoundDetector.js` | Watches each team packet's `pitExit` flag. Adds the IP to a `pendingIps` Set so the UI can prompt for a one-tap compound confirmation. `confirmCompound(ip)` / `stopDetecting(ip)` clear it. Dedupes by `${ip}-${currentLap}`. |
 | `useTrackMap.js` | App-level `requestAnimationFrame` loop that records GPS (`posX`/`posZ`) into segments + an occupancy grid, persisted to `localStorage` (`gt7_track_map_v1`). Detects the pit lane from a sustained slow zone and fires `onPitEntry`. Returns `{ mapRef, resetMap }`. |
+| `useTelemetryLearner.js` | **Phase 1.** Runs `createLearner` against the selected car's live packets (resets only when the car changes), throttles `getEstimates()` to once per new lap, pushes the confirmed compound in, and manages ignore/dismiss state. Returns `{ estimates, recommendations, ignore, clearDismiss }`. Never writes to `inputs`. |
 
 ### Components — `src/components/`
 
@@ -56,7 +65,9 @@ gap is the whole point of Phase 1.
 | `StintTable.jsx` | Lap-by-lap stint detail; red rows for warnings. |
 | `LiveDashboard.jsx` | Single-team widget: gear/speed, RPM/throttle/brake/fuel bars, per-corner tire temp + wear, compound picker, and the SVG `TrackMap` (exported named). |
 | `TelemetryControls.jsx` | Server URL + connect/disconnect, PS5 IP list editor, LAN scan button + results, team label editor. |
-| `TelemetryLeaderboard.jsx` | Multi-team table sorted by race position: lap/gap, last/best lap, compound picker, fuel bar, pit/track status. |
+| `TelemetryLeaderboard.jsx` | Multi-team table sorted by race position: lap/gap, last/best lap, compound picker, fuel bar, pit/track status. **Phase 2: now mounted only behind the Télémétrie tab's "Advanced / LAN event" toggle (hidden by default).** |
+| `NowView.jsx` | **Phase 2.** The glanceable in-race "Now" view (dumb renderer over `raceState.js`): current plan, big stint countdown, next action (box lap + fuel + tyres + next compound), lift-and-coast/push verdict + pit reason, and a "freeze plan" toggle. |
+| `LearnerRecommendations.jsx` | **Phase 1.** Propose-and-accept cards (Accept / Ignore + sample-size/volatility trust line) for the learner's confident, meaningfully-different estimates. |
 
 ### Root — `src/App.jsx`
 
@@ -88,10 +99,14 @@ Standalone Node process, **not** part of the Vite build. Run with
 | `test.js` | `npm run test:smoke` — quick 1-hour race sanity check. |
 | `test_comprehensive.js` | Helpers + broad `findBestStrategies` coverage (part of the ~1586 assertions `npm test` runs). |
 | `test_invariants.js` | Structural invariants, ranking dominance, multi-compound coverage, multi-driver minimums, race-time boundary, known-answer hand-computed scenarios, bulk no-overfill / no-overrun checks. |
+| `test_telemetry_learner.js` | **Phase 1.** Synthetic seed+race sessions from known ground truth; tight (synthetic) vs live-trust tolerance bands; recovery, engine round-trip, confidence gating, single-stint non-identifiability, multi-compound segmentation. |
+| `test_recommendations.js` | **Phase 1.** Propose-and-accept gating, no-mutation, ignore/material-shift re-surface, accepted value → valid ranked strategy. |
+| `test_race_state.js` | **Phase 2.** `raceState` helpers: stint/next-action, fuel margin + lift-and-coast verdict, earliest-of pit trigger, smoothing. |
 
-`npm test` runs `test_comprehensive.js` then `test_invariants.js`. Both are pure
-node imports of `src/logic/strategy.js`; they print `✓/✗` lines and exit non-zero
-on failure. **These are the guardrail — keep every assertion green.**
+`npm test` runs `test_comprehensive.js`, `test_invariants.js`,
+`test_telemetry_learner.js`, `test_recommendations.js`, then `test_race_state.js`.
+All are pure node; they print `✓/✗` lines and exit non-zero on failure.
+**These are the guardrail — keep every assertion green.**
 
 ---
 
@@ -222,9 +237,11 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
 
 - **`compoundDetector.js`** is a comment-only file (the real logic lives in the
   `useCompoundDetector` hook). Intentional, but easy to mistake for dead code.
-- **No telemetry→engine learning path.** The differentiator the build plan
-  describes (auto-derive fuel burn / fuel-weight / degradation) **does not exist
-  yet**. Only `currentLap` + `fuelLiters` auto-fill in mid-race mode.
+- **Telemetry→engine learning path exists (Phase 1, done).** The differentiator
+  (auto-derive fuel burn / fuel-weight / degradation) is implemented as a
+  propose-and-accept flow (`telemetryLearner.js` + `recommendations.js` +
+  `useTelemetryLearner.js` + `LearnerRecommendations.jsx`). The legacy
+  `currentLap` + `fuelLiters` mid-race auto-fill still runs alongside.
 - **No auto-reconnect / auto-connect.** The browser must be told the server URL
   and IPs; a dropped socket stays dropped until manual reconnect.
 - **`tireWear` is radius-derived and unproven.** Whether it is stable/monotonic
