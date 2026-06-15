@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Live GT7 endurance strategy that learns your car</title>
+    <meta
+      name="description"
+      content="Single-team live race strategy for GT7 endurance — no manual input, it learns your car automatically from PS5 telemetry."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <!--
+      Cloudflare Web Analytics (Phase 4 — visit + event tracking).
+      TODO(owner): paste your real beacon token below, then uncomment.
+      Custom click attribution is handled in app.js (track()) by pushing a
+      distinct URL path so it lands as its own entry in CF Web Analytics.
+    -->
+    <!--
+    <script
+      defer
+      src="https://static.cloudflareinsights.com/beacon.min.js"
+      data-cf-beacon='{"token": "PASTE_CF_TOKEN_HERE"}'
+    ></script>
+    -->
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <span class="brand"><span class="brand-name"></span></span>
+        <a class="header-cta" href="#offer" data-track="header_cta"></a>
+      </div>
+    </header>
+
+    <main>
+      <!-- Hero -->
+      <section class="hero">
+        <div class="wrap">
+          <p class="kicker" data-i18n="kicker"></p>
+          <h1 class="hero-title" data-i18n="hero_title"></h1>
+          <p class="hero-sub" data-i18n="hero_sub"></p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#offer" data-track="hero_cta" data-i18n="hero_cta"></a>
+            <a class="btn btn-ghost" href="#download" data-track="hero_download" data-i18n="hero_download"></a>
+          </div>
+          <p class="hero-foot" data-i18n="hero_foot"></p>
+        </div>
+      </section>
+
+      <!-- How it works -->
+      <section class="features">
+        <div class="wrap">
+          <div class="feature">
+            <div class="feature-num">01</div>
+            <h3 data-i18n="f1_title"></h3>
+            <p data-i18n="f1_body"></p>
+          </div>
+          <div class="feature">
+            <div class="feature-num">02</div>
+            <h3 data-i18n="f2_title"></h3>
+            <p data-i18n="f2_body"></p>
+          </div>
+          <div class="feature">
+            <div class="feature-num">03</div>
+            <h3 data-i18n="f3_title"></h3>
+            <p data-i18n="f3_body"></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Download -->
+      <section class="download" id="download">
+        <div class="wrap">
+          <h2 data-i18n="dl_title"></h2>
+          <p data-i18n="dl_body"></p>
+          <a class="btn btn-primary" id="download-btn" href="#" data-track="download_click" data-i18n="dl_btn"></a>
+          <p class="fineprint" data-i18n="dl_note"></p>
+        </div>
+      </section>
+
+      <!-- Offer / fake door -->
+      <section class="offer" id="offer">
+        <div class="wrap">
+          <div class="price-card">
+            <p class="price-eyebrow" data-i18n="offer_eyebrow"></p>
+            <p class="price"><span class="price-amount"></span><span class="price-period" data-i18n="offer_period"></span></p>
+            <p class="price-line" data-i18n="offer_line"></p>
+            <button class="btn btn-primary btn-lg" id="offer-btn" data-track="fake_door_click" data-i18n="offer_btn"></button>
+
+            <!-- Honest post-click state (no checkout, no charge) -->
+            <div class="join hidden" id="join">
+              <p class="join-msg" data-i18n="join_msg"></p>
+              <form class="email-form" id="email-form">
+                <input
+                  type="email"
+                  id="email-input"
+                  class="email-input"
+                  required
+                  autocomplete="email"
+                  data-i18n-attr="placeholder:email_placeholder"
+                />
+                <button type="submit" class="btn btn-primary" data-i18n="email_btn"></button>
+              </form>
+              <p class="consent" data-i18n="consent"></p>
+              <p class="join-thanks hidden" id="join-thanks" data-i18n="email_thanks"></p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <span class="brand-name"></span> · <span data-i18n="footer_note"></span>
+      </div>
+    </footer>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

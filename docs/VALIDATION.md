@@ -71,14 +71,42 @@
 
 ---
 
-## Phase 4 — public validation (later; see `phase-4.md`)
+## Phase 4 — public validation  ·  STATUS: ☐ READY TO RUN
 
-Filled in during/after Phase 4. The three questions + pass bar:
+The landing page (`landing/`) is **built** — a standalone fake-door + email capture
+that records attributable click events (verified locally: the season-pass click
+fires `#/fake_door_click`, the email submit fires `#/email_submit`, both visible to
+Cloudflare Web Analytics). **The validation itself is a human activity** — Claude
+can't run it. Do these in order, then read the results before writing any Phase 5
+code.
 
-- Show the live "Now" view to 2–3 GT7 endurance teams/leagues — do they want it?
-- Does the fake-door pricing button get real clicks in sim-racing communities?
-- Run a real mock endurance race — does the learner stay accurate enough to trust?
-  - **Pass bar:** predicted pit lap within **±1 lap** of optimal; fuel prediction
-    error **under ~1 lap's worth** by stint end; **no accidental dry-running**.
+### Before posting the page (owner setup — see `landing/README.md`)
 
-**Put the tools down here.** If those land, *then* consider Phase 5.
+- [ ] Pick the **product name** and set `BRAND` in `landing/app.js` (PENDING — see
+      `docs/DECISIONS.md`). Check domain + trademark first.
+- [ ] Set `DOWNLOAD_URL` to the Windows installer (Phase 3 `npm run dist` output).
+- [ ] Set `TALLY_URL` to your Tally form (email → Google Sheet).
+- [ ] Paste the **Cloudflare Web Analytics** token into `landing/index.html` and
+      uncomment the beacon; deploy to **Cloudflare Pages**.
+- [ ] Confirm one test email lands in the Google Sheet and one test click shows in
+      Web Analytics. **If recording isn't wired to a sink you read, the experiment
+      yields nothing** — verify the event lands before posting.
+
+### The three questions + pass bar
+
+1. **Do teams want it?** Show the live "Now" view to **2–3 GT7 endurance
+   teams/leagues**. Record: would they use it live? what's missing?
+   - Result: _______________________________________________
+2. **Will strangers click the offer?** Post the page in sim-racing communities.
+   Does the **€9.99/season** fake-door button get real clicks? how many vs visits?
+   - Result: _______________________________________________
+3. **Is the learner accurate enough live?** Run a **real mock endurance race**.
+   - **Pass bar (DECISION):** predicted pit lap within **±1 lap** of optimal;
+     fuel-prediction error **under ~1 lap's worth** by stint end; **no accidental
+     dry-running**. (Ties back to Phase 1 tolerances — retune `LEARNER_CONFIG` /
+     the test bands if real residuals warrant.)
+   - Result: _______________________________________________
+
+**Put the tools down here.** If those land — teams want it, the fake door gets real
+clicks, and the learner proves accurate in a real mock race — *then* consider
+Phase 5. If they don't, you've spent the minimum to find out.
