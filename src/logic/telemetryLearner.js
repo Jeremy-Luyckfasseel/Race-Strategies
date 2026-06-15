@@ -134,6 +134,7 @@ function stddev(arr) {
 /**
  * @typedef {object} LapRecord
  * @property {number} lapNum       game lap number that was just completed
+ * @property {string} compoundId   compound active during this lap (from setCompound)
  * @property {number} stintAge     0-based lap index within the current stint
  * @property {number} lapTimeSecs  the just-completed lap time (lastLapMs / 1000)
  * @property {number} fuelStart    fuel on board at the start of this lap (L)
@@ -143,19 +144,49 @@ function stddev(arr) {
  */
 
 /**
- * Create a stateful learner for one running car / compound.
+ * Create a stateful learner for one running car.
+ *
+ * Task 1.2: the learner segments the frame stream into stints at each pit-exit and
+ * accumulates a SEPARATE degradation curve per compound. The fuel-weight penalty is
+ * kept as a single global estimate (it's a car property, not a tyre property). The
+ * compound for each stint comes from the user's one-tap confirm flow via
+ * `setCompound()` — the learner never guesses it (GT7 doesn't expose it).
  *
  * @param {object} cfg
  * @param {number} cfg.tankSize        litres (user-declared)
- * @param {number} cfg.tireLife        laps before "worn" for the running compound (user input — DECISION 3)
+ * @param {Object<string,{tireLife:number}>} [cfg.compounds]  per-compound user-set tireLife (DECISION 3)
+ * @param {number} [cfg.tireLife]      shorthand tireLife for a single running compound (with cfg.compoundId)
  * @param {string} [cfg.compoundId]    current compound id (set by the one-tap confirm flow — never guessed)
  * @param {number} [cfg.seedPenalty]   starting fuel-weight penalty (defaults to LEARNER_CONFIG.fuelWeightPenaltySeed)
  */
 export function createLearner(cfg = {}) {
   const tankSize = Number(cfg.tankSize) || 0;
-  const tireLife = Number(cfg.tireLife) || 0;
-  const compoundId = cfg.compoundId || 'unknown';
   const seedPenalty = cfg.seedPenalty != null ? Number(cfg.seedPenalty) : LEARNER_CONFIG.fuelWeightPenaltySeed;
+
+  // Per-compound user-set tyre life. Accepts a `compounds` map and/or the
+  // single-compound `tireLife` + `compoundId` shorthand.
+  const tireLifeById = {};
+  if (cfg.compounds) {
+    for (const id of Object.keys(cfg.compounds)) tireLifeById[id] = Number(cfg.compounds[id].tireLife) || 0;
+  }
+  if (cfg.compoundId && cfg.tireLife != null) tireLifeById[cfg.compoundId] = Number(cfg.tireLife) || 0;
+
+  let currentCompoundId = cfg.compoundId || (cfg.compounds && Object.keys(cfg.compounds)[0]) || 'unknown';
+
+  /** Tyre life for a compound (0 if unknown). */
+  function lifeOf(id) {
+    return tireLifeById[id] || 0;
+  }
+
+  /**
+   * Set the compound for the CURRENT stint (from the user's one-tap confirm flow).
+   * Optionally (re)declares that compound's tyre life. Never inferred from telemetry.
+   */
+  function setCompound(id, tireLife) {
+    if (!id) return;
+    currentCompoundId = id;
+    if (tireLife != null) tireLifeById[id] = Number(tireLife) || 0;
+  }
 
   /** @type {LapRecord[]} */
   const laps = [];
@@ -241,6 +272,7 @@ export function createLearner(cfg = {}) {
 
     laps.push({
       lapNum: completedLap,
+      compoundId: currentCompoundId,
       stintAge: completedLap - stintStartLap,
       lapTimeSecs,
       fuelStart,
@@ -296,104 +328,116 @@ export function createLearner(cfg = {}) {
     };
   }
 
-  /**
-   * Joint least-squares for the fuel-weight penalty AND the 3-point degradation
-   * curve, on clean laps only (DECISION 1, 2). Within a single monotone stint
-   * fuel and tyre-age are collinear, so we solve them TOGETHER rather than
-   * sequentially (the risks-section "joint multiple regression" route). A seed
-   * practice stint at a different fuel load supplies the fuel-load variation that
-   * makes the system identifiable (DECISION 5).
-   *
-   * Model:  lapTime = c0·1 + c1·h1(age) + c2·h2(age) + c3·fuel
-   *   h1(age) = min(age, tireLife/2)        slope of segment 1 (ratio 0 → 0.5)
-   *   h2(age) = max(0, age - tireLife/2)    slope of segment 2 (ratio 0.5 → 1.0)
-   * so the pure (fuel-removed) degradation curve is
-   *   D(0)        = c0
-   *   D(life/2)   = c0 + c1·(life/2)
-   *   D(life)     = c0 + c1·(life/2) + c2·(life/2)
-   * and the fuel-weight penalty is c3. This is the engine's exact piecewise
-   * 3-point form (strategy.js simulateStrategy), so the fit can't drift away from
-   * what the engine can consume.
-   */
-  function estimateDegAndPenalty(litersPerLap) {
-    const half = tireLife / 2;
+  /** Distinct stint-age count in a lap set (identifiability of a deg fit). */
+  function distinctAges(rows) {
+    return new Set(rows.map((l) => l.stintAge)).size;
+  }
 
-    // Clean-lap selection: drop dirty laps, then median-filter the survivors
-    // (traffic / mistakes). Non-consecutive clean laps are fine (DECISION 5).
-    const candidates = laps.filter((l) => l.dirtyReasons.length === 0 && l.lapTimeSecs != null && l.fuelStart != null);
-    const med = median(candidates.map((l) => l.lapTimeSecs));
-    const clean =
-      med == null
-        ? []
-        : candidates.filter(
-            (l) =>
-              l.lapTimeSecs <= med * LEARNER_CONFIG.outlierSlowFactor &&
-              l.lapTimeSecs >= med * LEARNER_CONFIG.outlierFastFactor
-          );
-
-    const sampleCount = clean.length;
-    const ageSpan = sampleCount > 0 ? Math.max(...clean.map((l) => l.stintAge)) - Math.min(...clean.map((l) => l.stintAge)) : 0;
-
-    // Default / fallback estimate: seed penalty + a flat curve from the clean
-    // median (graceful degradation when we can't yet identify the model).
-    let penalty = seedPenalty;
-    let deg = { start: med, half: med, end: med };
-    let residual = 0;
-    let identifiable = false;
-
-    if (sampleCount >= 4 && tireLife > 0) {
-      const X = clean.map((l) => [1, Math.min(l.stintAge, half), Math.max(0, l.stintAge - half), l.fuelStart]);
-      const y = clean.map((l) => l.lapTimeSecs);
-      const c = leastSquares(X, y);
-      if (c) {
-        const [c0, c1, c2, c3] = c;
-        penalty = c3;
-        deg = { start: c0, half: c0 + c1 * half, end: c0 + c1 * half + c2 * half };
-        // RMS residual = volatility band for the curve.
-        const sq = clean.map((l, i) => {
-          const pred = X[i][0] * c0 + X[i][1] * c1 + X[i][2] * c2 + X[i][3] * c3;
-          return (y[i] - pred) ** 2;
-        });
-        residual = Math.sqrt(mean(sq));
-        identifiable = true;
-      }
-    }
-
-    const penaltyInRange = penalty >= LEARNER_CONFIG.fuelWeightPenaltyMin && penalty <= LEARNER_CONFIG.fuelWeightPenaltyMax;
-    const enoughSpan = ageSpan >= LEARNER_CONFIG.minDegAgeSpanFraction * tireLife;
-    const confident =
-      identifiable && sampleCount >= LEARNER_CONFIG.minCleanLapsForDeg && enoughSpan && penaltyInRange;
-
-    return {
-      penalty,
-      penaltyInRange,
-      deg,
-      observed: buildObservedTimes(deg, penalty, litersPerLap),
-      sampleCount,
-      ageSpan,
-      volatility: residual,
-      confident,
-      identifiable,
-      highlyVolatile: residual > LEARNER_CONFIG.degVolatileResidualSecs,
-    };
+  /** Clean laps for one compound: drop dirty laps, then per-compound median filter
+   *  (compounds have different pace, so the median MUST be per compound). */
+  function cleanLapsFor(rows) {
+    const cand = rows.filter((l) => l.dirtyReasons.length === 0 && l.lapTimeSecs != null && l.fuelStart != null);
+    const med = median(cand.map((l) => l.lapTimeSecs));
+    if (med == null) return [];
+    return cand.filter(
+      (l) =>
+        l.lapTimeSecs <= med * LEARNER_CONFIG.outlierSlowFactor && l.lapTimeSecs >= med * LEARNER_CONFIG.outlierFastFactor
+    );
   }
 
   /**
-   * Convert the pure (fuel-removed) degradation curve D + penalty into the
-   * "observed at full tank" lap-time triple the engine expects as manual input.
-   *
-   * The engine (strategy.js:459-485) treats `startLapTime` as a full-tank
-   * reference (no correction) and adds the already-burned fuel weight back onto
-   * `halfLapTime` / `endLapTime` using its OWN burn schedule
-   * (lapsToMid / lapsToEnd). We therefore emit exactly what that schedule implies,
-   * so the engine's correction round-trips our curve back to D(age) + penalty·fuel
-   * — i.e. feeding the learner's output into findBestStrategies reproduces the
-   * physics we measured. Verified against strategy.js:467-474.
+   * Estimate the SINGLE global fuel-weight penalty via a joint block regression
+   * over the well-sampled compounds (DECISION 1: penalty is a car property, shared
+   * across tyres). Design columns: [fuel] then, per qualifying compound, its own
+   * piecewise degradation block [1, h1(age), h2(age)]. Solving them together
+   * isolates the fuel-weight slope from each compound's degradation — and because
+   * different stints/compounds carry different fuel at the same tyre age, the
+   * collinearity that makes a single monotone stint unidentifiable is broken
+   * (DECISION 5). Returns the seed penalty + identifiable=false when nothing is
+   * well-sampled enough or the system is still collinear.
    */
-  function buildObservedTimes(deg, penalty, litersPerLap) {
+  function estimatePenalty(cleanByComp) {
+    const qualified = Object.keys(cleanByComp).filter(
+      (id) => cleanByComp[id].length >= 4 && distinctAges(cleanByComp[id]) >= 3 && lifeOf(id) > 0
+    );
+    if (qualified.length === 0) return { penalty: seedPenalty, identifiable: false };
+
+    const cols = 1 + 3 * qualified.length;
+    const X = [];
+    const y = [];
+    qualified.forEach((id, j) => {
+      const half = lifeOf(id) / 2;
+      for (const l of cleanByComp[id]) {
+        const row = new Array(cols).fill(0);
+        row[0] = l.fuelStart;
+        row[1 + 3 * j] = 1;
+        row[2 + 3 * j] = Math.min(l.stintAge, half);
+        row[3 + 3 * j] = Math.max(0, l.stintAge - half);
+        X.push(row);
+        y.push(l.lapTimeSecs);
+      }
+    });
+
+    const c = leastSquares(X, y);
+    if (!c) return { penalty: seedPenalty, identifiable: false };
+    return { penalty: c[0], identifiable: true };
+  }
+
+  /**
+   * Fit one compound's 3-point degradation curve given the (already-known) global
+   * penalty. We subtract penalty·fuel to isolate degradation, then fit the engine's
+   * piecewise form. Degrades gracefully: full piecewise when richly sampled, a
+   * single linear slope with only 2 distinct ages, a flat median otherwise.
+   */
+  function fitDeg(clean, tireLife, penalty) {
+    const half = tireLife / 2;
+    const adj = clean.map((l) => l.lapTimeSecs - penalty * l.fuelStart); // degradation-only signal
+    const distinct = distinctAges(clean);
+    let deg = null;
+    let residual = 0;
+
+    const rms = (X, c) =>
+      Math.sqrt(mean(clean.map((_, i) => (adj[i] - X[i].reduce((s, v, k) => s + v * c[k], 0)) ** 2)));
+
+    if (clean.length >= 4 && distinct >= 3 && tireLife > 0) {
+      const X = clean.map((l) => [1, Math.min(l.stintAge, half), Math.max(0, l.stintAge - half)]);
+      const c = leastSquares(X, adj);
+      if (c) {
+        deg = { start: c[0], half: c[0] + c[1] * half, end: c[0] + c[1] * half + c[2] * half };
+        residual = rms(X, c);
+      }
+    }
+    if (!deg && distinct >= 2 && tireLife > 0) {
+      // Too few distinct ages for the bend — fall back to a single linear slope.
+      const X = clean.map((l) => [1, l.stintAge]);
+      const c = leastSquares(X, adj);
+      if (c) {
+        deg = { start: c[0], half: c[0] + c[1] * half, end: c[0] + c[1] * tireLife };
+        residual = rms(X, c);
+      }
+    }
+    if (!deg) {
+      const m = median(adj);
+      deg = { start: m, half: m, end: m };
+    }
+    return { deg, residual };
+  }
+
+  /**
+   * Convert a pure (fuel-removed) degradation curve D + penalty into the "observed
+   * at full tank" lap-time triple the engine expects as manual input.
+   *
+   * The engine (strategy.js:459-485) treats `startLapTime` as a full-tank reference
+   * (no correction) and adds the already-burned fuel weight back onto `halfLapTime`
+   * / `endLapTime` using its OWN burn schedule (lapsToMid / lapsToEnd). We emit
+   * exactly what that schedule implies, so the engine's correction round-trips our
+   * curve back to D(age) + penalty·fuel — feeding the learner's output into
+   * findBestStrategies reproduces the physics we measured. Verified vs strategy.js:467-474.
+   */
+  function buildObservedTimes(deg, penalty, litersPerLap, tireLife) {
     if (deg == null || deg.start == null) return null;
     const lpl = litersPerLap && litersPerLap > 0 ? litersPerLap : null;
-    // Engine's burn schedule. If we don't yet know litersPerLap, fall back to the
+    // Engine's burn schedule. If litersPerLap is unknown, fall back to the
     // full-tank reference (no burn-off) so the strings are still well-formed.
     const lapsToMid = lpl ? Math.min(tireLife / 2, tankSize / lpl) : 0;
     const lapsToEnd = lpl ? Math.min(tireLife, tankSize / lpl) : 0;
@@ -417,38 +461,60 @@ export function createLearner(cfg = {}) {
   /**
    * Current best estimates with trust payloads. Shaped to drop into
    * findBestStrategies input (CURRENT_STATE §3B). The `compounds` map is keyed by
-   * compound id now so Task 1.2's per-compound segmentation slots in without
-   * reshaping the output.
+   * compound id, one entry per compound the learner has seen.
    */
   function getEstimates() {
     const fuel = estimateFuel();
-    const dp = estimateDegAndPenalty(fuel.litersPerLap);
 
-    const cleanLapCount = laps.filter((l) => l.dirtyReasons.length === 0).length;
+    // Group clean laps per compound (every compound seen, plus the current one).
+    const compIds = new Set(laps.map((l) => l.compoundId));
+    compIds.add(currentCompoundId);
+    const cleanByComp = {};
+    for (const id of compIds) cleanByComp[id] = cleanLapsFor(laps.filter((l) => l.compoundId === id));
+
+    const { penalty, identifiable } = estimatePenalty(cleanByComp);
+    const penaltyInRange = penalty >= LEARNER_CONFIG.fuelWeightPenaltyMin && penalty <= LEARNER_CONFIG.fuelWeightPenaltyMax;
+
+    const compounds = {};
+    for (const id of compIds) {
+      const clean = cleanByComp[id];
+      const life = lifeOf(id);
+      const sampleCount = clean.length;
+      const ageSpan = sampleCount > 0 ? Math.max(...clean.map((l) => l.stintAge)) - Math.min(...clean.map((l) => l.stintAge)) : 0;
+      const { deg, residual } = sampleCount > 0 ? fitDeg(clean, life, penalty) : { deg: null, residual: 0 };
+      const observed = deg ? buildObservedTimes(deg, penalty, fuel.litersPerLap, life) : null;
+      const enoughSpan = life > 0 && ageSpan >= LEARNER_CONFIG.minDegAgeSpanFraction * life;
+      const confident =
+        identifiable && penaltyInRange && sampleCount >= LEARNER_CONFIG.minCleanLapsForDeg && enoughSpan;
+
+      compounds[id] = {
+        tireLife: life,
+        startLapTime: observed ? observed.startLapTime : null,
+        halfLapTime: observed ? observed.halfLapTime : null,
+        endLapTime: observed ? observed.endLapTime : null,
+        // Pure (fuel-removed) degradation points, seconds — for tests + trust UI;
+        // the strings above are what the engine consumes.
+        deg,
+        sampleCount,
+        ageSpan,
+        volatility: residual,
+        confident,
+        highlyVolatile: residual > LEARNER_CONFIG.degVolatileResidualSecs,
+      };
+    }
+
+    // Aggregate degradation trust = the current compound's (what the engineer is
+    // looking at right now).
+    const cur = compounds[currentCompoundId] || { sampleCount: 0, ageSpan: 0, volatility: 0, confident: false, highlyVolatile: false };
 
     return {
       // --- engine-ready scalars ---
       litersPerLap: fuel.litersPerLap,
       lapsPerFullTank: fuel.lapsPerFullTank,
-      fuelWeightPenaltyPerLiter: dp.penalty,
+      fuelWeightPenaltyPerLiter: penalty,
 
-      // --- per-compound degradation (keyed; one entry in Task 1.1) ---
-      compounds: {
-        [compoundId]: {
-          tireLife,
-          startLapTime: dp.observed ? dp.observed.startLapTime : null,
-          halfLapTime: dp.observed ? dp.observed.halfLapTime : null,
-          endLapTime: dp.observed ? dp.observed.endLapTime : null,
-          // Pure (fuel-removed) degradation points, in seconds — exposed for
-          // tests and trust UI; the strings above are what the engine consumes.
-          deg: dp.deg,
-          sampleCount: dp.sampleCount,
-          ageSpan: dp.ageSpan,
-          volatility: dp.volatility,
-          confident: dp.confident,
-          highlyVolatile: dp.highlyVolatile,
-        },
-      },
+      // --- per-compound degradation (keyed) ---
+      compounds,
 
       // --- trust payloads, per estimate (Task 1.3 propose-and-accept UI) ---
       trust: {
@@ -459,29 +525,29 @@ export function createLearner(cfg = {}) {
           highlyVolatile: fuel.highlyVolatile,
         },
         fuelWeightPenalty: {
-          value: dp.penalty,
-          inRange: dp.penaltyInRange,
-          identifiable: dp.identifiable,
-          sampleCount: dp.sampleCount,
-          volatility: dp.volatility,
-          confident: dp.confident,
-          highlyVolatile: dp.highlyVolatile,
+          value: penalty,
+          inRange: penaltyInRange,
+          identifiable,
+          sampleCount: Object.values(cleanByComp).reduce((s, r) => s + r.length, 0),
+          volatility: cur.volatility,
+          confident: identifiable && penaltyInRange,
+          highlyVolatile: cur.highlyVolatile,
         },
         degradation: {
-          sampleCount: dp.sampleCount,
-          ageSpan: dp.ageSpan,
-          volatility: dp.volatility,
-          confident: dp.confident,
-          highlyVolatile: dp.highlyVolatile,
+          sampleCount: cur.sampleCount,
+          ageSpan: cur.ageSpan,
+          volatility: cur.volatility,
+          confident: cur.confident,
+          highlyVolatile: cur.highlyVolatile,
         },
       },
 
       // --- current stint snapshot ---
       currentStint: {
-        compoundId,
+        compoundId: currentCompoundId,
         stintStartLap,
         lapsCompleted: laps.length,
-        cleanLapCount,
+        cleanLapCount: laps.filter((l) => l.dirtyReasons.length === 0).length,
         tireAge: laps.length > 0 ? laps[laps.length - 1].stintAge : 0,
       },
     };
@@ -490,6 +556,7 @@ export function createLearner(cfg = {}) {
   return {
     ingest,
     ingestAll,
+    setCompound,
     getEstimates,
     // Exposed for tests / inspection.
     _laps: laps,

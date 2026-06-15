@@ -130,6 +130,33 @@ function makeLearner() {
   });
 }
 
+// --- Multi-compound ground truth (Task 1.2) ---------------------------------
+// A second compound with its own life + degradation curve. Softer: starts faster
+// but degrades harder than the medium.
+const TRUTH_S = { compoundId: 'S', tireLife: 20, deg: { start: 118.0, half: 120.0, end: 124.0 } };
+
+/** Generic pure degradation D(age) for any compound spec + life (engine piecewise form). */
+function degAt(spec, life, age) {
+  const half = life / 2;
+  if (age <= half) return spec.start + (age / half) * (spec.half - spec.start);
+  let r = (age - half) / half;
+  if (r > 1) r = 1;
+  return spec.half + r * (spec.end - spec.half);
+}
+
+/** Noise-free lap-complete frames for a stint on a given compound (no init/boundary frame). */
+function genStint(startLapNumber, Fi, nLaps, spec, life) {
+  const lpl = TRUTH.litersPerLap;
+  const frames = [];
+  for (let k = 1; k <= nLaps; k++) {
+    const age = k - 1;
+    const fuelStart = Fi - age * lpl;
+    const lapSecs = degAt(spec, life, age) + TRUTH.penalty * fuelStart;
+    frames.push(frame(startLapNumber + k, Fi - k * lpl, lapSecs * 1000));
+  }
+  return frames;
+}
+
 // ===========================================================================
 // Test harness (same ✓/✗ style as the other suites).
 // ===========================================================================
@@ -255,6 +282,52 @@ section('Identifiability — a single stint must NOT identify the penalty');
   assert('single-stint fuel still recovered', Math.abs(est.litersPerLap - TRUTH.litersPerLap) <= TOL_TIGHT.litersPerLap);
   assert('single-stint penalty NOT identifiable', est.trust.fuelWeightPenalty.identifiable !== true);
   assert('single-stint degradation NOT confident', comp.confident === false);
+}
+
+section('Per-compound segmentation (Task 1.2) — two compounds, distinct curves');
+{
+  // Session: two stints on M (practice 60 L + race 100 L), then one stint on S.
+  // Tyre age resets at each pit-exit; the compound is set via the confirm flow
+  // (setCompound) — never guessed. The fuel-weight penalty is a single global
+  // estimate shared across both compounds.
+  const learner = createLearner({
+    tankSize: TRUTH.tankSize,
+    compounds: { M: { tireLife: TRUTH.tireLife }, S: { tireLife: TRUTH_S.tireLife } },
+    compoundId: 'M',
+  });
+
+  learner.ingest(frame(1, 60)); // init seed stint
+  learner.ingestAll(genStint(1, 60, 16, TRUTH.deg, TRUTH.tireLife)); // M practice, ends currentLap 17
+  learner.ingest(frame(17, TRUTH.tankSize, null, { pitExit: true })); // boundary → age resets
+  learner.ingestAll(genStint(17, TRUTH.tankSize, 28, TRUTH.deg, TRUTH.tireLife)); // M race, ends currentLap 45
+  learner.ingest(frame(45, TRUTH.tankSize, null, { pitExit: true })); // boundary
+  learner.setCompound('S'); // user confirms the new compound
+  learner.ingestAll(genStint(45, TRUTH.tankSize, 18, TRUTH_S.deg, TRUTH_S.tireLife)); // S stint
+
+  const est = learner.getEstimates();
+  const M = est.compounds.M;
+  const S = est.compounds.S;
+
+  assert('both compounds learned', M != null && S != null);
+  assertNear('M deg start', M.deg.start, TRUTH.deg.start, TOL_TIGHT.lapTime);
+  assertNear('M deg half', M.deg.half, TRUTH.deg.half, TOL_TIGHT.lapTime);
+  assertNear('M deg end', M.deg.end, TRUTH.deg.end, TOL_TIGHT.lapTime);
+  assertNear('S deg start', S.deg.start, TRUTH_S.deg.start, TOL_TIGHT.lapTime);
+  assertNear('S deg half', S.deg.half, TRUTH_S.deg.half, TOL_TIGHT.lapTime);
+  assertNear('S deg end', S.deg.end, TRUTH_S.deg.end, TOL_TIGHT.lapTime);
+  assertNear('global penalty recovered', est.fuelWeightPenaltyPerLiter, TRUTH.penalty, TOL_TIGHT.penalty);
+
+  assert('curves are distinct (M.end ≠ S.end)', Math.abs(M.deg.end - S.deg.end) > 0.5);
+  assert('both compounds confident', M.confident === true && S.confident === true);
+
+  // Second stint on the SAME compound refines (accumulates), not resets: M's clean
+  // sample count exceeds what a single stint could provide (~26 max here).
+  assert('M accumulates across both stints', M.sampleCount > 28, `M.sampleCount=${M.sampleCount}`);
+
+  // Tyre age reset at the boundary: the S stint has clean laps at low age.
+  const sLaps = learner._laps.filter((l) => l.compoundId === 'S');
+  assert('tyre age resets at pit-exit (S has age-0 lap)', sLaps.some((l) => l.stintAge === 0));
+  assert('S stint ages stay within its life', Math.max(...sLaps.map((l) => l.stintAge)) < TRUTH_S.tireLife);
 }
 
 // ===========================================================================
