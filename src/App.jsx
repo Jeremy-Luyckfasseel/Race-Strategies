@@ -9,6 +9,7 @@ import { useCompoundDetector } from "./hooks/useCompoundDetector";
 import { useTrackMap } from "./hooks/useTrackMap";
 import { useTelemetryLearner } from "./hooks/useTelemetryLearner";
 import { applyRecommendation } from "./logic/recommendations";
+import { pickAutoConnectIp } from "./logic/connection";
 import LiveDashboard, { TrackMap } from "./components/LiveDashboard";
 import TelemetryLeaderboard from "./components/TelemetryLeaderboard";
 import TelemetryControls from "./components/TelemetryControls";
@@ -166,6 +167,7 @@ export default function App() {
   });
 
   const handledPitsRef = useRef(new Set());
+  const autoScannedRef = useRef(false);
   const telem    = useTelemetry();
   const detector = useCompoundDetector(telem.teams);
   const { result, calculating, calculate } = useStrategy(inputs);
@@ -250,6 +252,31 @@ export default function App() {
       };
     });
   }, [telem.teams, telemSelectedIp]);
+
+  // Auto-connect on launch (Phase 3, Task 3.1): connect to the relay and let the
+  // hook hold the link with capped-backoff auto-reconnect. The user does not
+  // normally type IPs or press connect; manual override still works.
+  useEffect(() => {
+    telem.connect(telemUrl, ps5IPs.map((ip) => ip.trim()).filter(Boolean));
+    // Mount-only: intentionally not re-running on telemUrl/ps5IPs changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Once connected with no IPs configured yet, auto-scan the LAN once.
+  useEffect(() => {
+    if (telem.connected && !autoScannedRef.current && !ps5IPs.some((ip) => ip.trim())) {
+      autoScannedRef.current = true;
+      telem.scan();
+    }
+  }, [telem.connected, telem, ps5IPs]);
+
+  // Auto-pick a PS5 only when exactly one is found (DECISION 4); otherwise leave
+  // it to the user to choose in the telemetry controls.
+  useEffect(() => {
+    if (ps5IPs.some((ip) => ip.trim())) return;
+    const ip = pickAutoConnectIp(telem.scanResults);
+    if (ip) savePS5IPs([ip]);
+  }, [telem.scanResults, ps5IPs, savePS5IPs]);
 
   const best = result?.best ?? null;
   const ranked = result?.ranked ?? [];
