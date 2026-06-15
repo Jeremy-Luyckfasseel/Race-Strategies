@@ -13,6 +13,8 @@ import LiveDashboard, { TrackMap } from "./components/LiveDashboard";
 import TelemetryLeaderboard from "./components/TelemetryLeaderboard";
 import TelemetryControls from "./components/TelemetryControls";
 import LearnerRecommendations from "./components/LearnerRecommendations";
+import NowView from "./components/NowView";
+import { DEFAULT_LANG, t } from "./i18n/strings";
 
 const DEFAULT_INPUTS = {
   raceDurationHours: 8,
@@ -142,7 +144,10 @@ export default function App() {
   const [inputs, setInputs] = useState(DEFAULT_INPUTS);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [telemSelectedIp, setTelemSelectedIp] = useState("");
-  const [activeTab, setActiveTab] = useState("strategy");
+  // Single-team is the default landing experience (Phase 2, Task 2.2). The
+  // multi-team leaderboard still exists but is demoted behind an Advanced toggle.
+  const [activeTab, setActiveTab] = useState("now");
+  const [showAdvancedLb, setShowAdvancedLb] = useState(false);
 
   const [ps5IPs, setPS5IPs] = useState(() => {
     try { return JSON.parse(localStorage.getItem("gt7-ps5-ips") || '[""]'); }
@@ -252,6 +257,33 @@ export default function App() {
 
   const displayIp = activeIp;
 
+  // --- "Now" view live state (Phase 2) ---
+  // Freeze-plan toggle (DECISION 2): hold the plan steady so nothing shifts
+  // mid-corner. Snapshotting on freeze (in the click handler) keeps the plan
+  // pinned to what was on screen at that moment; unfrozen tracks the live best.
+  const [planFrozen, setPlanFrozen] = useState(false);
+  const [frozenBest, setFrozenBest] = useState(null);
+  const toggleFreeze = useCallback(() => {
+    if (!planFrozen) setFrozenBest(best); // about to freeze → snapshot current best
+    setPlanFrozen((f) => !f);
+  }, [planFrozen, best]);
+  const nowBest = planFrozen ? frozenBest : best;
+
+  // Best available fuel/lap: the learner's confident estimate, else derived from
+  // the active (accepted/manual) inputs. The plan source stays the active inputs.
+  const nowLitersPerLap = useMemo(() => {
+    const est = learner.estimates;
+    if (est && est.trust?.fuel?.confident && est.litersPerLap) return est.litersPerLap;
+    const lpt = Number(inputs.lapsPerFullTank);
+    const tank = Number(inputs.tankSize);
+    return lpt > 0 ? tank / lpt : null;
+  }, [learner.estimates, inputs.lapsPerFullTank, inputs.tankSize]);
+
+  const nowCompoundId = (activeIp && teamCompounds[activeIp]) || null;
+  const nowTireLife = nowCompoundId
+    ? Number(inputs.compounds.find((c) => c.id === nowCompoundId)?.tireLife) || 0
+    : 0;
+
   return (
     <div className="app-root">
       <header className="app-header">
@@ -291,6 +323,15 @@ export default function App() {
         <section className="results-area">
           <div className="tab-bar">
             <button
+              className={`tab-btn${activeTab === "now" ? " tab-active" : ""}`}
+              onClick={() => setActiveTab("now")}
+            >
+              {t("now_tab", DEFAULT_LANG)}
+              {telem.connected && telem.teams.size > 0 && (
+                <span className="tab-live-dot" />
+              )}
+            </button>
+            <button
               className={`tab-btn${activeTab === "strategy" ? " tab-active" : ""}`}
               onClick={() => setActiveTab("strategy")}
             >
@@ -306,6 +347,27 @@ export default function App() {
               )}
             </button>
           </div>
+
+          {activeTab === "now" && (
+            <div className="tab-content tab-content--now">
+              <LearnerRecommendations
+                recommendations={learner.recommendations}
+                onAccept={acceptRecommendation}
+                onIgnore={learner.ignore}
+              />
+              <NowView
+                data={activeIp ? telem.teams.get(activeIp) : null}
+                strategy={nowBest?.strategy ?? null}
+                planLabel={nowBest?.label ?? null}
+                litersPerLap={nowLitersPerLap}
+                tireLife={nowTireLife}
+                frozen={planFrozen}
+                onToggleFreeze={toggleFreeze}
+                label={activeIp ? getTeamLabel(activeIp) : null}
+                lang={DEFAULT_LANG}
+              />
+            </div>
+          )}
 
           {activeTab === "strategy" && (
             <div className={`tab-content${calculating ? " results-calculating" : ""}`}>
@@ -379,6 +441,16 @@ export default function App() {
                   teamLabels={teamLabels}
                   onTeamLabelChange={updateTeamLabel}
                 />
+                {telem.teams.size > 0 && (
+                  <button
+                    className={`advanced-lan-toggle${showAdvancedLb ? " is-open" : ""}`}
+                    onClick={() => setShowAdvancedLb((v) => !v)}
+                  >
+                    {showAdvancedLb
+                      ? "Masquer le classement multi-équipes"
+                      : "Avancé · Événement LAN — classement multi-équipes"}
+                  </button>
+                )}
                 {telem.teams.size === 0 ? (
                   <div className="empty-state">
                     <div className="empty-text-block">
@@ -394,9 +466,11 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="telem-3col">
-                    <div className="telem-3col-lb">
-                      <TelemetryLeaderboard {...lbProps} />
-                    </div>
+                    {showAdvancedLb && (
+                      <div className="telem-3col-lb">
+                        <TelemetryLeaderboard {...lbProps} />
+                      </div>
+                    )}
                     <div className="telem-3col-map">
                       <TrackMap
                         currentLap={telem.teams.get(displayIp)?.currentLap ?? 0}
