@@ -2886,4 +2886,133 @@ input[type="range"]::-moz-range-thumb {
   .stint-table th, .stint-table td { border-color: #ccc; color: black; }
   .stint-table tbody tr:hover { background: none; }
   .compound-H, .compound-M, .compound-S, .compound-IM, .compound-W { border-color: currentColor !important; }
+  .learner-recs { display: none !important; }
 }
+
+/* ---------------------------------------------------------------------------
+   Telemetry learner — propose-and-accept recommendation cards (Phase 1, Task 1.3)
+   --------------------------------------------------------------------------- */
+
+.learner-recs {
+  border: 1px solid var(--accent-dim, var(--rule));
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  padding: 12px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.learner-recs-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display, var(--font-ui));
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.learner-recs-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow, var(--accent));
+}
+
+.learner-recs-count {
+  margin-left: auto;
+  min-width: 18px;
+  text-align: center;
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--bg-field);
+  color: var(--text-primary);
+  font-family: var(--font-mono, monospace);
+}
+
+.rec-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--bg-field);
+}
+
+.rec-card-main { flex: 1; min-width: 0; }
+
+.rec-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+
+.rec-values {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8rem;
+}
+
+.rec-measured { color: var(--accent); }
+.rec-vs { color: var(--text-muted); font-size: 0.72rem; }
+.rec-current { color: var(--text-secondary); }
+
+.rec-trust {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.rec-trust-vol { color: var(--text-secondary); }
+
+.rec-trust-badge {
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  background: var(--warning);
+  color: var(--bg-base);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.rec-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.rec-accept,
+.rec-ignore {
+  padding: 5px 12px;
+  border-radius: var(--radius-xs);
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background var(--t-fast), border-color var(--t-fast);
+}
+
+.rec-accept {
+  background: var(--accent);
+  color: var(--bg-base);
+}
+.rec-accept:hover { background: var(--accent-dim, var(--accent)); }
+
+.rec-ignore {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: var(--rule);
+}
+.rec-ignore:hover { border-color: var(--rule-bright, var(--text-muted)); color: var(--text-primary); }

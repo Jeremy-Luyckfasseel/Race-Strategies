@@ -7,9 +7,12 @@ import { useStrategy } from "./hooks/useStrategy";
 import { useTelemetry } from "./hooks/useTelemetry";
 import { useCompoundDetector } from "./hooks/useCompoundDetector";
 import { useTrackMap } from "./hooks/useTrackMap";
+import { useTelemetryLearner } from "./hooks/useTelemetryLearner";
+import { applyRecommendation } from "./logic/recommendations";
 import LiveDashboard, { TrackMap } from "./components/LiveDashboard";
 import TelemetryLeaderboard from "./components/TelemetryLeaderboard";
 import TelemetryControls from "./components/TelemetryControls";
+import LearnerRecommendations from "./components/LearnerRecommendations";
 
 const DEFAULT_INPUTS = {
   raceDurationHours: 8,
@@ -183,6 +186,21 @@ export default function App() {
 
   const activeIp = telemSelectedIp || (teamKeys.length === 1 ? teamKeys[0] : null);
 
+  // Background telemetry learner for the selected car. Surfaces propose-and-accept
+  // recommendations; never writes to `inputs` except via an explicit Accept below.
+  const learner = useTelemetryLearner({
+    activeIp,
+    data: activeIp ? telem.teams.get(activeIp) : null,
+    inputs,
+    confirmedCompoundId: (activeIp && teamCompounds[activeIp]) || "",
+  });
+
+  const acceptRecommendation = useCallback((rec) => {
+    setInputs((prev) => applyRecommendation(prev, rec));
+    learner.clearDismiss(rec);
+    setSelectedIndex(0);
+  }, [learner]);
+
   const { mapRef, resetMap } = useTrackMap(
     telem.teams.get(activeIp ?? ''),
     () => activeIp && updateTeamCompound(activeIp, null, false),
@@ -291,6 +309,11 @@ export default function App() {
 
           {activeTab === "strategy" && (
             <div className={`tab-content${calculating ? " results-calculating" : ""}`}>
+              <LearnerRecommendations
+                recommendations={learner.recommendations}
+                onAccept={acceptRecommendation}
+                onIgnore={learner.ignore}
+              />
               {calculating && best && (
                 <div className="recalc-badge">Recalculating&hellip;</div>
               )}
