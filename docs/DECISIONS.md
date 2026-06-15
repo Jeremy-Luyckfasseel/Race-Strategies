@@ -70,8 +70,16 @@ For Claude Code. These are the locked decisions for the MVP. Read this alongside
 
 Two cheap experiments run **before / alongside Phase 1**, ahead of building the learner:
 
-- **Concierge / Wizard-of-Oz trust test (do this FIRST — before writing learner code).** Sit in a team's Discord during a live race and **be the algorithm**: feed strategy calls by voice/text and watch whether they follow or override. For one evening and zero code this answers the make-or-break question both red-teams circle — **do teams want live automation, or just a better static planner (assist vs automate)?** If they keep overriding ("the data doesn't know I'm saving tyres behind this slow car"), you've learned the product must be **assist-not-automate** *before* spending build effort. This directly validates the propose-and-accept design.
-- **SmartScreen audit (cheap, run early).** Watch how testers handle the unsigned-app warning (on our build or a comparable unsigned sim tool). Confirms the install friction is click-through, not a wall, before committing to packaging polish.
+- **Concierge / Wizard-of-Oz trust test — DONE.** Sat in a team's live race and was the algorithm. **Result: ASSIST, not automate** (teams followed some calls, overrode others — mixed, as expected for live judgement). Confirms the **propose-and-accept** design. See `docs/VALIDATION.md` 0.4. **Plus a key clarification — see "Who the live view is for" below.**
+- **SmartScreen audit — DONE (owner read).** Community clicks through unsigned warnings; install friction is click-through, not a wall. See `docs/VALIDATION.md` 0.5.
+
+## Who the live view is for (from the 0.4 test — affects Phase 2)
+
+**The user of the live race view is the race engineer / strategist — NOT the driver.** In an endurance team there is always a human already talking to the driver. Therefore:
+
+- **The app never talks to the driver directly and never tries to be that voice.** It surfaces clear, live updates + recommendations to the **engineer**, who decides and relays. (This is *why* audio callouts are out of MVP — item 2.4 — not just "polish later" but "wrong audience for an auto-voice".)
+- Phase 2's "Now" view is designed for that engineer: glanceable, shows the current plan + proposed changes + the next call to relay. Propose-and-accept fits exactly — the engineer is the human who accepts.
+- No change to the Phase 1 learner from this; the change is to the **audience** of the Phase 2 surface.
 
 ## Compound handling — MVP scope
 

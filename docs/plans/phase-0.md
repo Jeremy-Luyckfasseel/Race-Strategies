@@ -92,36 +92,33 @@ two experiments are *activities*, not code.)
 - **Acceptance:** Every Phase 1–4 task in the build plan appears as at least one
   backlog item; already-done items are flagged.
 
-### Task 0.4 — Concierge / Wizard-of-Oz trust test (zero code — do this BEFORE Phase 1)
+### Task 0.4 — Concierge / Wizard-of-Oz trust test  ·  DONE
 
 > The single highest-leverage experiment in the whole plan, per the red-team
-> review. It costs one evening and zero code and answers the make-or-break product
-> question before any learner is built.
+> review. One evening, zero code, answered the make-or-break product question
+> before any learner is built.
 
-- **What to do (not build):** Sit in a GT7 endurance team's Discord during a live
-  race and **be the algorithm** — feed strategy calls (pit lap, fuel, push/save)
-  by voice or text and watch whether the team **follows or overrides** you.
-- **What it answers:** Do teams actually want **live automation**, or just a
-  **better static planner**? (assist vs automate). If they keep overriding with
-  human-judgement context the data can't see ("I'm saving tyres behind this slow
-  car"), the product must be **assist-not-automate** — which validates the
-  **propose-and-accept** design Phase 1 is built around, and could reshape it.
-- **Files changed:** none (optionally capture notes in `docs/VALIDATION.md`).
-- **Acceptance:** A written takeaway recorded (in `docs/VALIDATION.md` or the
-  backlog) on whether teams want automation vs. a planner, and any signal that
-  changes the Phase 1 design, **before** learner code starts.
+- **What was done:** Acted as the live strategist in a real GT7 endurance race,
+  making calls and watching follow-vs-override.
+- **Result (see `docs/VALIDATION.md` 0.4):** **ASSIST, not automate** — confirmed.
+  Teams followed some calls, overrode others (mixed, as expected for live judgement
+  calls). Validates the **propose-and-accept** design.
+- **Key clarification:** the live view's **user is the race engineer, not the
+  driver** — there is always a human already talking to the driver, so the app
+  surfaces updates/recommendations to *that* person and **never talks to the driver
+  directly**. This sharpens the Phase 2 "Now" view audience and reinforces audio
+  staying out. No change to the Phase 1 learner.
 
-### Task 0.5 — SmartScreen audit (zero/low code — early, alongside Phase 1)
+### Task 0.5 — SmartScreen audit  ·  RESOLVED (owner read)
 
-- **What to do:** Observe how target users handle the Windows SmartScreen
-  "unknown publisher" warning — using a comparable unsigned sim tool (SimHub /
-  CrewChief / Hector) or a throwaway unsigned build — to confirm the unsigned-app
-  friction is a **click-through, not a wall** before investing in packaging polish
-  (Phase 3).
-- **Files changed:** none (note the result in `docs/VALIDATION.md`).
-- **Acceptance:** A recorded read on whether the unsigned warning blocks adoption;
-  if it does, that escalates the code-signing-cert timing (see Phase 3 / Phase 4
-  pre-launch checklist).
+- **Outcome:** Resolved without a formal observation — per the owner's first-hand
+  knowledge of the GT7 sim-racing community, users **don't care** about the
+  unsigned-app warning and click straight through (the hobby routinely installs
+  unsigned tools like SimHub / CrewChief / Hector). Recorded in
+  `docs/VALIDATION.md` 0.5.
+- **Implication:** "ship unsigned for the MVP" stands; the code-signing cert is a
+  **pre-paid-launch** item, not a build blocker. The *why* behind the warning (and
+  the separate, unavoidable firewall prompt) is documented in `phase-3.md` Task 3.2.
 
 ## Decisions I need from you (CRITICAL)
 

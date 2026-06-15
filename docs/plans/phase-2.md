@@ -17,15 +17,24 @@
 > learner proposes; the human accepts; nothing silently overrides). If
 > `docs/DECISIONS.md` and this file disagree, `DECISIONS.md` wins.
 
+> **Audience (from the 0.4 concierge test — see `docs/DECISIONS.md` "Who the live
+> view is for"): the live view's user is the RACE ENGINEER / STRATEGIST, not the
+> driver.** A human is always already talking to the driver. The app surfaces
+> updates + recommendations to that engineer, who decides and relays. The app
+> **never talks to the driver directly** and never tries to be that voice (this is
+> *why* audio is out — wrong audience, not just "polish later").
+
 ## Objective (what's true when this phase is done)
 
-1. A primary in-race **"Now" view** surfaces only the in-the-moment essentials:
-   the current optimal plan, the next action (pit lap target + fuel to add), a
-   stint countdown, and a lift-and-coast / push prompt when fuel is tight or in
-   surplus. Readable at a glance on a second screen.
+1. A primary in-race **"Now" view** — **built for the race engineer to read at a
+   glance and relay** — surfaces only the in-the-moment essentials: the current
+   optimal plan, the next action (pit lap target + fuel to add), a stint countdown,
+   and a lift-and-coast / push prompt when fuel is tight or in surplus. Readable at
+   a glance on a second screen.
 2. The single-team experience is the **default landing view**. The multi-team
    leaderboard still exists but is moved behind an "Advanced / LAN event" section.
-3. (Optional) Spoken audio callouts for key events with a mute toggle.
+3. Audio callouts are **OUT of the MVP** (confirmed — the engineer is the voice to
+   the driver, so an auto-voice is the wrong audience, not just deferred polish).
 4. All existing tests stay green; any new pure helpers are node-tested.
 
 ## Prerequisites
@@ -118,12 +127,13 @@
 
 ### Task 2.3 (CONFIRMED OUT of MVP) — Audio callouts
 
-> Per `docs/DECISIONS.md` 2.4, audio is **confirmed out of the MVP**. The visual
-> "Now" view + propose-and-accept *is* the product; audio drags in TTS, mute
-> states, and language handling not needed yet. **Do not build this for the MVP.**
-> Add later only if validation shows demand. If ever added: default **muted**,
-> opt-in; events = box-this-lap + fuel-target; language follows the i18n layer. The
-> plan below is kept only as a future reference.
+> Per `docs/DECISIONS.md` 2.4, audio is **confirmed out of the MVP** — and the 0.4
+> test gives the deeper reason: **the engineer is the human voice to the driver, so
+> an auto-voice is the wrong audience, not just deferred polish.** The visual "Now"
+> view + propose-and-accept *is* the product; audio also drags in TTS, mute states,
+> and language handling not needed yet. **Do not build this for the MVP.** If ever
+> revisited: default **muted**, opt-in; events = box-this-lap + fuel-target;
+> language follows the i18n layer. The plan below is kept only as a future reference.
 
 - **What to build (only if confirmed in):** Optional spoken callouts via the
   browser `SpeechSynthesis` API for key events ("box this lap", "fuel target

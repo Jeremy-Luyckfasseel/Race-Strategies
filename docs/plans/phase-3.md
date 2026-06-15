@@ -134,6 +134,23 @@
     Unsigned through validation; signed before charging strangers.
   - Note in `PACKAGING.md` where the **Salsa20 key** lives, since a GT7 update can
     change it and silently break a shipped binary.
+- **The two first-run pop-ups (don't conflate them — document both in
+  `PACKAGING.md`):**
+  - **1. SmartScreen "unknown publisher"** ("Windows protected your PC → More info
+    → Run anyway"). **Why:** the downloaded `.exe` isn't code-signed by a trusted
+    CA — we ship unsigned by choice, so we get the scary version. **Removed by:** a
+    code-signing cert — but note the nuance: an **OV** cert (~€100–400/yr) only
+    *reduces* it (SmartScreen still warns until the app earns download "reputation"
+    over time), whereas an **EV** cert (~€300–600/yr, hardware token) clears it
+    **instantly**. That's why the pre-paid-launch signing should likely be **EV**,
+    so a paying stranger never sees a warning. Confirmed non-blocking for the free
+    MVP audience (see `docs/VALIDATION.md` 0.5 — the community clicks through).
+  - **2. Windows Firewall "allow network access".** **Why:** the relay binds UDP
+    sockets — any networked app triggers this. **NOT removed by signing** — it
+    fires for signed apps too. Either let the user click "Allow" (pair with the
+    Task 3.3 in-app explainer) or add a firewall rule at install time (needs admin
+    elevation). Letting the prompt happen is the normal path. This one is here to
+    stay regardless of cert status.
 - **Tests:** build the installer on Windows 11 (the dev environment) and
   smoke-launch it. Document the exact build command in `PACKAGING.md`. Existing
   `npm test` must still pass from source, and `npm run dev` + `npm run telemetry`
