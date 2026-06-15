@@ -3016,3 +3016,153 @@ input[type="range"]::-moz-range-thumb {
   border-color: var(--rule);
 }
 .rec-ignore:hover { border-color: var(--rule-bright, var(--text-muted)); color: var(--text-primary); }
+
+/* ---------------------------------------------------------------------------
+   "Now" view — glanceable in-race surface for the engineer (Phase 2, Task 2.1)
+   --------------------------------------------------------------------------- */
+
+.tab-content--now { display: block; }
+
+.now-view {
+  max-width: 880px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.now-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.now-car {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.now-freeze {
+  padding: 6px 14px;
+  border: 1px solid var(--rule);
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+}
+.now-freeze.is-frozen { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.now-plan {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.now-stint-label {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+.now-plan-seq { font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted); }
+
+.now-compound {
+  border: 1px solid;
+  padding: 2px 10px;
+  border-radius: var(--radius-xs);
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+}
+
+.now-countdown {
+  text-align: center;
+  padding: 24px 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+.now-countdown-num {
+  font-family: var(--font-mono);
+  font-size: 6rem;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.now-countdown-label {
+  margin-top: 8px;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.now-action-title {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.now-action-body {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  color: var(--text-primary);
+}
+.now-box-lap { font-weight: 700; }
+.now-fuel { color: var(--accent); }
+.now-tyres { font-size: 1rem; color: var(--text-secondary); }
+.now-run-to-flag { color: var(--text-secondary); }
+
+.now-box-reason {
+  margin-top: 10px;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+.now-box-reason--fuel { color: var(--accent); }
+.now-box-reason--tyres { color: var(--warning); }
+
+.now-verdict {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--rule);
+}
+.now-verdict-text {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.now-verdict-margin { font-family: var(--font-mono); font-size: 0.9rem; color: var(--text-muted); }
+.now-verdict--lift { border-color: var(--warning); }
+.now-verdict--lift .now-verdict-text { color: var(--warning); }
+.now-verdict--push { border-color: var(--success); }
+.now-verdict--push .now-verdict-text { color: var(--success); }
+.now-verdict--ok .now-verdict-text { color: var(--text-secondary); }
+
+.now-empty,
+.now-waiting {
+  text-align: center;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  padding: 20px;
+}
