@@ -9,9 +9,11 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node tests/test_comprehensive.js && node tests/test_invariants.js && node tests/test_telemetry_learner.js && node tests/test_recommendations.js && node tests/test_race_state.js && node tests/test_connection.js",
+    "test": "node tests/test_comprehensive.js && node tests/test_invariants.js && node tests/test_telemetry_learner.js && node tests/test_recommendations.js && node tests/test_race_state.js && node tests/test_connection.js && node tests/test_engine_validation.js",
     "test:smoke": "node tests/test.js",
     "telemetry": "node server/telemetry-server.js",
+    "record": "node scripts/record-session.js",
+    "validate": "node scripts/compare-session.js",
     "electron:build": "npm run build && electron .",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder --win"
