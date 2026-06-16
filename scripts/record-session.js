@@ -30,17 +30,34 @@ import path from 'path';
 import readline from 'readline';
 
 // ── args ──────────────────────────────────────────────────────────────────────
-function arg(name, def) {
-  const i = process.argv.indexOf(`--${name}`);
-  return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : def;
+// Parse `--flag value` pairs AND bare positionals. `npm run record -- --ip X`
+// can strip the `--ip` and forward only a bare `X`, so we accept the PS5 IP
+// either as --ip or as a bare positional that looks like an IP/hostname.
+const ARGV = process.argv.slice(2);
+const FLAGS = {};
+const POSITIONALS = [];
+for (let i = 0; i < ARGV.length; i++) {
+  const a = ARGV[i];
+  if (a.startsWith('--')) {
+    const next = ARGV[i + 1];
+    if (next && !next.startsWith('--')) {
+      FLAGS[a.slice(2)] = next;
+      i++;
+    } else {
+      FLAGS[a.slice(2)] = true;
+    }
+  } else {
+    POSITIONALS.push(a);
+  }
 }
+const looksLikeHost = (s) => /^\d{1,3}(\.\d{1,3}){3}$/.test(s) || /^[a-zA-Z0-9][a-zA-Z0-9.-]*$/.test(s);
 const OPT = {
-  url: arg('url', 'ws://localhost:20777'),
-  ip: arg('ip', null),
-  team: arg('team', null),
-  compound: (arg('compound', 'H') || 'H').toUpperCase(),
-  outDir: arg('out', path.join(process.cwd(), 'captures')),
-  notes: arg('notes', ''),
+  url: typeof FLAGS.url === 'string' ? FLAGS.url : 'ws://localhost:20777',
+  ip: (typeof FLAGS.ip === 'string' ? FLAGS.ip : null) || POSITIONALS.find(looksLikeHost) || null,
+  team: typeof FLAGS.team === 'string' ? FLAGS.team : null,
+  compound: String(typeof FLAGS.compound === 'string' ? FLAGS.compound : 'H').toUpperCase(),
+  outDir: typeof FLAGS.out === 'string' ? FLAGS.out : path.join(process.cwd(), 'captures'),
+  notes: typeof FLAGS.notes === 'string' ? FLAGS.notes : '',
 };
 
 const KEY_TO_COMPOUND = { h: 'H', m: 'M', s: 'S', i: 'IM', w: 'W' };
@@ -69,6 +86,7 @@ const capture = {
 };
 
 // Per-lap accumulation
+let gotAny = false; // have we received any telemetry packet yet?
 let lockedLabel = OPT.team || null; // which car we record
 let currentCompound = OPT.compound;
 let lastLap = null;
@@ -105,6 +123,7 @@ function logEvent(type, extra = {}) {
 
 // ── packet handling ───────────────────────────────────────────────────────────
 function onPacket(pkt) {
+  gotAny = true; // telemetry is flowing (silences the no-data hint)
   const label = pkt.ps5ip;
   if (lockedLabel == null) {
     lockedLabel = label; // lock onto the first car seen
@@ -215,9 +234,24 @@ function connect() {
   ws = new WebSocket(OPT.url);
   ws.on('open', () => {
     console.log(`connected to relay ${OPT.url}`);
-    if (OPT.ip) ws.send(JSON.stringify({ type: 'setIPs', ips: [OPT.ip] }));
+    if (OPT.ip) {
+      ws.send(JSON.stringify({ type: 'setIPs', ips: [OPT.ip] }));
+      console.log(`tracking PS5: ${OPT.ip}`);
+    } else {
+      console.log('⚠ no PS5 IP given — pass --ip <ps5-ip> (or make sure the app has set the IPs)');
+    }
     console.log(`recording to ${outFile}`);
     console.log(`compound keys: h Hard · m Medium · s Soft · i Intermediate · w Wet · q quit\n`);
+
+    // Make a silent failure obvious: if nothing arrives, say why.
+    setTimeout(() => {
+      if (!gotAny && !stopped) {
+        console.log(
+          '… no telemetry after 8s. Check: GT7 running on the PS5 and you are OUT ON TRACK (not in a menu)?' +
+            `  IP ${OPT.ip || '(none set)'} correct?  PC and PS5 on the same network (192.168.x)?  Windows Firewall allowed?`
+        );
+      }
+    }, 8000);
   });
   ws.on('message', (raw) => {
     try {
@@ -257,6 +291,7 @@ function stop() {
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
 
+console.log(`recorder · car: ${OPT.ip || OPT.team || '(first seen)'} · start compound: ${OPT.compound}`);
 logEvent('start', { compound: currentCompound });
 setupKeys();
 connect();
