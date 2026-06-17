@@ -55,6 +55,7 @@ const OPT = {
   url: typeof FLAGS.url === 'string' ? FLAGS.url : 'ws://localhost:20777',
   ip: (typeof FLAGS.ip === 'string' ? FLAGS.ip : null) || POSITIONALS.find(looksLikeHost) || null,
   team: typeof FLAGS.team === 'string' ? FLAGS.team : null,
+  driver: typeof FLAGS.driver === 'string' ? FLAGS.driver : null, // who is driving (team prep / multi-driver)
   compound: String(typeof FLAGS.compound === 'string' ? FLAGS.compound : 'H').toUpperCase(),
   outDir: typeof FLAGS.out === 'string' ? FLAGS.out : path.join(process.cwd(), 'captures'),
   notes: typeof FLAGS.notes === 'string' ? FLAGS.notes : '',
@@ -77,6 +78,7 @@ const capture = {
     startedAt: new Date().toISOString(),
     endedAt: null,
     team: OPT.team || OPT.ip || null,
+    driver: OPT.driver || null,
     tankCapacityL: null,
     startCompound: OPT.compound,
     notes: OPT.notes,

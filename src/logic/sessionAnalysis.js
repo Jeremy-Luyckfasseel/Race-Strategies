@@ -18,7 +18,7 @@
  * timings are left untouched — the recording is the car, not the race plan).
  */
 
-import { formatLapTime } from './strategy.js';
+import { formatLapTime, parseLapTime } from './strategy.js';
 
 export const ASSUMED_PENALTY = 0.03; // engine's fuel-weight assumption (s/L)
 export const COMPOUND_NAMES = { H: 'Hard', M: 'Medium', S: 'Soft', IM: 'Intermediate', W: 'Wet' };
@@ -412,4 +412,79 @@ export function mergeAnalysisIntoInputs(analysis, base = {}) {
 /** Convenience: analyse a capture and fold it onto base inputs in one call. */
 export function deriveStrategyInputs(capture, base = {}) {
   return mergeAnalysisIntoInputs(analyzeCapture(capture), base);
+}
+
+const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+
+/**
+ * Combine MULTIPLE drivers' recorded sessions (each driver records on their own
+ * PS5 at home) into one team strategy input. The car is shared, so the global car
+ * model — tank, fuel/lap, fuel-weight, per-compound tyre life — is averaged across
+ * sessions; the LAP-TIME pace is kept PER DRIVER and written into the engine's
+ * existing per-driver compound times, so the optimiser assigns stints by each
+ * driver's real measured pace (with minimum drive-time still honoured).
+ *
+ * @param {Array<{driver?:string, analysis:object}>} sessions  one analyzeCapture() per driver
+ * @param {object} base  current strategy inputs (race length, pit timings, minDriverTimeSecs kept)
+ * @returns {object} new inputs object (never mutates)
+ */
+export function mergeDriverSessions(sessions, base = {}) {
+  const valid = (sessions || []).filter((s) => s && s.analysis);
+  if (!valid.length) return { ...base };
+
+  // Global car model (same car for everyone) — averaged across drivers.
+  const tank = valid.map((s) => s.analysis.tank).find((t) => t > 0) || Number(base.tankSize) || 100;
+  const fuelVals = valid.map((s) => s.analysis.fuel.value).filter((v) => v > 0);
+  const fuelPerLap = fuelVals.length ? avg(fuelVals) : null;
+  const pens = valid.filter((s) => s.analysis.fuelWeight.identifiable).map((s) => s.analysis.fuelWeight.sPerLiter);
+  const penalty = pens.length ? round3(avg(pens)) : Number(base.fuelWeightPenaltyPerLiter) || ASSUMED_PENALTY;
+
+  // Per-compound: collect tyre life + each driver's observed times.
+  const compMap = {};
+  for (const s of valid) {
+    for (const c of s.analysis.compounds) {
+      if (!c.deg || !c.observed) continue;
+      const m = (compMap[c.id] ||= { name: c.name, life: [], start: [], half: [], end: [] });
+      m.life.push(c.observedLife);
+      m.start.push(parseLapTime(c.observed.start));
+      m.half.push(parseLapTime(c.observed.half));
+      m.end.push(parseLapTime(c.observed.end));
+    }
+  }
+
+  // Global compounds = base, with measured tyre life (max observed) + average pace
+  // as the fallback when a driver lacks that compound.
+  const globalCompounds = (base.compounds || []).map((bc) => {
+    const m = compMap[bc.id];
+    return m
+      ? { ...bc, tireLife: Math.max(1, Math.round(Math.max(...m.life))), startLapTime: formatLapTime(avg(m.start)), halfLapTime: formatLapTime(avg(m.half)), endLapTime: formatLapTime(avg(m.end)) }
+      : bc;
+  });
+  for (const id of Object.keys(compMap)) {
+    if (!globalCompounds.some((c) => c.id === id)) {
+      const m = compMap[id];
+      globalCompounds.push({
+        id,
+        name: m.name,
+        mandatory: false,
+        tireLife: Math.max(1, Math.round(Math.max(...m.life))),
+        startLapTime: formatLapTime(avg(m.start)),
+        halfLapTime: formatLapTime(avg(m.half)),
+        endLapTime: formatLapTime(avg(m.end)),
+      });
+    }
+  }
+
+  // One engine driver per session, each with their OWN measured per-compound times.
+  const drivers = valid.map((s, i) => {
+    const compounds = {};
+    for (const c of s.analysis.compounds) {
+      if (c.deg && c.observed) compounds[c.id] = { startLapTime: c.observed.start, halfLapTime: c.observed.half, endLapTime: c.observed.end };
+    }
+    return { id: `d${i + 1}`, name: s.driver || s.analysis.meta?.driver || s.analysis.meta?.team || `Driver ${i + 1}`, compounds };
+  });
+
+  const out = { ...base, tankSize: tank, fuelWeightPenaltyPerLiter: penalty, compounds: globalCompounds, drivers };
+  if (fuelPerLap > 0) out.lapsPerFullTank = Math.round((tank / fuelPerLap) * 10) / 10;
+  return out;
 }

@@ -10,8 +10,8 @@
  * Run with: node tests/test_session_analysis.js
  */
 
-import { analyzeCapture, mergeAnalysisIntoInputs, deriveStrategyInputs } from '../src/logic/sessionAnalysis.js';
-import { findBestStrategies } from '../src/logic/strategy.js';
+import { analyzeCapture, mergeAnalysisIntoInputs, deriveStrategyInputs, mergeDriverSessions } from '../src/logic/sessionAnalysis.js';
+import { findBestStrategies, parseLapTime } from '../src/logic/strategy.js';
 
 let passed = 0;
 let failed = 0;
@@ -171,6 +171,59 @@ section('deriveStrategyInputs → a valid (multi-driver) ranked strategy');
   const ranked = findBestStrategies(inputs);
   assert('engine returns a ranked strategy from derived inputs', Array.isArray(ranked) && ranked.length > 0);
   assert('multi-driver preserved into the engine run', inputs.drivers.length === 2);
+}
+
+section('mergeDriverSessions — combine drivers, keep per-driver pace');
+{
+  // Each driver records their own two-stint session; Bob is 1.5 s/lap slower.
+  function driverSession(name, degFn) {
+    const s1 = makeStint(1, 60, 15, 1, 'M', degFn);
+    s1[s1.length - 1].sawPit = true;
+    const s2 = makeStint(2, 100, 27, 17, 'M', degFn);
+    s2[0].fuelStartL = s1[s1.length - 1].fuelEndL;
+    s2[0].fuelUsedL = Math.round((s2[0].fuelStartL - s2[0].fuelEndL) * 100) / 100;
+    const cap = { meta: { tankCapacityL: 100, driver: name, startCompound: 'M' }, laps: [...s1, ...s2], events: [] };
+    return { driver: name, analysis: analyzeCapture(cap) };
+  }
+  const alice = driverSession('Alice', degOnly);
+  const bob = driverSession('Bob', (a) => degOnly(a) + 1.5);
+
+  const base = {
+    raceDurationHours: 2,
+    tankSize: 1,
+    lapsPerFullTank: 1,
+    fuelMap: 1.0,
+    fuelWeightPenaltyPerLiter: 0.05,
+    mandatoryStops: 1,
+    pitBaseSecs: 25,
+    tireChangeSecs: 27,
+    fuelRateLitersPerSec: 4.0,
+    minDriverTimeSecs: 1800,
+    drivers: [{ id: 'old', name: 'placeholder', compounds: {} }],
+    compounds: [{ id: 'M', name: 'Medium', tireLife: 30, mandatory: false, startLapTime: '2:00', halfLapTime: '2:01', endLapTime: '2:03' }],
+  };
+  const out = mergeDriverSessions([alice, bob], base);
+
+  assert('two drivers in the team', out.drivers.length === 2);
+  assert('driver names carried from captures', out.drivers[0].name === 'Alice' && out.drivers[1].name === 'Bob');
+  assert('each driver has per-compound times', !!out.drivers[0].compounds.M && !!out.drivers[1].compounds.M);
+  assert(
+    'per-driver pace preserved (Bob slower than Alice)',
+    parseLapTime(out.drivers[1].compounds.M.startLapTime) > parseLapTime(out.drivers[0].compounds.M.startLapTime)
+  );
+
+  // Global car model is taken from the sessions (same car), averaged.
+  near('global tank from sessions', out.tankSize, 100, 0.1);
+  near('global laps/tank from sessions', out.lapsPerFullTank, 100 / FUEL, 1);
+  near('global penalty from sessions', out.fuelWeightPenaltyPerLiter, PEN, 0.005);
+
+  // Race plan kept.
+  assert('race length kept', out.raceDurationHours === 2);
+  assert('min drive time kept', out.minDriverTimeSecs === 1800);
+
+  const ranked = findBestStrategies(out);
+  assert('engine runs the multi-driver team plan', Array.isArray(ranked) && ranked.length > 0);
+  assert('plan covers both drivers', ranked[0].strategy.driverSummary.length === 2);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
