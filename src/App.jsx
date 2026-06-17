@@ -16,7 +16,9 @@ import TelemetryControls from "./components/TelemetryControls";
 import LearnerRecommendations from "./components/LearnerRecommendations";
 import NowView from "./components/NowView";
 import Onboarding from "./components/Onboarding";
+import SessionImport from "./components/SessionImport";
 import { CAR_PRESETS } from "./logic/strategy";
+import { mergeAnalysisIntoInputs } from "./logic/sessionAnalysis";
 import { DEFAULT_LANG, t } from "./i18n/strings";
 
 const DEFAULT_INPUTS = {
@@ -335,6 +337,13 @@ export default function App() {
     }));
   }, []);
 
+  // Apply a recorded session's measured CAR MODEL to the inputs (propose-and-accept:
+  // only on the user's explicit click). Race length / drivers / pits are preserved.
+  const applySession = useCallback((analysis) => {
+    setInputs((prev) => mergeAnalysisIntoInputs(analysis, prev));
+    setSelectedIndex(0);
+  }, []);
+
   return (
     <div className="app-root">
       {!onboarded && (
@@ -371,6 +380,7 @@ export default function App() {
 
       <main className={`app-main${activeTab === 'telemetry' ? ' app-main--telemetry' : ''}`}>
         <aside className="sidebar">
+          <SessionImport onApply={applySession} lang={DEFAULT_LANG} />
           <InputPanel
             inputs={inputs}
             onChange={handleChange}
