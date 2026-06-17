@@ -85,15 +85,15 @@ const capture = {
   events: [],
 };
 
-// Per-lap accumulation
+// Per-lap accumulation. NOTE: the recorder captures RAW ground truth only —
+// it does NOT compute stints / tyre age. Stint boundaries are derived from the
+// data (refuel / compound change) by the comparison (scripts/lib/validation.js),
+// which is the single source of truth for segmentation.
 let gotAny = false; // have we received any telemetry packet yet?
 let lockedLabel = OPT.team || null; // which car we record
 let currentCompound = OPT.compound;
 let lastLap = null;
 let lapStartFuel = null;
-let stintStartLap = null;
-let stint = 1;
-let pendingOutLap = true; // first completed lap is an out-lap (joined mid-lap)
 // flags/extremes seen during the in-progress lap
 let sawPit = false;
 let sawOffTrack = false;
@@ -143,17 +143,16 @@ function onPacket(pkt) {
   if (pkt.onTrack === false) sawOffTrack = true;
   if (pkt.paused) sawPaused = true;
 
-  // pit events → stint boundary
+  // The relay's pit flags are speed-based (ANY stop — crash, spin, standing start),
+  // so they're recorded as informational events + a nudge only. They do NOT define
+  // stints here; the comparison derives real boundaries from refuel / compound change.
   if (pkt.pitDetected) {
     logEvent('pitDetected', { lap: pkt.currentLap, compound: currentCompound });
-    console.log(`\n⛽ PIT IN  (lap ${pkt.currentLap})`);
+    console.log(`\n⛽ stop detected (lap ${pkt.currentLap})`);
   }
   if (pkt.pitExit) {
-    stint += 1;
-    stintStartLap = pkt.currentLap;
-    pendingOutLap = true;
     logEvent('pitExit', { lap: pkt.currentLap });
-    console.log(`🏁 PIT OUT (lap ${pkt.currentLap}) — confirm the compound: h/m/s/i/w  (current: ${currentCompound})`);
+    console.log(`🏁 moving again (lap ${pkt.currentLap}) — if that was a pit, press the compound key: h/m/s/i/w  (current: ${currentCompound})`);
   }
 
   const lap = Number(pkt.currentLap);
@@ -163,7 +162,6 @@ function onPacket(pkt) {
   if (lastLap === null) {
     lastLap = lap;
     lapStartFuel = pkt.fuelLiters;
-    stintStartLap = lap;
     resetLapAccumulators();
     return;
   }
@@ -181,8 +179,6 @@ function onPacket(pkt) {
       fuelEndL: fuelEnd,
       fuelUsedL: lapStartFuel != null && fuelEnd != null ? Math.round((lapStartFuel - fuelEnd) * 100) / 100 : null,
       compound: currentCompound,
-      stint,
-      tireAge: lastLap - stintStartLap,
       tireWear: pkt.tireWear || null,
       tireRadius: pkt.tireRadius || null,
       minSpeedKmh: Number.isFinite(minSpeed) ? minSpeed : null,
@@ -190,7 +186,6 @@ function onPacket(pkt) {
       sawPit,
       sawOffTrack,
       sawPaused,
-      outLap: pendingOutLap,
       lapJump: delta !== 1,
       tsEnd: new Date().toISOString(),
     };
@@ -199,12 +194,11 @@ function onPacket(pkt) {
 
     const lt = rec.lapTimeSec != null ? `${rec.lapTimeSec.toFixed(3)}s` : '—';
     const fu = rec.fuelUsedL != null ? `${rec.fuelUsedL.toFixed(2)}L` : '—';
-    console.log(`lap ${rec.lap} · ${lt} · fuel ${fu} · ${rec.compound} · age ${rec.tireAge}${rec.outLap ? ' · out-lap' : ''}`);
+    console.log(`lap ${rec.lap} · ${lt} · fuel ${fu} · ${rec.compound}`);
 
     // roll forward
     lastLap = lap;
     lapStartFuel = fuelEnd;
-    pendingOutLap = false;
     resetLapAccumulators();
   }
 }
