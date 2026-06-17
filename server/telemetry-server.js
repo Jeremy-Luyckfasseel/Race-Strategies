@@ -236,8 +236,10 @@ function parsePacket(buf) {
   // Engine
   const rpm          = decrypted.readFloatLE(0x3C);
 
-  // Fuel
-  const fuelRatio    = decrypted.readFloatLE(0x44);
+  // Fuel — 0x44 is the CURRENT fuel level (0..100, where 100 = full), NOT a 0..1
+  // ratio; 0x48 is the capacity (≈100 for cars, 0 for EVs/karts). The fraction is
+  // gasLevel / capacity. (Previously these were multiplied, inflating fuel ×100.)
+  const gasLevel     = decrypted.readFloatLE(0x44);
   const fuelCapacity = decrypted.readFloatLE(0x48);
 
   // Angular velocity — yaw rate (rad/s) used for lateral-G estimation
@@ -293,8 +295,8 @@ function parsePacket(buf) {
     rpm:          Math.round(rpm),
     rpmWarning,
     rpmLimiter,
-    fuelLiters:   Math.round(fuelRatio * fuelCapacity * 10) / 10,
-    fuelRatio:    Math.round(fuelRatio * 1000) / 1000,
+    fuelLiters:   Math.round(gasLevel * 10) / 10,
+    fuelRatio:    fuelCapacity > 0 ? Math.round((gasLevel / fuelCapacity) * 1000) / 1000 : 0,
     fuelCapacity: Math.round(fuelCapacity * 10) / 10,
     speedKmh:     Math.round(speed * 3.6),
     latG:         Math.round(Math.abs(speed * angVelY) / 9.81 * 100) / 100,
