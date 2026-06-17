@@ -50,8 +50,11 @@ The quality of the verdict depends entirely on the quality of the run. Aim for:
    (lap times rising, not just a few laps). This is the only way to see whether the
    degradation curve — and any late "cliff" — matches the model.
 3. **At least one pit stop**, and **confirm the compound** at the stop (see keys
-   below). The comparison segments stints at the pit and learns each compound
-   separately.
+   below). The comparison finds the pit from the **refuel / compound change in the
+   data** — not just "the car stopped" — so a crash, spin, off-track stop, or a
+   standing/pit start is **not** mistaken for a pit, and won't corrupt the stint
+   segmentation. (The live recorder may still *print* a "PIT" line on a stop, from
+   the relay's speed-based flag, but the analysis ignores it.)
 4. **If you can, do one low-traffic baseline run** (a clean stint with clear track).
    This second stint at a different fuel load is what lets the tool **separate the
    fuel-weight effect from degradation** — without it, those two are mathematically

@@ -92,6 +92,39 @@ function leastSquares(X, y) {
 // Lap cleaning (DECISION 5 rules, applied to the recorded per-lap records).
 // ---------------------------------------------------------------------------
 
+export const REFUEL_THRESHOLD_L = 1.0; // fuel rising > this across a lap = a refuel (a real pit)
+const PIT_DEBOUNCE_LAPS = 2; // ignore a second boundary within this many laps (late keypress)
+
+/**
+ * Re-derive stint boundaries from the DATA, not the relay's speed-based pit flag.
+ * A real pit is the only thing that REFUELS the car or CHANGES the tyres — a crash,
+ * spin, off-track stop, or a standing/pit start does neither. So a new stint starts
+ * only where fuel rose across a lap (refuel) OR the confirmed compound changed.
+ * This makes the analysis robust to false "pits"; it overrides each lap's
+ * stint / tireAge / outLap (the recorder's values, derived from the flaky flag).
+ */
+export function resegmentStints(laps) {
+  const sorted = [...laps].sort((a, b) => a.lap - b.lap);
+  let stint = 1;
+  let stintStart = 0;
+  let prevCompound = sorted.length ? sorted[0].compound : null;
+  for (let i = 0; i < sorted.length; i++) {
+    const l = sorted[i];
+    const refuelled = Number.isFinite(Number(l.fuelUsedL)) && Number(l.fuelUsedL) < -REFUEL_THRESHOLD_L;
+    const compoundChanged = !!l.compound && l.compound !== prevCompound;
+    const farEnough = i - stintStart >= PIT_DEBOUNCE_LAPS;
+    if (i > 0 && farEnough && (refuelled || compoundChanged)) {
+      stint += 1;
+      stintStart = i;
+    }
+    l.stint = stint;
+    l.tireAge = i - stintStart;
+    l.outLap = i === stintStart;
+    prevCompound = l.compound || prevCompound;
+  }
+  return sorted;
+}
+
 /**
  * Annotate each lap with why it is / isn't a clean degradation sample, and
  * whether it's usable for the tank-delta fuel measurement.
@@ -250,16 +283,17 @@ export function fitCompoundModel(compoundLaps, repLife) {
 // Stint / race reconstruction from the capture.
 // ---------------------------------------------------------------------------
 
-function reconstructRace(capture) {
-  const laps = capture.laps || [];
+function reconstructRace(capture, laps) {
   const events = capture.events || [];
   const actualTotalLaps = laps.length ? Math.max(...laps.map((l) => l.lap)) : 0;
 
-  // Pit laps from events (preferred) or the per-lap sawPit flag.
-  const pitLapsFromEvents = events.filter((e) => e.type === 'pitDetected' && e.lap != null).map((e) => e.lap);
-  const actualPitLaps = pitLapsFromEvents.length
-    ? [...new Set(pitLapsFromEvents)].sort((a, b) => a - b)
-    : laps.filter((l) => l.sawPit).map((l) => l.lap);
+  // Real pit laps = the last lap of each data-derived stint except the last (the
+  // in-lap), from the refuel/compound segmentation — NOT the speed-based flag, so
+  // a crash/standing start is never counted as a pit.
+  const stintNums = [...new Set(laps.map((l) => l.stint))].sort((a, b) => a - b);
+  const actualPitLaps = stintNums
+    .slice(0, -1)
+    .map((s) => Math.max(...laps.filter((l) => l.stint === s).map((l) => l.lap)));
 
   // Pit durations from paired detect→exit event timestamps, if present.
   const pitDurations = [];
@@ -291,9 +325,11 @@ function reconstructRace(capture) {
 // ---------------------------------------------------------------------------
 
 export function compareSession(capture) {
-  const laps = classifyLaps([...(capture.laps || [])]);
+  // Re-derive stint boundaries from the data (refuel / compound change) so a crash
+  // or a standing start can't be mistaken for a pit, THEN classify clean laps.
+  const laps = classifyLaps(resegmentStints([...(capture.laps || [])]));
   const tank = Number(capture.meta?.tankCapacityL) || 0;
-  const race = reconstructRace(capture);
+  const race = reconstructRace(capture, laps);
 
   const cleanCount = laps.filter((l) => l._degClean).length;
   const fuel = measureFuelPerLap(laps, tank || Infinity);
