@@ -16,7 +16,7 @@ import TelemetryControls from "./components/TelemetryControls";
 import LearnerRecommendations from "./components/LearnerRecommendations";
 import NowView from "./components/NowView";
 import Onboarding from "./components/Onboarding";
-import SessionImport from "./components/SessionImport";
+import TeamPanel from "./components/TeamPanel";
 import { CAR_PRESETS } from "./logic/strategy";
 import { mergeAnalysisIntoInputs, mergeDriverSessions } from "./logic/sessionAnalysis";
 import { DEFAULT_LANG, t } from "./i18n/strings";
@@ -385,7 +385,7 @@ export default function App() {
 
       <main className={`app-main${activeTab === 'telemetry' ? ' app-main--telemetry' : ''}`}>
         <aside className="sidebar">
-          <SessionImport onApply={applySessions} lang={DEFAULT_LANG} />
+          <TeamPanel onBuild={applySessions} lang={DEFAULT_LANG} />
           <InputPanel
             inputs={inputs}
             onChange={handleChange}

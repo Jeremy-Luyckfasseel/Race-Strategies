@@ -3469,3 +3469,83 @@ input[type="range"]::-moz-range-thumb {
   justify-content: space-between;
   gap: 8px;
 }
+
+/* ---------------------------------------------------------------------------
+   Team panel — groups / races / shared-folder import (session-import)
+   --------------------------------------------------------------------------- */
+.team-panel {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  padding: 14px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.tg-head {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+}
+.tg-hint { font-size: 0.72rem; color: var(--text-muted); line-height: 1.45; margin: 0; }
+.tg-row { display: flex; gap: 6px; align-items: center; }
+.tg-select {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-field);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  padding: 6px 8px;
+}
+.tg-name {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-base);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  letter-spacing: 0.03em;
+  font-size: 0.86rem;
+  padding: 6px 8px;
+}
+.tg-name:focus, .tg-select:focus { outline: none; border-color: var(--accent); }
+.tg-btn {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--rule-bright, var(--rule));
+  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 6px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tg-btn:hover { color: var(--text-primary); border-color: var(--accent); }
+.tg-btn--ghost { width: 28px; padding: 6px 0; text-align: center; color: var(--text-muted); }
+.tg-btn--ghost:hover { color: var(--accent); }
+.tg-sources { display: flex; flex-direction: column; gap: 6px; }
+.tg-folder-btn {
+  width: 100%;
+  padding: 9px;
+  background: var(--bg-field);
+  border: 1px solid var(--accent-dim, var(--accent));
+  border-radius: var(--radius-xs);
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.tg-folder-btn:hover { background: var(--bg-elevated, var(--bg-field)); }
+.tg-folder-btn:disabled { opacity: 0.5; cursor: default; }

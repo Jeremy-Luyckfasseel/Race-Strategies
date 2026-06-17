@@ -9,7 +9,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node tests/test_comprehensive.js && node tests/test_invariants.js && node tests/test_telemetry_learner.js && node tests/test_recommendations.js && node tests/test_race_state.js && node tests/test_connection.js && node tests/test_engine_validation.js && node tests/test_session_analysis.js",
+    "test": "node tests/test_comprehensive.js && node tests/test_invariants.js && node tests/test_telemetry_learner.js && node tests/test_recommendations.js && node tests/test_race_state.js && node tests/test_connection.js && node tests/test_engine_validation.js && node tests/test_session_analysis.js && node tests/test_groups.js",
     "test:smoke": "node tests/test.js",
     "telemetry": "node server/telemetry-server.js",
     "record": "node scripts/record-session.js",
