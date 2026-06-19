@@ -42,6 +42,7 @@ export function useGroups() {
     deleteRace: useCallback((gid, rid) => setState((s) => G.deleteRace(s, gid, rid)), []),
     setActiveRace: useCallback((rid) => setState((s) => G.setActiveRace(s, rid)), []),
     setRaceSessions: useCallback((gid, rid, sessions) => setState((s) => G.setRaceSessions(s, gid, rid, sessions)), []),
+    setGroupSync: useCallback((gid, sync) => setState((s) => G.setGroupSync(s, gid, sync)), []),
     setRaceFolder: useCallback((gid, rid, folderName) => setState((s) => G.setRaceFolder(s, gid, rid, folderName)), []),
   };
 }

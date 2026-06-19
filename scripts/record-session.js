@@ -28,6 +28,7 @@ import WebSocket from 'ws';
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
+import { ensureRace, uploadSession } from '../src/logic/syncClient.js';
 
 // ── args ──────────────────────────────────────────────────────────────────────
 // Parse `--flag value` pairs AND bare positionals. `npm run record -- --ip X`
@@ -56,6 +57,10 @@ const OPT = {
   ip: (typeof FLAGS.ip === 'string' ? FLAGS.ip : null) || POSITIONALS.find(looksLikeHost) || null,
   team: typeof FLAGS.team === 'string' ? FLAGS.team : null,
   driver: typeof FLAGS.driver === 'string' ? FLAGS.driver : null, // who is driving (team prep / multi-driver)
+  // Optional team sync server (v2): upload the capture to a group/race on stop.
+  server: typeof FLAGS.server === 'string' ? FLAGS.server : null,
+  group: typeof FLAGS.group === 'string' ? FLAGS.group : null, // group join code
+  race: typeof FLAGS.race === 'string' ? FLAGS.race : null,
   compound: String(typeof FLAGS.compound === 'string' ? FLAGS.compound : 'H').toUpperCase(),
   outDir: typeof FLAGS.out === 'string' ? FLAGS.out : path.join(process.cwd(), 'captures'),
   notes: typeof FLAGS.notes === 'string' ? FLAGS.notes : '',
@@ -265,7 +270,7 @@ function connect() {
   ws.on('error', (e) => console.warn('ws error:', e.message));
 }
 
-function stop() {
+async function stop() {
   if (stopped) return;
   stopped = true;
   capture.meta.endedAt = new Date().toISOString();
@@ -276,6 +281,18 @@ function stop() {
     console.error('final flush failed:', e.message);
   }
   console.log(`\n■ stopped. ${capture.laps.length} laps saved to ${outFile}`);
+
+  // Optional: upload to the team sync server so the strategist gets it directly.
+  if (OPT.server && OPT.group && capture.laps.length > 0) {
+    try {
+      const race = await ensureRace(OPT.server, OPT.group, OPT.race || 'Race');
+      await uploadSession(OPT.server, OPT.group, race.id, OPT.driver || OPT.team || 'Driver', capture);
+      console.log(`☁ uploaded to group ${OPT.group} · race "${race.name}"`);
+    } catch (e) {
+      console.error(`upload failed (local file kept): ${e.message}`);
+    }
+  }
+
   try {
     ws && ws.close();
   } catch {
@@ -288,6 +305,7 @@ process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
 
 console.log(`recorder · car: ${OPT.ip || OPT.team || '(first seen)'} · start compound: ${OPT.compound}`);
+if (OPT.server && OPT.group) console.log(`☁ will upload on stop → ${OPT.server} · group ${OPT.group} · race "${OPT.race || 'Race'}" · driver ${OPT.driver || OPT.team || 'Driver'}`);
 logEvent('start', { compound: currentCompound });
 setupKeys();
 connect();

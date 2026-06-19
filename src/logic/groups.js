@@ -103,6 +103,11 @@ export function setRaceSessions(state, groupId, raceId, sessions) {
   };
 }
 
+/** Connect a group to a sync server: { serverUrl, code } (or null to disconnect). */
+export function setGroupSync(state, groupId, sync) {
+  return { ...state, groups: state.groups.map((g) => (g.id === groupId ? { ...g, sync } : g)) };
+}
+
 /** Remember which synced folder backs a race (display + re-pick convenience). */
 export function setRaceFolder(state, groupId, raceId, folderName) {
   return {

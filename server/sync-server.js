@@ -21,28 +21,23 @@
 import http from 'http';
 import * as store from './sync-store.js';
 
-const PORT = Number(process.env.PORT) || 8787;
-const DATA_DIR = process.env.DATA_DIR || './sync-data';
-const MAX_BODY = Number(process.env.MAX_BODY) || 2 * 1024 * 1024; // 2 MB / upload
-const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
-
-function send(res, status, body) {
+function send(res, status, body, corsOrigin) {
   res.writeHead(status, {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': CORS_ORIGIN,
+    'Access-Control-Allow-Origin': corsOrigin,
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   });
   res.end(JSON.stringify(body));
 }
 
-function readBody(req) {
+function readBody(req, maxBody) {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
     req.on('data', (c) => {
       size += c.length;
-      if (size > MAX_BODY) {
+      if (size > maxBody) {
         reject(new Error('too-large'));
         req.destroy();
       } else {
@@ -60,10 +55,20 @@ function readBody(req) {
   });
 }
 
-const server = http.createServer(async (req, res) => {
-  if (req.method === 'OPTIONS') return send(res, 204, {});
-  const seg = new URL(req.url, 'http://x').pathname.split('/').filter(Boolean);
-  try {
+/** Create the sync HTTP server (not yet listening). Testable on any port. */
+export function createSyncServer({ dataDir = './sync-data', maxBody = 2 * 1024 * 1024, corsOrigin = '*' } = {}) {
+  const DATA_DIR = dataDir;
+  const MAX_BODY = maxBody;
+  const CORS_ORIGIN = corsOrigin;
+  const send2 = (res, status, body) => send(res, status, body, CORS_ORIGIN);
+  const readBody2 = (req) => readBody(req, MAX_BODY);
+
+  return http.createServer(async (req, res) => {
+    const send = send2;
+    const readBody = readBody2;
+    if (req.method === 'OPTIONS') return send(res, 204, {});
+    const seg = new URL(req.url, 'http://x').pathname.split('/').filter(Boolean);
+    try {
     if (req.method === 'GET' && seg[0] === 'api' && seg[1] === 'health') return send(res, 200, { ok: true });
     if (seg[0] !== 'api' || seg[1] !== 'groups') return send(res, 404, { error: 'not-found' });
 
@@ -109,9 +114,21 @@ const server = http.createServer(async (req, res) => {
     }
 
     return send(res, 404, { error: 'not-found' });
-  } catch (e) {
-    return send(res, e.message === 'too-large' ? 413 : 400, { error: e.message });
-  }
-});
+    } catch (e) {
+      return send(res, e.message === 'too-large' ? 413 : 400, { error: e.message });
+    }
+  });
+}
 
-server.listen(PORT, () => console.log(`GT7 sync server on :${PORT}  (data: ${DATA_DIR})`));
+// CLI entry — run the server directly with env config.
+const isMain =
+  typeof process !== 'undefined' && process.argv[1] && process.argv[1].replace(/\\/g, '/').endsWith('server/sync-server.js');
+if (isMain) {
+  const PORT = Number(process.env.PORT) || 8787;
+  const dataDir = process.env.DATA_DIR || './sync-data';
+  createSyncServer({
+    dataDir,
+    maxBody: Number(process.env.MAX_BODY) || undefined,
+    corsOrigin: process.env.CORS_ORIGIN || undefined,
+  }).listen(PORT, () => console.log(`GT7 sync server on :${PORT}  (data: ${dataDir})`));
+}

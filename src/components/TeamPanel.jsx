@@ -13,6 +13,7 @@
 
 import { useState } from 'react';
 import { analyzeCapture } from '../logic/sessionAnalysis';
+import { ensureRace, fetchSessions } from '../logic/syncClient';
 import { useGroups } from '../hooks/useGroups';
 import { t } from '../i18n/strings';
 
@@ -52,8 +53,34 @@ export default function TeamPanel({ onBuild, lang }) {
   const grp = useGroups();
   const { state, activeGroup, activeRace } = grp;
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
 
   const updateSessions = (sessions) => grp.setRaceSessions(activeGroup.id, activeRace.id, sessions);
+
+  const sync = activeGroup?.sync || {};
+  const setSync = (patch) => grp.setGroupSync(activeGroup.id, { ...sync, ...patch });
+  const canPull = !!(sync.serverUrl && sync.code && activeRace);
+
+  // Pull every driver's uploaded session for this race from the team sync server.
+  const pullFromGroup = async () => {
+    if (!canPull) return;
+    setErr(null);
+    setBusy(true);
+    try {
+      const race = await ensureRace(sync.serverUrl, sync.code, activeRace.name);
+      const remote = await fetchSessions(sync.serverUrl, sync.code, race.id);
+      updateSessions(
+        remote.map((r) => {
+          const a = analyzeCapture(r.capture);
+          return { id: `sync-${r.driver}`, fileName: `${r.driver} (sync)`, driver: r.driver || a.meta?.driver || 'Driver', analysis: slim(a) };
+        })
+      );
+    } catch (e) {
+      setErr(`sync: ${e.message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const pickFolder = async () => {
     try {
@@ -128,6 +155,22 @@ export default function TeamPanel({ onBuild, lang }) {
             </button>
           </div>
 
+          {/* Optional: connect this group to a sync server (no shared folder needed) */}
+          <div className="tg-sync">
+            <input
+              className="tg-sync-input"
+              placeholder={t('tg_server_url', lang)}
+              value={sync.serverUrl || ''}
+              onChange={(e) => setSync({ serverUrl: e.target.value })}
+            />
+            <input
+              className="tg-sync-input"
+              placeholder={t('tg_code', lang)}
+              value={sync.code || ''}
+              onChange={(e) => setSync({ code: e.target.value })}
+            />
+          </div>
+
           {/* Race selector */}
           <div className="tg-row">
             <select className="tg-select" value={state.activeRaceId || ''} onChange={(e) => grp.setActiveRace(e.target.value)}>
@@ -154,6 +197,11 @@ export default function TeamPanel({ onBuild, lang }) {
 
               {/* Shared folder + file fallback */}
               <div className="tg-sources">
+                {canPull && (
+                  <button className="tg-folder-btn" onClick={pullFromGroup} disabled={busy}>
+                    {t('tg_pull', lang)}
+                  </button>
+                )}
                 {supportsFolder && (
                   <button className="tg-folder-btn" onClick={pickFolder} disabled={busy}>
                     {activeRace.folderName ? `${t('tg_refresh', lang)} · ${activeRace.folderName}` : t('tg_pick_folder', lang)}
@@ -164,6 +212,7 @@ export default function TeamPanel({ onBuild, lang }) {
                   <span>{t('si_choose', lang)}</span>
                 </label>
               </div>
+              {err && <div className="si-error">{err}</div>}
 
               {/* Driver sessions */}
               {activeRace.sessions.length === 0 ? (

@@ -76,6 +76,9 @@ const STRINGS = {
     tg_no_sessions: 'No driver sessions yet — pick the shared race folder, or add files.',
     tg_build: 'Build strategy from this race',
     tg_create_group_hint: 'Create a group for your team, add a race, then point it at the shared folder where each driver drops their recorded session.',
+    tg_server_url: 'Sync server URL (optional)',
+    tg_code: 'Group code',
+    tg_pull: 'Pull from group',
   },
   fr: {
     now_tab: 'Course',
@@ -139,6 +142,9 @@ const STRINGS = {
     tg_no_sessions: 'Pas encore de sessions — choisissez le dossier partagé, ou ajoutez des fichiers.',
     tg_build: 'Calculer la stratégie de cette course',
     tg_create_group_hint: "Créez un groupe pour votre équipe, ajoutez une course, puis pointez-la vers le dossier partagé où chaque pilote dépose sa session enregistrée.",
+    tg_server_url: 'URL du serveur de sync (optionnel)',
+    tg_code: 'Code du groupe',
+    tg_pull: 'Récupérer du groupe',
   },
 };
 

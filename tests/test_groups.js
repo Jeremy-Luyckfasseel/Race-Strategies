@@ -15,6 +15,7 @@ import {
   setActiveRace,
   setRaceSessions,
   setRaceFolder,
+  setGroupSync,
   getActiveGroup,
   getActiveRace,
 } from '../src/logic/groups.js';
@@ -77,6 +78,9 @@ section('sessions + folder on a race');
 
   s = setRaceFolder(s, gid, rid, 'Dropbox/TeamT/RaceR');
   assert('folder name remembered', getActiveRace(s).folderName === 'Dropbox/TeamT/RaceR');
+
+  s = setGroupSync(s, gid, { serverUrl: 'https://sync.example', code: 'AbC123' });
+  assert('group sync connection stored', getActiveGroup(s).sync.code === 'AbC123');
 
   // Replacing sessions (e.g. re-reading the folder) overwrites cleanly.
   s = setRaceSessions(s, gid, rid, [sessions[0]]);

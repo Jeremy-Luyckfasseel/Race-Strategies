@@ -3549,3 +3549,18 @@ input[type="range"]::-moz-range-thumb {
 }
 .tg-folder-btn:hover { background: var(--bg-elevated, var(--bg-field)); }
 .tg-folder-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* Team panel — sync-to-group connection (session-import) */
+.tg-sync { display: flex; flex-direction: column; gap: 5px; }
+.tg-sync-input {
+  width: 100%;
+  background: var(--bg-base);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  padding: 6px 8px;
+}
+.tg-sync-input:focus { outline: none; border-color: var(--accent); }
+.tg-sync-input::placeholder { color: var(--text-muted); }
