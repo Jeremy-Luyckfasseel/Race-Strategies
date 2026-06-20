@@ -19,6 +19,9 @@ release
 captures/*.json
 captures/*.json.tmp
 
+# Sync server data (v2) — uploaded captures, not source
+sync-data/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

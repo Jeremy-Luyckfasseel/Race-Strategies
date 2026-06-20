@@ -16,7 +16,9 @@ import TelemetryControls from "./components/TelemetryControls";
 import LearnerRecommendations from "./components/LearnerRecommendations";
 import NowView from "./components/NowView";
 import Onboarding from "./components/Onboarding";
+import TeamPanel from "./components/TeamPanel";
 import { CAR_PRESETS } from "./logic/strategy";
+import { mergeAnalysisIntoInputs, mergeDriverSessions } from "./logic/sessionAnalysis";
 import { DEFAULT_LANG, t } from "./i18n/strings";
 
 const DEFAULT_INPUTS = {
@@ -335,6 +337,18 @@ export default function App() {
     }));
   }, []);
 
+  // Apply recorded session(s), on the user's explicit click only. One session fills
+  // the car model and keeps the user's driver setup; two or more build the team
+  // (each driver's measured pace → the engine's per-driver model). Race length and
+  // pit timings are always preserved.
+  const applySessions = useCallback((sessions) => {
+    if (!sessions || !sessions.length) return;
+    setInputs((prev) =>
+      sessions.length === 1 ? mergeAnalysisIntoInputs(sessions[0].analysis, prev) : mergeDriverSessions(sessions, prev)
+    );
+    setSelectedIndex(0);
+  }, []);
+
   return (
     <div className="app-root">
       {!onboarded && (
@@ -371,6 +385,7 @@ export default function App() {
 
       <main className={`app-main${activeTab === 'telemetry' ? ' app-main--telemetry' : ''}`}>
         <aside className="sidebar">
+          <TeamPanel onBuild={applySessions} lang={DEFAULT_LANG} />
           <InputPanel
             inputs={inputs}
             onChange={handleChange}
