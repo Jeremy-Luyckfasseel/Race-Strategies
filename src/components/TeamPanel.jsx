@@ -13,7 +13,7 @@
 
 import { useState } from 'react';
 import { analyzeCapture } from '../logic/sessionAnalysis';
-import { ensureRace, fetchSessions } from '../logic/syncClient';
+import { ensureRace, fetchSessions, createGroup as createRemoteGroup } from '../logic/syncClient';
 import { useGroups } from '../hooks/useGroups';
 import { t } from '../i18n/strings';
 
@@ -60,6 +60,21 @@ export default function TeamPanel({ onBuild, lang }) {
   const sync = activeGroup?.sync || {};
   const setSync = (patch) => grp.setGroupSync(activeGroup.id, { ...sync, ...patch });
   const canPull = !!(sync.serverUrl && sync.code && activeRace);
+
+  // Create the group ON the server and capture its join code (no curl needed).
+  const createOnServer = async () => {
+    if (!sync.serverUrl) return;
+    setErr(null);
+    setBusy(true);
+    try {
+      const g = await createRemoteGroup(sync.serverUrl, activeGroup.name);
+      setSync({ code: g.code });
+    } catch (e) {
+      setErr(`sync: ${e.message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   // Pull every driver's uploaded session for this race from the team sync server.
   const pullFromGroup = async () => {
@@ -169,6 +184,11 @@ export default function TeamPanel({ onBuild, lang }) {
               value={sync.code || ''}
               onChange={(e) => setSync({ code: e.target.value })}
             />
+            {sync.serverUrl && !sync.code && (
+              <button className="tg-btn" onClick={createOnServer} disabled={busy}>
+                {t('tg_create_remote', lang)}
+              </button>
+            )}
           </div>
 
           {/* Race selector */}

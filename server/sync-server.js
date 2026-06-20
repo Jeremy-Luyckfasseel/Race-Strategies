@@ -56,17 +56,41 @@ function readBody(req, maxBody) {
 }
 
 /** Create the sync HTTP server (not yet listening). Testable on any port. */
-export function createSyncServer({ dataDir = './sync-data', maxBody = 2 * 1024 * 1024, corsOrigin = '*' } = {}) {
+export function createSyncServer({
+  dataDir = './sync-data',
+  maxBody = 2 * 1024 * 1024,
+  corsOrigin = '*',
+  rateMax = 240, // max requests per IP per window
+  rateWindowMs = 60_000, // 1 minute
+  maxGroups = 1000, // cap total groups (spam / disk-fill guard)
+} = {}) {
   const DATA_DIR = dataDir;
   const MAX_BODY = maxBody;
   const CORS_ORIGIN = corsOrigin;
   const send2 = (res, status, body) => send(res, status, body, CORS_ORIGIN);
   const readBody2 = (req) => readBody(req, MAX_BODY);
 
+  // Simple fixed-window rate limit per client IP (honours X-Forwarded-For so it
+  // works behind Caddy). Keeps a flood from filling disk or hammering the box.
+  const hits = new Map();
+  const limited = (req) => {
+    const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+    const now = Date.now();
+    const e = hits.get(ip);
+    if (!e || now > e.reset) {
+      if (hits.size > 5000) hits.clear();
+      hits.set(ip, { n: 1, reset: now + rateWindowMs });
+      return false;
+    }
+    e.n += 1;
+    return e.n > rateMax;
+  };
+
   return http.createServer(async (req, res) => {
     const send = send2;
     const readBody = readBody2;
     if (req.method === 'OPTIONS') return send(res, 204, {});
+    if (limited(req)) return send(res, 429, { error: 'rate-limited' });
     const seg = new URL(req.url, 'http://x').pathname.split('/').filter(Boolean);
     try {
     if (req.method === 'GET' && seg[0] === 'api' && seg[1] === 'health') return send(res, 200, { ok: true });
@@ -74,6 +98,7 @@ export function createSyncServer({ dataDir = './sync-data', maxBody = 2 * 1024 *
 
     // POST /api/groups
     if (seg.length === 2 && req.method === 'POST') {
+      if (store.countGroups(DATA_DIR) >= maxGroups) return send(res, 403, { error: 'group-limit' });
       const b = await readBody(req);
       return send(res, 200, store.createGroup(DATA_DIR, b.name));
     }
@@ -130,5 +155,7 @@ if (isMain) {
     dataDir,
     maxBody: Number(process.env.MAX_BODY) || undefined,
     corsOrigin: process.env.CORS_ORIGIN || undefined,
+    rateMax: Number(process.env.RATE_MAX) || undefined,
+    maxGroups: Number(process.env.MAX_GROUPS) || undefined,
   }).listen(PORT, () => console.log(`GT7 sync server on :${PORT}  (data: ${dataDir})`));
 }

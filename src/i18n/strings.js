@@ -79,6 +79,7 @@ const STRINGS = {
     tg_server_url: 'Sync server URL (optional)',
     tg_code: 'Group code',
     tg_pull: 'Pull from group',
+    tg_create_remote: 'Create group on server',
   },
   fr: {
     now_tab: 'Course',
@@ -145,6 +146,7 @@ const STRINGS = {
     tg_server_url: 'URL du serveur de sync (optionnel)',
     tg_code: 'Code du groupe',
     tg_pull: 'Récupérer du groupe',
+    tg_create_remote: 'Créer le groupe sur le serveur',
   },
 };
 

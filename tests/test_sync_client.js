@@ -59,6 +59,30 @@ const server = createSyncServer({ dataDir: root });
   }
   assert('unknown code → client error', threw);
 
+  console.log('\n── hardening: rate limit + group cap ──');
+  const jpost = (o) => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(o) });
+
+  const rlRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gt7rl-'));
+  const rl = createSyncServer({ dataDir: rlRoot, rateMax: 3 });
+  await new Promise((r) => rl.listen(0, r));
+  const rlUrl = `http://localhost:${rl.address().port}`;
+  const codes = [];
+  for (let i = 0; i < 6; i++) codes.push((await fetch(`${rlUrl}/api/health`)).status);
+  assert('rate limit returns 429 past the cap', codes.includes(429), `codes=${codes.join(',')}`);
+  rl.close();
+  fs.rmSync(rlRoot, { recursive: true, force: true });
+
+  const gcRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gt7gc-'));
+  const gc = createSyncServer({ dataDir: gcRoot, maxGroups: 1 });
+  await new Promise((r) => gc.listen(0, r));
+  const gcUrl = `http://localhost:${gc.address().port}`;
+  const c1 = await fetch(`${gcUrl}/api/groups`, jpost({ name: 'A' }));
+  const c2 = await fetch(`${gcUrl}/api/groups`, jpost({ name: 'B' }));
+  assert('first group allowed', c1.status === 200);
+  assert('group cap blocks the next', c2.status === 403);
+  gc.close();
+  fs.rmSync(gcRoot, { recursive: true, force: true });
+
   server.close();
   fs.rmSync(root, { recursive: true, force: true });
   console.log(`\n${passed} passed, ${failed} failed`);

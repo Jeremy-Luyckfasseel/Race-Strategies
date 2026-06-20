@@ -45,6 +45,15 @@ export function getGroup(root, code) {
   }
 }
 
+/** How many groups exist (used to cap creation against spam / disk fill). */
+export function countGroups(root) {
+  try {
+    return fs.readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory()).length;
+  } catch {
+    return 0;
+  }
+}
+
 export function addRace(root, code, name) {
   if (!getGroup(root, code)) return null;
   const raceId = token(6);

@@ -43,7 +43,9 @@ npm run sync                 # PORT=8787  DATA_DIR=./sync-data  (defaults)
 curl localhost:8787/api/health
 ```
 
-Config via env: `PORT`, `DATA_DIR`, `MAX_BODY`, `CORS_ORIGIN` (default `*`).
+Config via env: `PORT`, `DATA_DIR`, `MAX_BODY` (bytes/upload), `CORS_ORIGIN`
+(default `*`), `RATE_MAX` (requests/IP/min, default 240), `MAX_GROUPS` (cap on
+total groups, default 1000).
 
 ## Deploy on a small VPS (e.g. Hetzner €5)
 
@@ -94,7 +96,10 @@ few MB of data. It does **not** touch your existing apps.
 - The **join code is the secret** — anyone with it can read/write that group. Treat
   it like a shared password; rotate by making a new group if it leaks.
 - Body size is capped; only JSON with a `laps` array is accepted; bad codes 404.
-- For more than a friends-and-team setup, add rate limiting + the domain/TLS above.
+- **Rate limiting is built in** (`RATE_MAX` requests/IP/min → HTTP 429) and **group
+  creation is capped** (`MAX_GROUPS`) so a flood can't fill the disk. Tune both via env.
+- Run it as the **dedicated unprivileged user** above so a compromise can't reach
+  your other services. Pair with the domain/TLS below.
 - Back up `DATA_DIR` if you care about keeping past races.
 
 ## Status
