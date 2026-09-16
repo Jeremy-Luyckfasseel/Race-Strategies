@@ -190,6 +190,82 @@ section('Compound switch fuel planning — switching to faster compound');
 }
 
 // ---------------------------------------------------------------------------
+// Tyre-change economics — cost/benefit at pit stops that aren't forced
+// ---------------------------------------------------------------------------
+section('Tyre-change economics — steep degradation triggers more optional changes than flat');
+{
+  // Fuel forces a stop every ~9 laps, well inside a 40-lap tyre life, so most
+  // pits are NOT forced by compound switch or expiring tyres — the optional
+  // cost/benefit comparison decides. Steep back-half degradation should make
+  // paying tireChangeSecs for a fresh set worth it more often than flat
+  // degradation does, with everything else identical.
+  const buildScenario = (endLapTime) => findBestStrategies({
+    raceDurationHours: 1,
+    tankSize: 30,
+    lapsPerFullTank: 9,
+    fuelMap: 1.0,
+    compounds: [
+      { id: 'H', name: 'Hard', tireLife: 40, mandatory: false,
+        startLapTime: '2:00', halfLapTime: '2:01', endLapTime },
+    ],
+    pitBaseSecs: 25, tireChangeSecs: 27, fuelRateLitersPerSec: 4.0,
+    mandatoryStops: 0, midRaceMode: false,
+  });
+
+  const flat = buildScenario('2:02'); // shallow: 120 → 121 → 122
+  const steep = buildScenario('3:00'); // steep: 120 → 121 → 180
+
+  assert('Returns strategies (flat)', flat.length > 0);
+  assert('Returns strategies (steep)', steep.length > 0);
+  if (flat.length > 0 && steep.length > 0) {
+    const countChanges = (res) => res[0].strategy.stints.filter(s => s.pitLap !== null && s.tiresChanged).length;
+    const flatChanges = countChanges(flat);
+    const steepChanges = countChanges(steep);
+    assert(
+      'Steep degradation triggers more tyre changes than flat degradation at the same fuel-forced pits',
+      steepChanges > flatChanges,
+      `flat=${flatChanges} changes, steep=${steepChanges} changes`
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Multi-driver fairness with uneven (tyre-economics-driven) stint lengths
+// ---------------------------------------------------------------------------
+section('Multi-driver minimums survive short tyre-economics "remainder" stints');
+{
+  // Medium's tyre life (25 laps) doesn't divide evenly into the fuel range (22
+  // laps), so once the economics decide it's cheaper to run a tyre's last few
+  // laps than pay tireChangeSecs early, the race naturally produces a mix of
+  // long (~22-lap) and short (~3-lap) stints. Three drivers each need a full
+  // hour in a 4h race: pickNextDriver must not waste a short remainder stint
+  // on whoever owes the most (they still won't be caught up afterward) when
+  // it could instead fully cover a driver who owes less.
+  const H = { id: 'H', name: 'Hard', tireLife: 40, mandatory: false, startLapTime: '2:00', halfLapTime: '2:01', endLapTime: '2:03' };
+  const M = { id: 'M', name: 'Medium', tireLife: 25, mandatory: false, startLapTime: '1:58', halfLapTime: '1:59', endLapTime: '2:01' };
+  const res = findBestStrategies({
+    raceDurationHours: 4, tankSize: 80, lapsPerFullTank: 22, fuelMap: 1.0,
+    compounds: [{ ...H }, { ...M }],
+    pitBaseSecs: 25, tireChangeSecs: 27, fuelRateLitersPerSec: 4.0,
+    mandatoryStops: 2, midRaceMode: false,
+    drivers: [
+      { id: 'd1', name: 'Alice', compounds: {} },
+      { id: 'd2', name: 'Bob', compounds: {} },
+      { id: 'd3', name: 'Carol', compounds: {} },
+    ],
+    minDriverTimeSecs: 3600,
+  });
+  assert('Returns strategies', res.length > 0);
+  if (res.length > 0) {
+    const summary = res[0].strategy.driverSummary;
+    assert('Driver summary has 3 entries', summary.length === 3, `got ${summary.length}`);
+    for (const d of summary) {
+      assert(`${d.name}: metMinimum`, d.metMinimum, `totalTimeSecs=${d.totalTimeSecs?.toFixed(0)}s, required=3600`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Mandatory compound filter
 // ---------------------------------------------------------------------------
 section('Mandatory compound hard filter');

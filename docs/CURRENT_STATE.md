@@ -39,7 +39,7 @@ selected) still runs alongside. Manual inputs remain the source of truth.
 
 | File | Role |
 |------|------|
-| `strategy.js` | The engine (~630 lines). Exports `findBestStrategies`, `simulateStrategy` (internal), `calcPitStopTime`, `parseLapTime`, `formatLapTime`, `formatRaceTime`, `TIRE_COMPOUNDS`, `CAR_PRESETS`. |
+| `strategy.js` | The engine (~700 lines). Exports `findBestStrategies`, `simulateStrategy` (internal), `calcPitStopTime`, `parseLapTime`, `isValidLapTimeStr`, `formatLapTime`, `formatRaceTime`, `TIRE_COMPOUNDS`, `CAR_PRESETS`. |
 | `telemetryLearner.js` | **Phase 1.** `createLearner({tankSize, compounds, tireLife, compoundId})` → `{ingest, ingestAll, setCompound, getEstimates}`. Learns `litersPerLap` (tank-delta), the global fuel-weight penalty + per-compound 3-point degradation (joint block least-squares), with per-estimate trust payloads. Emits the engine's input shape. `LEARNER_CONFIG`. |
 | `recommendations.js` | **Phase 1.** `buildRecommendations(estimates, inputs, dismissed)` (confident + meaningfully-differs gating, no re-nag after ignore), `applyRecommendation(inputs, rec)` (new object, only path a learned value enters inputs), `dismissSnapshot`, `RECOMMEND_CONFIG`. |
 | `raceState.js` | **Phase 2.** Live "Now" decision logic: `currentStint`, `nextAction`, `fuelMarginLaps`, `liftAndCoastVerdict`, `fuelExhaustionLap`, `pitNowTrigger` (earliest-of + reason), `medianRecent` smoothing, `RACE_STATE_CONFIG`. |
@@ -50,7 +50,7 @@ selected) still runs alongside. Manual inputs remain the source of truth.
 
 | File | Role |
 |------|------|
-| `useStrategy.js` | Wraps `findBestStrategies`. 600 ms debounce on input change + immediate `calculate()`. Validates/coerces inputs in `compute()`. Returns `{ result: {ranked, best} \| null, calculating, calculate }`. |
+| `useStrategy.js` | Wraps `findBestStrategies`. 600 ms debounce on input change + immediate `calculate()`. Validates/coerces inputs in `compute()`, including rejecting a malformed lap-time string (`isValidLapTimeStr`) on any active compound or driver override — returns `null` rather than silently computing with `parseLapTime`'s 120s fallback. Returns `{ result: {ranked, best} \| null, calculating, calculate }`. |
 | `useTelemetry.js` | WebSocket client to the relay. Returns `{ connected, reconnecting, teams: Map<ip,packet>, serverIPs, connect, disconnect, sendIPs, scan, scanning, scanResults }`. Each team packet is stamped with `ts: Date.now()`. **Phase 3: auto-reconnect** with capped exponential backoff (re-sends last IPs), suppressed after an explicit `disconnect()`. |
 | `useCompoundDetector.js` | Watches each team packet's `pitExit` flag. Adds the IP to a `pendingIps` Set so the UI can prompt for a one-tap compound confirmation. `confirmCompound(ip)` / `stopDetecting(ip)` clear it. Dedupes by `${ip}-${currentLap}`. |
 | `useTrackMap.js` | App-level `requestAnimationFrame` loop that records GPS (`posX`/`posZ`) into segments + an occupancy grid, persisted to `localStorage` (`gt7_track_map_v1`). Detects the pit lane from a sustained slow zone and fires `onPitEntry`. Returns `{ mapRef, resetMap }`. |
@@ -98,18 +98,28 @@ Standalone Node process, **not** part of the Vite build. Run with
 
 | File | Role |
 |------|------|
-| `test.js` | `npm run test:smoke` — quick 1-hour race sanity check. |
-| `test_comprehensive.js` | Helpers + broad `findBestStrategies` coverage (part of the ~1586 assertions `npm test` runs). |
-| `test_invariants.js` | Structural invariants, ranking dominance, multi-compound coverage, multi-driver minimums, race-time boundary, known-answer hand-computed scenarios, bulk no-overfill / no-overrun checks. |
-| `test_telemetry_learner.js` | **Phase 1.** Synthetic seed+race sessions from known ground truth; tight (synthetic) vs live-trust tolerance bands; recovery, engine round-trip, confidence gating, single-stint non-identifiability, multi-compound segmentation. |
-| `test_recommendations.js` | **Phase 1.** Propose-and-accept gating, no-mutation, ignore/material-shift re-surface, accepted value → valid ranked strategy. |
-| `test_race_state.js` | **Phase 2.** `raceState` helpers: stint/next-action, fuel margin + lift-and-coast verdict, earliest-of pit trigger, smoothing. |
-| `test_connection.js` | **Phase 3.** `connection` helpers: backoff schedule, session-active detection, single-PS5 auto-pick. |
+| `test.js` | `npm run test:smoke` — quick 1-hour race sanity check (not part of `npm test`). |
+| `test_comprehensive.js` | 120 assertions. Helpers, degradation curve, fuel tracking, pit timing, tyre-change economics, mandatory compound filter, mid-race mode, fuel-weight penalty. |
+| `test_invariants.js` | 1 640 bulk-generated assertions. Structural invariants, ranking dominance, multi-compound coverage, multi-driver minimums, race-time boundary, known-answer hand-computed scenarios, bulk no-overfill / no-overrun checks. |
+| `test_telemetry_learner.js` | 37 assertions. **Phase 1.** Synthetic seed+race sessions from known ground truth; tight (synthetic) vs live-trust tolerance bands; recovery, engine round-trip, confidence gating, single-stint non-identifiability, multi-compound segmentation. |
+| `test_recommendations.js` | 20 assertions. **Phase 1.** Propose-and-accept gating, no-mutation, ignore/material-shift re-surface, accepted value → valid ranked strategy. |
+| `test_race_state.js` | 29 assertions. **Phase 2.** `raceState` helpers: stint/next-action, fuel margin + lift-and-coast verdict, earliest-of pit trigger, smoothing. |
+| `test_connection.js` | 18 assertions. **Phase 3.** `connection` helpers: backoff schedule, session-active detection, single-PS5 auto-pick. |
+| `test_engine_validation.js` | 27 assertions. Recorded-session measurement library (`scripts/lib/validation.js`) recovers fuel/weight/degradation from a synthetic capture; guards the measurement logic, not the engine. |
+| `test_session_analysis.js` | 42 assertions. `sessionAnalysis.js` — recorded-session → strategy-input derivation, single- and multi-driver merge (including per-driver tyre-life-mismatch correction). |
+| `test_groups.js` | 18 assertions. Team Groups → Races → Sessions state (pure, local, `src/logic/groups.js`). |
+| `test_sync_store.js` | 17 assertions. Self-hosted sync server's filesystem store; path-traversal rejection. |
+| `test_sync_client.js` | 11 assertions. `syncClient` ↔ `sync-server` round trip over real HTTP. |
 
-`npm test` runs `test_comprehensive.js`, `test_invariants.js`,
-`test_telemetry_learner.js`, `test_recommendations.js`, `test_race_state.js`,
-then `test_connection.js`. All are pure node; they print `✓/✗` lines and exit
-non-zero on failure. **These are the guardrail — keep every assertion green.**
+`npm test` runs all eleven suites above (every row except `test.js`) in
+sequence — 1 979 assertions total, all pure node; they print `✓/✗` lines and
+exit non-zero on failure. **These are the guardrail — keep every assertion
+green.** 339 of the 1 979 are hand-written; 1 640 are bulk-generated invariant
+sweeps (see `test_invariants.js` above) — worth knowing which is which when
+judging how much a passing `npm test` actually proves. (Assertion counts
+inside loop-based checks scale with how many stints/strategies an input
+produces, so they shift slightly whenever engine behaviour changes — this is
+expected, not a discrepancy to chase.)
 
 ---
 
@@ -230,9 +240,43 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
 - Generates all cyclic compound patterns up to length 5 (`MAX_PATTERN_LENGTH`),
   plus non-cyclic "hold last" variants, simulates each, filters by mandatory
   rules, dedupes by stint signature, ranks. < ~4000 patterns for 5 compounds.
-- Pit time = `base + (tiresChanged ? tireChange : 0) + fuelToAdd / fuelRate`.
-- Multi-driver: greedy — the driver owing the most toward their minimum takes the
-  next stint; tie-break least accumulated time.
+- Pit time = `base + (tiresChanged ? tireChange : 0) + fuelToAdd / fuelRate`
+  (`calcPitStopTime`) — the three terms are strictly additive, i.e. tyre change
+  and refuelling are assumed **sequential**, not done in parallel by the pit
+  crew. Confirmed against real GT7 behaviour; do not "fix" this to a
+  `max(tireChange, fuelTime)` model without re-confirming.
+- **Tyre-change decision** (`simulateStrategy`, around the `tiresActuallyChanged`
+  assignment): a change is forced when the compound plan calls for a different
+  compound, or when the current set has exactly zero remaining life. In every
+  other case it's a genuine cost/benefit comparison — projected total time on
+  the ageing tyres vs. on a fresh set plus `tireChangeSecs`, over the shared
+  upcoming-stint length, bounded by whichever of fuel / mandatory-pacing / the
+  tyres' own remaining life binds first (`cappedStintLaps` + `tirePaceSecs`
+  helpers). This replaced an earlier fixed "always change unless tyres
+  comfortably reach the finish" heuristic. Two things worth knowing:
+  - The forced condition is intentionally scoped to "zero life left," not
+    "won't reach the end of the whole race" — the latter is true at nearly
+    every stop in a real multi-hour race (a single tyre set is never going to
+    outlast the whole event), which made the comparison below effectively
+    unreachable except at the last stop of the race.
+  - Known simplification: the comparison only weighs the single upcoming
+    stint, not any extra stint length a fresh set might unlock further down
+    the race (that would need a multi-stop lookahead). The horizon is
+    deliberately capped at the tyres' own remaining life (never extrapolated
+    past 100% wear) — extending it further breaks the "stints are capped,
+    never modelled past tyre life" invariant above and was found, in testing,
+    to corrupt downstream stint-length planning.
+- **Multi-driver assignment** (`pickNextDriver`): greedy — the driver owing the
+  most toward their minimum takes the next stint; tie-break least accumulated
+  time. Exception: if the upcoming stint (now known before the driver is
+  picked — stint length is fixed by fuel/tyre/pacing, not by who drives it) is
+  much shorter than a normal stint for this race (e.g. a tyre-life-remainder
+  stint from the economics above) and wouldn't clear the most-behind driver's
+  deficit anyway, it goes instead to whichever owing driver it WOULD fully
+  cover, so it isn't wasted. Added alongside the tyre-change economics above —
+  without it, the new short "remainder" stints could starve a driver of their
+  minimum drive time in a fixed-length race (caught by
+  `tests/test_invariants.js`'s multi-driver-minimum checks).
 
 ---
 
@@ -270,7 +314,7 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
 npm run dev          # Vite dev server :5173
 npm run build        # production build → /dist
 npm run lint         # ESLint flat config
-npm test             # test_comprehensive.js + test_invariants.js
+npm test             # all eleven suites in tests/ (see §2 Tests table) — 1 979 assertions
 npm run test:smoke   # quick 1h race test
 npm run telemetry    # start the UDP→WS relay (separate process)
 ```

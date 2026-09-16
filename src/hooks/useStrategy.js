@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { findBestStrategies } from '../logic/strategy';
+import { findBestStrategies, isValidLapTimeStr } from '../logic/strategy';
 
 /**
  * Run findBestStrategies with validated, coerced inputs.
@@ -38,6 +38,20 @@ function compute(inputs) {
   // Ensure compounds array has at least one active compound
   const activeCompounds = (compounds || []).filter(c => c.tireLife > 0);
   if (activeCompounds.length === 0) return null;
+
+  // Reject a malformed lap time rather than let parseLapTime silently fall
+  // back to 120s — a typo would otherwise produce a plausible-looking but
+  // wrong strategy with no indication anything was off. Covers both the
+  // per-compound times and any per-driver override that's actually filled in.
+  const lapTimeFieldsValid = (obj) =>
+    ['startLapTime', 'halfLapTime', 'endLapTime'].every((k) => isValidLapTimeStr(obj[k]));
+  if (!activeCompounds.every(lapTimeFieldsValid)) return null;
+  for (const d of drivers || []) {
+    for (const c of activeCompounds) {
+      const dc = d.compounds?.[c.id];
+      if (dc?.startLapTime && !lapTimeFieldsValid(dc)) return null;
+    }
+  }
 
   const ranked = findBestStrategies({
     raceDurationHours: Number(raceDurationHours),
