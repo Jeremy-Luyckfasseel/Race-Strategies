@@ -271,12 +271,26 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
   time. Exception: if the upcoming stint (now known before the driver is
   picked — stint length is fixed by fuel/tyre/pacing, not by who drives it) is
   much shorter than a normal stint for this race (e.g. a tyre-life-remainder
-  stint from the economics above) and wouldn't clear the most-behind driver's
-  deficit anyway, it goes instead to whichever owing driver it WOULD fully
-  cover, so it isn't wasted. Added alongside the tyre-change economics above —
-  without it, the new short "remainder" stints could starve a driver of their
-  minimum drive time in a fixed-length race (caught by
-  `tests/test_invariants.js`'s multi-driver-minimum checks).
+  stint from the economics above, or every stint when heavy `mandatoryStops`
+  pacing caps them all — `normalStintSecs` includes fuel, tyre life, AND
+  mandatory-pacing so a uniformly-short-stinted race isn't misjudged as "all
+  fragments") and wouldn't clear the most-behind driver's deficit anyway, it
+  goes instead to whichever owing driver it WOULD fully cover, so it isn't
+  wasted. Added alongside the tyre-change economics above — without it, the
+  new short "remainder" stints could starve a driver of their minimum drive
+  time in a fixed-length race (caught by `tests/test_invariants.js`'s
+  multi-driver-minimum checks).
+  - **Known limitation, not a bug to chase:** this is a single-pass greedy
+    heuristic, not a solved schedule. It handles reasonable slack well
+    (minimums comfortably under an even split of the race) but a minimum set
+    right at the theoretical maximum (e.g. exactly race-length ÷
+    driver-count, especially with few total stints) can still leave a driver
+    marginally short. Confirmed present even on pre-tyre-economics code with
+    the simplest possible config (1 mandatory stop, 2 drivers, minimum =
+    exactly half the race) — it predates and is unrelated to the tyre-change
+    economics work. Closing it fully would need a genuinely different
+    (non-greedy, whole-race-aware) allocation approach, not another
+    exception bolted onto `pickNextDriver`.
 
 ---
 

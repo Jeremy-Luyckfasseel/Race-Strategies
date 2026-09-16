@@ -57,7 +57,7 @@
 | **Fuel weight model** | Corrects per-lap time for a progressively lighter car as fuel burns. Enter your times at full tank — the engine handles the conversion every lap. |
 | **Exact fuel carry-over** | Leftover fuel from a stint is rolled into the next refuel calculation, so you never top up more than necessary. |
 | **Pit window bands** | Visualised on the strategy timeline. Always see the absolute latest lap you can pit without running dry or destroying tyres. |
-| **Multi-driver support** | Per-driver lap times per compound, configurable minimum drive time, greedy stint assignment that guarantees every driver meets their requirement. |
+| **Multi-driver support** | Per-driver lap times per compound, configurable minimum drive time, greedy stint assignment that prioritises whoever owes the most time toward their minimum. Works well with reasonable slack (minimums comfortably under an even split of the race); a minimum set right at the theoretical maximum a driver could get can still leave them a little short — the assignment is a heuristic, not a solved schedule. |
 | **Mid-race recalculation** | Enter current lap + fuel for an updated strategy on the fly. Connects directly to live PS5 telemetry for automatic updates. |
 | **Live PS5 telemetry** | Full Télémétrie tab: dedicated live dashboard per team with speed, gear, RPM/throttle/brake bars, tyre temp + wear per corner, last/best lap times, and fuel level. |
 | **Multi-team leaderboard** | All PS5s in the room on one sortable table — position, lap gap to leader, compound, fuel bar, and pit/on-track status. |
