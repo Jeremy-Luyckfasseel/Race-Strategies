@@ -20,7 +20,7 @@
 
 <br>
 
-![Tests](https://img.shields.io/badge/tests-1715%20passing-FFD700?style=flat-square&logoColor=black)
+![Tests](https://img.shields.io/badge/tests-1894%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
 ![Engine](https://img.shields.io/badge/strategy%20engine-pure%20JS%20%C2%B7%20zero%20React-c9a227?style=flat-square)
 ![Patterns](https://img.shields.io/badge/compound%20patterns-~4%20000%20enumerated-c9a227?style=flat-square)
 
@@ -53,7 +53,7 @@
 
 | Feature | What it means at race pace |
 | :--- | :--- |
-| **Full strategy enumeration** | Every valid pit + compound sequence tested — up to 5-element cyclic patterns, ~4 000 combinations for 5 compounds. If spamming Softs beats running Hards, it finds that. |
+| **Full strategy enumeration** | Every valid pit + compound sequence tested — up to 5-element patterns, ~4 000 combinations for 5 compounds, each tried both as a repeating cycle (H,S → H,S,H,S…) and holding the last compound (H,S → H,S,S,S…). Covers single-compound, alternating, and "soft start then settle on a hard for the rest of the race" strategies alike. If spamming Softs beats running Hards, it finds that. |
 | **Fuel weight model** | Corrects per-lap time for a progressively lighter car as fuel burns. Enter your times at full tank — the engine handles the conversion every lap. |
 | **Exact fuel carry-over** | Leftover fuel from a stint is rolled into the next refuel calculation, so you never top up more than necessary. |
 | **Pit window bands** | Visualised on the strategy timeline. Always see the absolute latest lap you can pit without running dry or destroying tyres. |
@@ -264,7 +264,7 @@ npm run dev        # → http://localhost:5173
 | `npm run dev` | Dev server at `http://localhost:5173` |
 | `npm run build` | Production build → `/dist` |
 | `npm run preview` | Preview the production build |
-| `npm test` | Full test suite — 1 715 assertions |
+| `npm test` | Full test suite — 1 894 assertions |
 | `npm run test:smoke` | Quick 1-hour race smoke test |
 | `npm run telemetry` | Start the UDP → WebSocket relay server |
 
@@ -280,13 +280,17 @@ npm run dev        # → http://localhost:5173
 | Input | How to measure in GT7 | Tip |
 | :--- | :--- | :--- |
 | `lapsPerFullTank` | Free practice, full tank, fuel map 1 — count laps until low-fuel warning | Repeat on the fuel map you will race on |
-| `startLapTime` | Lap 1 on fresh tyres at full tank | Use a consistent pace, not your personal best |
-| `halfLapTime` | Lap ≈ `tireLife / 2` on the same set | Same fuel map, same pace style |
-| `endLapTime` | Last safe lap on that set before pitting | When you'd normally box — not when the tyre explodes |
+| `startLapTime` | Lap 1 on fresh tyres, tank topped all the way to full | Use a consistent pace, not your personal best |
+| `halfLapTime` | Lap ≈ `tireLife / 2` on the **same uninterrupted stint** as `startLapTime` | Same fuel map, same pace style |
+| `endLapTime` | Last safe lap on that **same stint** before pitting | When you'd normally box — not when the tyre explodes |
 | `tireLife` | Free practice — push the set until handling degrades significantly | Count laps from new |
 | `pitBaseSecs` | Time from pit entry to exit with no refuel and no tyre change | Measure from replay |
 | `tireChangeSecs` | Extra time added when tyres are changed | `pitWithTyres − pitWithoutTyres` from replay |
 | `fuelWeightPenalty` | Lap 1 time (full tank) vs final lap time (near empty) divided by litres burned | 0.030 s/L is a safe GT7 default |
+
+> ⚠️ **`startLapTime` must be a genuine full-tank lap.** The engine assumes it and applies zero fuel-weight correction to it — every other number derives from that assumption, and a lap measured after a partial refuel will silently bias the whole strategy with no error or warning shown. This only applies to hand-typed compound times; the **recorded-session import** (Télémétrie → Team Panel) measures the fuel-weight penalty directly from your car's actual fuel telemetry and isn't affected by this.
+>
+> ⚠️ **Intermediate and Wet have no weather model behind them.** The engine has no way to know the track is wet — a compound is only ever as fast as the lap times *you* measure and type in for it, exactly like Hard/Medium/Soft. If you're prepping a wet-race strategy, go out in those conditions and measure IM/W the same way you would any dry compound; the app won't detect rain or switch compounds for you.
 
 <br><br>
 
@@ -298,14 +302,25 @@ npm run dev        # → http://localhost:5173
 The strategy engine has no React dependency and runs directly in Node:
 
 ```bash
-npm test              # 1 715 assertions across two suites
+npm test              # 1 894 assertions across eleven suites
 npm run test:smoke    # 1-hour race smoke test
 ```
 
+308 of those are hand-written unit tests; the other 1 586 are bulk-generated invariant sweeps (structural checks — no overfill, no tyre overrun, ranking correctness — repeated across many randomised inputs). Counted together because they all assert something real, but worth knowing which is which:
+
 | Suite | File | Tests | Covers |
 | :--- | :--- | :---: | :--- |
-| **Comprehensive** | `tests/test_comprehensive.js` | 129 | Helpers, degradation curve, fuel tracking, pit timing, mandatory compound filter, mid-race mode, fuel weight penalty |
-| **Invariants** | `tests/test_invariants.js` | 1 586 | Structural invariants on every result, ranking correctness, multi-compound enumeration, multi-driver minimums, race time boundary, known-answer scenarios, bulk no-overfill / no-tyre-overrun sweeps |
+| **Comprehensive** | `tests/test_comprehensive.js` | 89 | Helpers, degradation curve, fuel tracking, pit timing, tyre-change economics, mandatory compound filter, mid-race mode, fuel weight penalty |
+| **Invariants** *(generated sweeps)* | `tests/test_invariants.js` | 1 586 | Structural invariants on every result, ranking correctness, multi-compound enumeration, multi-driver minimums, race time boundary, known-answer scenarios, bulk no-overfill / no-tyre-overrun sweeps |
+| **Telemetry learner** | `tests/test_telemetry_learner.js` | 37 | Recovers a known fuel/lap, fuel-weight penalty, and degradation curve from synthetic live telemetry |
+| **Recommendations** | `tests/test_recommendations.js` | 20 | Propose-and-accept rules for live-measured car-model updates |
+| **Race state** | `tests/test_race_state.js` | 29 | Live next-action, stint countdown, fuel margin / lift-and-coast, pit-now trigger |
+| **Connection** | `tests/test_connection.js` | 18 | Telemetry reconnect backoff, session-active detection, auto-connect IP pick |
+| **Engine validation** | `tests/test_engine_validation.js` | 27 | The recorded-session measurement library recovers fuel/weight/degradation from a synthetic capture |
+| **Session analysis** | `tests/test_session_analysis.js` | 42 | Recorded-session → strategy-input derivation, single- and multi-driver merge |
+| **Groups** | `tests/test_groups.js` | 18 | Team Groups → Races → Sessions state (pure, local) |
+| **Sync store** | `tests/test_sync_store.js` | 17 | Self-hosted sync server's filesystem store, path-traversal rejection |
+| **Sync client** | `tests/test_sync_client.js` | 11 | syncClient ↔ sync-server round trip over real HTTP |
 
 <br><br>
 
@@ -338,8 +353,9 @@ npm run test:smoke    # 1-hour race smoke test
  ┃ ┗ 📄 telemetry-server.js       Node.js UDP relay — Salsa20 decrypt → WebSocket + LAN scan
  ┣ 📂 tests/
  ┃ ┣ 📄 test.js                   smoke test
- ┃ ┣ 📄 test_comprehensive.js     129 unit tests
- ┃ ┗ 📄 test_invariants.js        1 586 invariant & correctness tests
+ ┃ ┣ 📄 test_comprehensive.js     89 unit tests
+ ┃ ┣ 📄 test_invariants.js        1 586 generated invariant sweeps
+ ┃ ┗ 📄 (+ 9 more suites — see Quality Control ↑ for the full breakdown)
  ┗ 📄 package.json
 ```
 

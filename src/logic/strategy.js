@@ -56,6 +56,22 @@ export const CAR_PRESETS = [
 // ---------------------------------------------------------------------------
 
 /**
+ * Whether a string is a well-formed lap time ("M:SS", "M:SS.mmm", or plain
+ * seconds). Validate user-typed input with this BEFORE calling parseLapTime —
+ * parseLapTime itself silently falls back to 120s on anything unparseable,
+ * which is the right behaviour for internal machine-formatted strings (e.g.
+ * values round-tripped through formatLapTime) but would hide a typo's effect
+ * on the computed strategy if used to gate user input.
+ * @param {string} str
+ * @returns {boolean}
+ */
+export function isValidLapTimeStr(str) {
+  if (!str) return false;
+  const s = String(str).trim();
+  return /^\d+:\d{1,2}(\.\d{1,3})?$/.test(s) || /^\d+(\.\d+)?$/.test(s);
+}
+
+/**
  * Parse a "MM:SS.mmm" or "MM:SS" string into total seconds.
  * Returns 120 (2 min) if the string is empty or unparseable.
  * @param {string} str
@@ -116,6 +132,28 @@ export function calcPitStopTime(pitBaseSecs, tiresChanged, tireChangeSecs, fuelT
     time += fuelToAddLiters / fuelRateLitersPerSec;
   }
   return time;
+}
+
+/**
+ * Piecewise-linear pace at a given tyre age: start→half over the first 50% of
+ * life, half→end over the back 50%, clamped at end pace past 100% (no cliff —
+ * see the degradation-model note in findBestStrategies).
+ */
+function tirePaceSecs(ct, tireAge, tireLife) {
+  const tireRatio = tireAge / tireLife;
+  if (tireRatio <= 0.5) {
+    const r = tireRatio / 0.5;
+    return ct.startSecs + r * (ct.halfSecs - ct.startSecs);
+  }
+  let r = (tireRatio - 0.5) / 0.5;
+  if (r > 1.0) r = 1.0;
+  return ct.halfSecs + r * (ct.endSecs - ct.halfSecs);
+}
+
+/** Next stint length capped by tyre life, fuel range, and mandatory-stop pacing (whichever binds first). */
+function cappedStintLaps(tireCapLaps, fuelCapLaps, mandatoryPacingLaps) {
+  if (mandatoryPacingLaps < fuelCapLaps && mandatoryPacingLaps < tireCapLaps) return mandatoryPacingLaps;
+  return tireCapLaps <= fuelCapLaps ? tireCapLaps : fuelCapLaps;
 }
 
 // ---------------------------------------------------------------------------
@@ -199,6 +237,16 @@ function simulateStrategy(p) {
 
     // Per-lap metric logic happens inside the lap loop now
 
+    // Three different lap-time estimators are used across this function, each for
+    // a different purpose — not an oversight, each needs a different bias:
+    //   1. slowestLapTime (below) — the WORST case across every compound in the
+    //      plan, so mandatory-stop spacing never under-counts remaining laps and
+    //      leaves a required stop stranded past the finish.
+    //   2. activeComp.avgLapTimeSecs (used for estRemainingLaps at each pit) — the
+    //      pace of the tyre actually being run right now, for realistic stint sizing.
+    //   3. nextComp.avgLapTimeSecs (used for estRemainingLapsForFuel) — the pace of
+    //      the tyre about to be fitted, so switching to a faster compound doesn't
+    //      under-fuel the upcoming stint.
     let slowestLapTime = compoundPlan[0].avgLapTimeSecs;
     for (const c of compoundPlan) {
       if (c.avgLapTimeSecs > slowestLapTime) slowestLapTime = c.avgLapTimeSecs;
@@ -240,18 +288,9 @@ function simulateStrategy(p) {
     // Simulate laps sequentially for precision against time buffer
     for (let lap = currentLap; lap <= targetStopLap; lap++) {
       let tireAge = activeComp.tireLife - tireLapsLeft + lapsInStint;
-      let tireRatio = tireAge / activeComp.tireLife;
       // Use current driver's compound times; fall back to global compound times
       const ct = currentDriver.compTimes[activeComp.id] ?? activeComp;
-      let baseLapTime = 0;
-      if (tireRatio <= 0.5) {
-        let r = tireRatio / 0.5;
-        baseLapTime = ct.startSecs + r * (ct.halfSecs - ct.startSecs);
-      } else {
-        let r = (tireRatio - 0.5) / 0.5;
-        if (r > 1.0) r = 1.0;
-        baseLapTime = ct.halfSecs + r * (ct.endSecs - ct.halfSecs);
-      }
+      let baseLapTime = tirePaceSecs(ct, tireAge, activeComp.tireLife);
 
       // Fuel weight correction: full-tank reference times adjusted for current fuel.
       // As fuel burns the car gets lighter → faster. Correction is negative (speeds up lap).
@@ -310,31 +349,43 @@ function simulateStrategy(p) {
 
       let isDifferentCompound = activeComp.id !== nextComp.id;
 
-      // Always change tires when pitting — cost is ~4s in GT7, almost always worth fresh rubber.
-      // Only skip if the current set will comfortably reach the finish line.
-      tiresActuallyChanged = isDifferentCompound || (estRemainingLaps > currentTireLifeLeft);
-
       let nextReqStops = mandatoryStops - pitsDone;
       let nextLimit = 9999;
       if (nextReqStops > 0 && estRemainingLaps > 0) {
         nextLimit = Math.ceil(estRemainingLaps / (nextReqStops + 1));
       }
 
+      if (isDifferentCompound) {
+        // The plan calls for a different compound here — physically requires a change.
+        tiresActuallyChanged = true;
+      } else if (estRemainingLaps > currentTireLifeLeft) {
+        // Current tyres won't reach the end of the race — a change is forced.
+        tiresActuallyChanged = true;
+      } else {
+        // Neither forced: staying out on the current tyres is a real option.
+        // Compare total time over the SAME upcoming stint length (bounded by
+        // whichever constraint the "keep" option hits first) on the ageing
+        // tyres vs. on a fresh set plus the pit-lane tireChangeSecs cost.
+        // Fuel needed is identical on both sides for that shared lap count,
+        // so it cancels out and only pace + the tyre-change cost decide it.
+        // (Simplification: this only weighs the upcoming stint, not any extra
+        // stint length fresh tyres might unlock further down the race — a
+        // full multi-stop lookahead would catch that but isn't done here.)
+        const keepStintLaps = cappedStintLaps(currentTireLifeLeft, effectiveLPT, nextLimit);
+        const ct = currentDriver.compTimes[activeComp.id] ?? activeComp;
+        let keepSecs = 0;
+        let freshSecs = 0;
+        for (let i = 0; i < keepStintLaps; i++) {
+          keepSecs += tirePaceSecs(ct, currentTireAge + i, activeComp.tireLife);
+          freshSecs += tirePaceSecs(ct, i, activeComp.tireLife);
+        }
+        tiresActuallyChanged = (freshSecs + tireChangeSecs) < keepSecs;
+      }
+
       let nextTireCap = tiresActuallyChanged ? nextComp.tireLife : (tireLapsLeft - lapsInStint);
       if (nextTireCap < 1) nextTireCap = 1;
 
-      let nextF = effectiveLPT;
-      let nextT = nextTireCap;
-
-      let nextStintLaps;
-      if (nextLimit < nextF && nextLimit < nextT) {
-        nextStintLaps = nextLimit;
-      } else {
-        if (nextT <= nextF) nextStintLaps = nextT;
-        else nextStintLaps = nextF;
-      }
-
-      let lapsInNextStint = Math.min(nextStintLaps, estRemainingLapsForFuel);
+      let lapsInNextStint = Math.min(cappedStintLaps(nextTireCap, effectiveLPT, nextLimit), estRemainingLapsForFuel);
 
       // The required total fuel in the tank for the next stint
       let targetFuelLiters = lapsInNextStint * effectiveLitersPerLap + 0.5;

@@ -1,13 +1,8 @@
 import { useState, useCallback } from "react";
-import { CAR_PRESETS } from "../logic/strategy";
+import { CAR_PRESETS, isValidLapTimeStr as isValidLapTime } from "../logic/strategy";
 
 
 const BUILT_IN_PRESETS = CAR_PRESETS;
-
-function isValidLapTime(str) {
-  if (!str) return false;
-  return /^\d+:\d{1,2}(\.\d{1,3})?$/.test(str.trim()) || /^\d+(\.\d+)?$/.test(str.trim());
-}
 
 const DEFAULT_OPEN = {
   presets: false,

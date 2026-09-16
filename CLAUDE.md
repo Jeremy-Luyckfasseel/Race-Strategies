@@ -58,9 +58,10 @@ State lives only in `App.jsx` — no Redux, no Context.
 
 ### Strategy algorithm (`src/logic/strategy.js`)
 
-- `findBestStrategies(inputs)` — entry point; generates all cyclic compound sequences (up to 5-element patterns, ~4000 for 5 compounds), simulates each, filters by mandatory stops/compounds, deduplicates, and sorts by (total laps DESC, race time ASC).
+- `findBestStrategies(inputs)` — entry point; generates all compound sequences up to 5-element patterns (~4000 for 5 compounds), each tried both as a repeating cycle and holding the last compound, simulates each, filters by mandatory stops/compounds, deduplicates, and sorts by (total laps DESC, race time ASC). Rejects (returns `null` upstream via `useStrategy`) if any active compound's or driver-override's lap time fails `isValidLapTimeStr` — never silently falls back to `parseLapTime`'s 120s default for user input.
 - `simulateStrategy(params)` — lap-by-lap simulation: tracks fuel consumption, fuel-weight speed correction per lap, piecewise tire wear curve (0–50% soft degradation, 50–100% harder degradation), and greedy multi-driver assignment.
-- Pit stop time = `basePitSecs + (tiresChanged ? tireChangeSecs : 0) + fuelToAdd / fuelRateLitersPerSec`
+- Pit stop time = `basePitSecs + (tiresChanged ? tireChangeSecs : 0) + fuelToAdd / fuelRateLitersPerSec` — the three terms are additive (tyres and fuel serviced sequentially, not in parallel, per confirmed GT7 behaviour).
+- Tyre-change decision: forced when the compound plan calls for a different compound, or when current tyres won't reach the end of the race; otherwise it's a real cost/benefit comparison (projected pace on ageing vs. fresh tyres over the shared upcoming-stint length, vs. `tireChangeSecs`) via `tirePaceSecs`/`cappedStintLaps`.
 - Mandatory minimum pit stops are enforced during stint planning by capping stint length.
 
 ### Fuel weight correction model
@@ -79,7 +80,7 @@ The `no-unused-vars` rule ignores variables whose names start with an uppercase 
 
 | File | Purpose |
 |------|---------|
-| `src/logic/strategy.js` | Pure-JS strategy engine (~620 lines); exports `findBestStrategies`, `TIRE_COMPOUNDS`, `CAR_PRESETS`, `formatLapTime`, `formatRaceTime`, `parseLapTime` |
+| `src/logic/strategy.js` | Pure-JS strategy engine (~700 lines); exports `findBestStrategies`, `TIRE_COMPOUNDS`, `CAR_PRESETS`, `formatLapTime`, `formatRaceTime`, `parseLapTime`, `isValidLapTimeStr`, `calcPitStopTime` |
 | `src/logic/compoundDetector.js` | Placeholder/note: GT7 UDP does not expose compound ID; compound tracking is user-driven only |
 | `src/hooks/useStrategy.js` | React hook wrapping the engine; 600ms debounce + manual `calculate()` |
 | `src/hooks/useTelemetry.js` | WebSocket hook; exposes `connect`, `disconnect`, `sendIPs`, `scan`; returns `teams` Map<ip, packet>, `scanning`, `scanResults` |
