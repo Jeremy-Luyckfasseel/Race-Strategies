@@ -299,7 +299,12 @@ function simulateStrategy(p) {
     // (e.g. a tyre-economics-driven remainder stint) on whoever owes the most
     // when it can't cover their deficit anyway: see pickNextDriver.
     const estimatedStintSecs = (targetStopLap - currentLap + 1) * activeComp.avgLapTimeSecs;
-    const normalStintSecs = effectiveLPT * activeComp.avgLapTimeSecs;
+    // Bounded by tire life too, not just the fuel-tank cap — otherwise a
+    // compound whose tire life is much shorter than its fuel range makes
+    // every one of its stints look like a "fragment" relative to the
+    // (unreachably large) fuel-only normal length, diverting normal-length
+    // stints away from the driver who most needs them.
+    const normalStintSecs = Math.min(effectiveLPT, activeComp.tireLife) * activeComp.avgLapTimeSecs;
     currentDriverIdx = pickNextDriver(processedDrivers, driverTimeSecs, minDriverTimeSecs || 0, estimatedStintSecs, normalStintSecs);
     const currentDriver = processedDrivers[currentDriverIdx];
 
@@ -401,7 +406,13 @@ function simulateStrategy(p) {
         // (Simplification: this only weighs the upcoming stint, not any extra
         // stint length fresh tyres might unlock further down the race — a
         // full multi-stop lookahead would catch that but isn't done here.)
-        const keepStintLaps = cappedStintLaps(currentTireLifeLeft, effectiveLPT, nextLimit);
+        // Floored to at least 1: real stints only ever run whole laps, and
+        // cappedStintLaps can return a value below 1 (or exactly 0 when
+        // nextLimit collapses near race end) — left unguarded, the loop
+        // below would run 0 iterations, making keepSecs = freshSecs = 0 and
+        // tiresActuallyChanged = (0 + tireChangeSecs) < 0 always false,
+        // i.e. tires would never be swapped regardless of actual wear.
+        const keepStintLaps = Math.max(1, cappedStintLaps(currentTireLifeLeft, effectiveLPT, nextLimit));
         const ct = currentDriver.compTimes[activeComp.id] ?? activeComp;
         let keepSecs = 0;
         let freshSecs = 0;

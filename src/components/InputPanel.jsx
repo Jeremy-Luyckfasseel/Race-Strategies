@@ -553,7 +553,7 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
                                     type="text"
                                     value={dc[key] || ""}
                                     onChange={(e) => updateDriverCompound(driver.id, comp.id, key, e.target.value)}
-                                    className={`compound-laptime-input driver-laptime-input${dc[key] && !isValidLapTime(dc[key]) ? " input-invalid" : ""}`}
+                                    className={`compound-laptime-input driver-laptime-input${dc.startLapTime && !isValidLapTime(dc[key]) ? " input-invalid" : ""}`}
                                     placeholder={placeholder(key)}
                                   />
                                 </td>
