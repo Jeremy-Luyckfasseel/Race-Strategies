@@ -284,20 +284,11 @@ function simulateStrategy(p) {
     let trueF = currentLap + fuelLapsLeft - 1;
     let trueT = currentLap + tireLapsLeft - 1;
     let targetStopLap;
-    let changeTires = false;
-    const tireChangeMargin = Math.max(1, Math.ceil(activeComp.tireLife * 0.1));
 
     if (limitForMandatory < fuelLapsLeft && limitForMandatory < tireLapsLeft) {
       targetStopLap = currentLap + limitForMandatory - 1;
-      if (targetStopLap >= trueT - tireChangeMargin) changeTires = true;
     } else {
-      if (trueT <= trueF) {
-        targetStopLap = trueT;
-        changeTires = true;
-      } else {
-        targetStopLap = trueF;
-        changeTires = false;
-      }
+      targetStopLap = trueT <= trueF ? trueT : trueF;
     }
 
     if (targetStopLap < currentLap) targetStopLap = currentLap;
