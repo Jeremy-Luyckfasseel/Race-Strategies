@@ -61,7 +61,7 @@ State lives only in `App.jsx` — no Redux, no Context.
 - `findBestStrategies(inputs)` — entry point; generates all compound sequences up to 5-element patterns (~4000 for 5 compounds), each tried both as a repeating cycle and holding the last compound, simulates each, filters by mandatory stops/compounds, deduplicates, and sorts by (total laps DESC, race time ASC). Rejects (returns `null` upstream via `useStrategy`) if any active compound's or driver-override's lap time fails `isValidLapTimeStr` — never silently falls back to `parseLapTime`'s 120s default for user input.
 - `simulateStrategy(params)` — lap-by-lap simulation: tracks fuel consumption, fuel-weight speed correction per lap, piecewise tire wear curve (0–50% soft degradation, 50–100% harder degradation), and greedy multi-driver assignment.
 - Pit stop time = `basePitSecs + (tiresChanged ? tireChangeSecs : 0) + fuelToAdd / fuelRateLitersPerSec` — the three terms are additive (tyres and fuel serviced sequentially, not in parallel, per confirmed GT7 behaviour).
-- Tyre-change decision: forced when the compound plan calls for a different compound, or when current tyres won't reach the end of the race; otherwise it's a real cost/benefit comparison (projected pace on ageing vs. fresh tyres over the shared upcoming-stint length, vs. `tireChangeSecs`) via `tirePaceSecs`/`cappedStintLaps`.
+- Tyre-change decision: forced when the compound plan calls for a different compound, or when the current set is at exactly zero remaining life (not "won't reach the end of the whole race" — that's true at nearly every stop in a real endurance race and made the comparison below unreachable in practice); otherwise it's a real cost/benefit comparison (projected pace on ageing vs. fresh tyres over the shared upcoming-stint length, bounded by the tyres' own remaining life, vs. `tireChangeSecs`) via `tirePaceSecs`/`cappedStintLaps`.
 - Mandatory minimum pit stops are enforced during stint planning by capping stint length.
 
 ### Fuel weight correction model
@@ -70,7 +70,7 @@ User observes lap times at full tank. The engine corrects t(start), t(mid), t(en
 
 ### Multi-driver logic
 
-Greedy assignment: each stint, the driver who owes the most time toward their minimum gets assigned. Tie-break: least accumulated total time. Per-driver compound lap times override global times when set.
+Greedy assignment: each stint, the driver who owes the most time toward their minimum gets assigned. Tie-break: least accumulated total time. Exception: a stint much shorter than a normal one for this race (e.g. a tyre-life-remainder stint from the tyre-change economics) can't meaningfully dent the most-behind driver's deficit anyway, so it goes instead to whichever owing driver it WOULD fully satisfy — otherwise a fixed-length race can burn its few long stints on drivers who keep drawing short ones and never catch up (`pickNextDriver`). Per-driver compound lap times override global times when set.
 
 ### ESLint config note
 

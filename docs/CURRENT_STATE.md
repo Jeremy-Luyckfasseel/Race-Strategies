@@ -99,8 +99,8 @@ Standalone Node process, **not** part of the Vite build. Run with
 | File | Role |
 |------|------|
 | `test.js` | `npm run test:smoke` — quick 1-hour race sanity check (not part of `npm test`). |
-| `test_comprehensive.js` | 89 assertions. Helpers, degradation curve, fuel tracking, pit timing, tyre-change economics, mandatory compound filter, mid-race mode, fuel-weight penalty. |
-| `test_invariants.js` | 1 586 bulk-generated assertions. Structural invariants, ranking dominance, multi-compound coverage, multi-driver minimums, race-time boundary, known-answer hand-computed scenarios, bulk no-overfill / no-overrun checks. |
+| `test_comprehensive.js` | 120 assertions. Helpers, degradation curve, fuel tracking, pit timing, tyre-change economics, mandatory compound filter, mid-race mode, fuel-weight penalty. |
+| `test_invariants.js` | 1 640 bulk-generated assertions. Structural invariants, ranking dominance, multi-compound coverage, multi-driver minimums, race-time boundary, known-answer hand-computed scenarios, bulk no-overfill / no-overrun checks. |
 | `test_telemetry_learner.js` | 37 assertions. **Phase 1.** Synthetic seed+race sessions from known ground truth; tight (synthetic) vs live-trust tolerance bands; recovery, engine round-trip, confidence gating, single-stint non-identifiability, multi-compound segmentation. |
 | `test_recommendations.js` | 20 assertions. **Phase 1.** Propose-and-accept gating, no-mutation, ignore/material-shift re-surface, accepted value → valid ranked strategy. |
 | `test_race_state.js` | 29 assertions. **Phase 2.** `raceState` helpers: stint/next-action, fuel margin + lift-and-coast verdict, earliest-of pit trigger, smoothing. |
@@ -112,11 +112,14 @@ Standalone Node process, **not** part of the Vite build. Run with
 | `test_sync_client.js` | 11 assertions. `syncClient` ↔ `sync-server` round trip over real HTTP. |
 
 `npm test` runs all eleven suites above (every row except `test.js`) in
-sequence — 1 894 assertions total, all pure node; they print `✓/✗` lines and
+sequence — 1 979 assertions total, all pure node; they print `✓/✗` lines and
 exit non-zero on failure. **These are the guardrail — keep every assertion
-green.** 308 of the 1 894 are hand-written; 1 586 are bulk-generated invariant
+green.** 339 of the 1 979 are hand-written; 1 640 are bulk-generated invariant
 sweeps (see `test_invariants.js` above) — worth knowing which is which when
-judging how much a passing `npm test` actually proves.
+judging how much a passing `npm test` actually proves. (Assertion counts
+inside loop-based checks scale with how many stints/strategies an input
+produces, so they shift slightly whenever engine behaviour changes — this is
+expected, not a discrepancy to chase.)
 
 ---
 
@@ -244,16 +247,36 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
   `max(tireChange, fuelTime)` model without re-confirming.
 - **Tyre-change decision** (`simulateStrategy`, around the `tiresActuallyChanged`
   assignment): a change is forced when the compound plan calls for a different
-  compound, or when the current tyres won't reach the end of the race. In every
+  compound, or when the current set has exactly zero remaining life. In every
   other case it's a genuine cost/benefit comparison — projected total time on
   the ageing tyres vs. on a fresh set plus `tireChangeSecs`, over the shared
-  upcoming-stint length (`cappedStintLaps` + `tirePaceSecs` helpers). This
-  replaced an earlier fixed "always change unless tyres comfortably reach the
-  finish" heuristic. Known simplification: the comparison only weighs the
-  single upcoming stint, not any extra stint length a fresh set might unlock
-  further down the race (that would need a multi-stop lookahead).
-- Multi-driver: greedy — the driver owing the most toward their minimum takes the
-  next stint; tie-break least accumulated time.
+  upcoming-stint length, bounded by whichever of fuel / mandatory-pacing / the
+  tyres' own remaining life binds first (`cappedStintLaps` + `tirePaceSecs`
+  helpers). This replaced an earlier fixed "always change unless tyres
+  comfortably reach the finish" heuristic. Two things worth knowing:
+  - The forced condition is intentionally scoped to "zero life left," not
+    "won't reach the end of the whole race" — the latter is true at nearly
+    every stop in a real multi-hour race (a single tyre set is never going to
+    outlast the whole event), which made the comparison below effectively
+    unreachable except at the last stop of the race.
+  - Known simplification: the comparison only weighs the single upcoming
+    stint, not any extra stint length a fresh set might unlock further down
+    the race (that would need a multi-stop lookahead). The horizon is
+    deliberately capped at the tyres' own remaining life (never extrapolated
+    past 100% wear) — extending it further breaks the "stints are capped,
+    never modelled past tyre life" invariant above and was found, in testing,
+    to corrupt downstream stint-length planning.
+- **Multi-driver assignment** (`pickNextDriver`): greedy — the driver owing the
+  most toward their minimum takes the next stint; tie-break least accumulated
+  time. Exception: if the upcoming stint (now known before the driver is
+  picked — stint length is fixed by fuel/tyre/pacing, not by who drives it) is
+  much shorter than a normal stint for this race (e.g. a tyre-life-remainder
+  stint from the economics above) and wouldn't clear the most-behind driver's
+  deficit anyway, it goes instead to whichever owing driver it WOULD fully
+  cover, so it isn't wasted. Added alongside the tyre-change economics above —
+  without it, the new short "remainder" stints could starve a driver of their
+  minimum drive time in a fixed-length race (caught by
+  `tests/test_invariants.js`'s multi-driver-minimum checks).
 
 ---
 
@@ -291,7 +314,7 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
 npm run dev          # Vite dev server :5173
 npm run build        # production build → /dist
 npm run lint         # ESLint flat config
-npm test             # all eleven suites in tests/ (see §2 Tests table) — 1 894 assertions
+npm test             # all eleven suites in tests/ (see §2 Tests table) — 1 979 assertions
 npm run test:smoke   # quick 1h race test
 npm run telemetry    # start the UDP→WS relay (separate process)
 ```

@@ -58,10 +58,12 @@ export const CAR_PRESETS = [
 /**
  * Whether a string is a well-formed lap time ("M:SS", "M:SS.mmm", or plain
  * seconds). Validate user-typed input with this BEFORE calling parseLapTime —
- * parseLapTime itself silently falls back to 120s on anything unparseable,
- * which is the right behaviour for internal machine-formatted strings (e.g.
- * values round-tripped through formatLapTime) but would hide a typo's effect
- * on the computed strategy if used to gate user input.
+ * parseLapTime itself makes no such guarantee on malformed input (empty →
+ * 120s, but e.g. "abc:def" → 0 and "1:xx" → 60, never a clean rejection),
+ * which is fine for internal machine-formatted strings (e.g. values
+ * round-tripped through formatLapTime, which can't produce those shapes) but
+ * would hide a typo's effect on the computed strategy if used to gate user
+ * input instead of this function.
  * @param {string} str
  * @returns {boolean}
  */
@@ -136,8 +138,11 @@ export function calcPitStopTime(pitBaseSecs, tiresChanged, tireChangeSecs, fuelT
 
 /**
  * Piecewise-linear pace at a given tyre age: start→half over the first 50% of
- * life, half→end over the back 50%, clamped at end pace past 100% (no cliff —
- * see the degradation-model note in findBestStrategies).
+ * life, half→end over the back 50%, clamped at end pace past 100%. Callers
+ * (the lap loop, and the tyre-change cost/benefit comparison below) never
+ * actually drive tireAge past tireLife — stints are capped before that point
+ * — so the clamp is a defensive boundary, not a modelled "running on dead
+ * tyres" behaviour; there is still no cliff past declared tireLife.
  */
 function tirePaceSecs(ct, tireAge, tireLife) {
   const tireRatio = tireAge / tireLife;
@@ -164,14 +169,31 @@ function cappedStintLaps(tireCapLaps, fuelCapLaps, mandatoryPacingLaps) {
  * Pick which driver should take the next stint.
  * Priority: driver who still has the most unfulfilled minimum time.
  * Tie-break: driver with least total accumulated time.
+ *
+ * Exception: a stint much shorter than a normal one for this race (e.g. a
+ * tyre-life remainder from the tyre-change economics in simulateStrategy)
+ * can't make a meaningful dent in the most-behind driver's deficit anyway —
+ * give it instead to whichever owing driver it WOULD fully cover, so it isn't
+ * wasted. Reserve normal-length-or-longer stints for the driver who owes the
+ * most as usual: only they can actually be satisfied by one, so diverting a
+ * full-length stint away from them would risk the same problem in reverse —
+ * a fixed-length race running out of stints before everyone's minimum is met.
  */
-function pickNextDriver(drivers, driverTimeSecs, minDriverTimeSecs) {
+function pickNextDriver(drivers, driverTimeSecs, minDriverTimeSecs, upcomingStintSecs, normalStintSecs) {
   if (drivers.length === 1) return 0;
   const min = minDriverTimeSecs || 0;
   const owed = drivers.map((_, i) => Math.max(0, min - driverTimeSecs[i]));
   const maxOwed = Math.max(...owed);
-  if (maxOwed > 0) return owed.indexOf(maxOwed);
-  return driverTimeSecs.indexOf(Math.min(...driverTimeSecs));
+  if (maxOwed <= 0) return driverTimeSecs.indexOf(Math.min(...driverTimeSecs));
+  const isFragmentStint = upcomingStintSecs != null && normalStintSecs > 0 && upcomingStintSecs < 0.6 * normalStintSecs;
+  if (isFragmentStint) {
+    let bestFit = -1;
+    for (let i = 0; i < owed.length; i++) {
+      if (owed[i] > 0 && owed[i] <= upcomingStintSecs && (bestFit === -1 || owed[i] > owed[bestFit])) bestFit = i;
+    }
+    if (bestFit !== -1 && owed[bestFit] < maxOwed) return bestFit;
+  }
+  return owed.indexOf(maxOwed);
 }
 
 // ---------------------------------------------------------------------------
@@ -224,10 +246,6 @@ function simulateStrategy(p) {
   const FUEL_ROUND_EPSILON = 0.0001;
 
   while (elapsedSecs < targetRaceTimeSecs) {
-    // Pick driver for this stint before any planning
-    currentDriverIdx = pickNextDriver(processedDrivers, driverTimeSecs, minDriverTimeSecs || 0);
-    const currentDriver = processedDrivers[currentDriverIdx];
-
     let fuelLapsLeft = Math.floor(currentFuelLiters / effectiveLitersPerLap + FUEL_ROUND_EPSILON);
     if (fuelLapsLeft > effectiveLPT) fuelLapsLeft = effectiveLPT;
     if (fuelLapsLeft < 1) fuelLapsLeft = 1;
@@ -240,8 +258,11 @@ function simulateStrategy(p) {
     // Three different lap-time estimators are used across this function, each for
     // a different purpose — not an oversight, each needs a different bias:
     //   1. slowestLapTime (below) — the WORST case across every compound in the
-    //      plan, so mandatory-stop spacing never under-counts remaining laps and
-    //      leaves a required stop stranded past the finish.
+    //      plan. Dividing remaining time by it deliberately UNDER-estimates
+    //      remaining laps, which schedules mandatory stops sooner rather than
+    //      later — the safe direction. An optimistic (fast) pace would instead
+    //      OVER-estimate remaining laps, push a required stop's target lap too
+    //      late, and risk it never happening before the race ends.
     //   2. activeComp.avgLapTimeSecs (used for estRemainingLaps at each pit) — the
     //      pace of the tyre actually being run right now, for realistic stint sizing.
     //   3. nextComp.avgLapTimeSecs (used for estRemainingLapsForFuel) — the pace of
@@ -280,6 +301,16 @@ function simulateStrategy(p) {
     }
 
     if (targetStopLap < currentLap) targetStopLap = currentLap;
+
+    // Stint length is fixed by fuel/tyre/mandatory-pacing above, independent
+    // of which driver runs it — so pick the driver AFTER knowing how long this
+    // stint will be. A stint-length-aware pick avoids "wasting" a short stint
+    // (e.g. a tyre-economics-driven remainder stint) on whoever owes the most
+    // when it can't cover their deficit anyway: see pickNextDriver.
+    const estimatedStintSecs = (targetStopLap - currentLap + 1) * activeComp.avgLapTimeSecs;
+    const normalStintSecs = effectiveLPT * activeComp.avgLapTimeSecs;
+    currentDriverIdx = pickNextDriver(processedDrivers, driverTimeSecs, minDriverTimeSecs || 0, estimatedStintSecs, normalStintSecs);
+    const currentDriver = processedDrivers[currentDriverIdx];
 
     let lapsInStint = 0;
     let stintDrivingSecs = 0;
@@ -358,16 +389,24 @@ function simulateStrategy(p) {
       if (isDifferentCompound) {
         // The plan calls for a different compound here — physically requires a change.
         tiresActuallyChanged = true;
-      } else if (estRemainingLaps > currentTireLifeLeft) {
-        // Current tyres won't reach the end of the race — a change is forced.
+      } else if (currentTireLifeLeft <= 0) {
+        // Tyres are exactly at their declared life with zero margin left — the
+        // engine never models running past this point (no cliff, but no
+        // extension either), so there's nothing left to weigh: change.
+        // Deliberately NOT based on whether the current set could reach the
+        // end of the WHOLE race — that made this branch fire on almost every
+        // stop of a normal multi-hour race (tire life is always far shorter
+        // than total race distance), leaving the cost/benefit comparison below
+        // unreachable in practice. This is the narrow, physically-correct
+        // trigger instead.
         tiresActuallyChanged = true;
       } else {
-        // Neither forced: staying out on the current tyres is a real option.
         // Compare total time over the SAME upcoming stint length (bounded by
-        // whichever constraint the "keep" option hits first) on the ageing
-        // tyres vs. on a fresh set plus the pit-lane tireChangeSecs cost.
-        // Fuel needed is identical on both sides for that shared lap count,
-        // so it cancels out and only pace + the tyre-change cost decide it.
+        // whichever constraint the "keep" option hits first — fuel, mandatory
+        // pacing, or the tyres' own remaining life) on the ageing tyres vs. on
+        // a fresh set plus the pit-lane tireChangeSecs cost. Fuel needed is
+        // identical on both sides for that shared lap count, so it cancels out
+        // and only pace + the tyre-change cost decide it.
         // (Simplification: this only weighs the upcoming stint, not any extra
         // stint length fresh tyres might unlock further down the race — a
         // full multi-stop lookahead would catch that but isn't done here.)

@@ -20,7 +20,7 @@
 
 <br>
 
-![Tests](https://img.shields.io/badge/tests-1894%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
+![Tests](https://img.shields.io/badge/tests-1979%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
 ![Engine](https://img.shields.io/badge/strategy%20engine-pure%20JS%20%C2%B7%20zero%20React-c9a227?style=flat-square)
 ![Patterns](https://img.shields.io/badge/compound%20patterns-~4%20000%20enumerated-c9a227?style=flat-square)
 
@@ -112,9 +112,9 @@ Each simulated plan runs the following per lap:
 | Tyre degradation | Piecewise curve: `start → half` over 0–50% tyre life, `half → end` over 50–100% |
 | Fuel weight | `dynamicLapTime = base + (fuelNow − tankSize) × penalty` — car gets faster every lap as fuel burns |
 | Fuel carry-over | Leftover fuel rolls into the next stint's refuel calculation |
-| Tyre change decision | Changed when compound differs, or remaining life won't cover the next stint |
+| Tyre change decision | Forced when compound differs or the current set is at zero life; otherwise a real cost/benefit comparison (ageing tyres vs. fresh + pit cost) over the upcoming stint |
 | Mandatory stop capping | Stint length shortened to guarantee the required number of pit stops |
-| Multi-driver assignment | Driver with the most outstanding minimum-time debt gets the next stint |
+| Multi-driver assignment | Driver with the most outstanding minimum-time debt gets the next stint, unless it's a short stint that can't cover their debt anyway — then it goes to whoever it WOULD fully cover |
 
 <br>
 
@@ -264,7 +264,7 @@ npm run dev        # → http://localhost:5173
 | `npm run dev` | Dev server at `http://localhost:5173` |
 | `npm run build` | Production build → `/dist` |
 | `npm run preview` | Preview the production build |
-| `npm test` | Full test suite — 1 894 assertions |
+| `npm test` | Full test suite — 1 979 assertions |
 | `npm run test:smoke` | Quick 1-hour race smoke test |
 | `npm run telemetry` | Start the UDP → WebSocket relay server |
 
@@ -302,16 +302,16 @@ npm run dev        # → http://localhost:5173
 The strategy engine has no React dependency and runs directly in Node:
 
 ```bash
-npm test              # 1 894 assertions across eleven suites
+npm test              # 1 979 assertions across eleven suites
 npm run test:smoke    # 1-hour race smoke test
 ```
 
-308 of those are hand-written unit tests; the other 1 586 are bulk-generated invariant sweeps (structural checks — no overfill, no tyre overrun, ranking correctness — repeated across many randomised inputs). Counted together because they all assert something real, but worth knowing which is which:
+339 of those are hand-written unit tests; the other 1 640 are bulk-generated invariant sweeps (structural checks — no overfill, no tyre overrun, ranking correctness — repeated across many randomised inputs). Counted together because they all assert something real, but worth knowing which is which:
 
 | Suite | File | Tests | Covers |
 | :--- | :--- | :---: | :--- |
-| **Comprehensive** | `tests/test_comprehensive.js` | 89 | Helpers, degradation curve, fuel tracking, pit timing, tyre-change economics, mandatory compound filter, mid-race mode, fuel weight penalty |
-| **Invariants** *(generated sweeps)* | `tests/test_invariants.js` | 1 586 | Structural invariants on every result, ranking correctness, multi-compound enumeration, multi-driver minimums, race time boundary, known-answer scenarios, bulk no-overfill / no-tyre-overrun sweeps |
+| **Comprehensive** | `tests/test_comprehensive.js` | 120 | Helpers, degradation curve, fuel tracking, pit timing, tyre-change economics, mandatory compound filter, mid-race mode, fuel weight penalty |
+| **Invariants** *(generated sweeps)* | `tests/test_invariants.js` | 1 640 | Structural invariants on every result, ranking correctness, multi-compound enumeration, multi-driver minimums, race time boundary, known-answer scenarios, bulk no-overfill / no-tyre-overrun sweeps |
 | **Telemetry learner** | `tests/test_telemetry_learner.js` | 37 | Recovers a known fuel/lap, fuel-weight penalty, and degradation curve from synthetic live telemetry |
 | **Recommendations** | `tests/test_recommendations.js` | 20 | Propose-and-accept rules for live-measured car-model updates |
 | **Race state** | `tests/test_race_state.js` | 29 | Live next-action, stint countdown, fuel margin / lift-and-coast, pit-now trigger |
@@ -353,8 +353,8 @@ npm run test:smoke    # 1-hour race smoke test
  ┃ ┗ 📄 telemetry-server.js       Node.js UDP relay — Salsa20 decrypt → WebSocket + LAN scan
  ┣ 📂 tests/
  ┃ ┣ 📄 test.js                   smoke test
- ┃ ┣ 📄 test_comprehensive.js     89 unit tests
- ┃ ┣ 📄 test_invariants.js        1 586 generated invariant sweeps
+ ┃ ┣ 📄 test_comprehensive.js     120 unit tests
+ ┃ ┣ 📄 test_invariants.js        1 640 generated invariant sweeps
  ┃ ┗ 📄 (+ 9 more suites — see Quality Control ↑ for the full breakdown)
  ┗ 📄 package.json
 ```

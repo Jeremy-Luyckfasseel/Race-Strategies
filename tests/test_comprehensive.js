@@ -230,6 +230,42 @@ section('Tyre-change economics — steep degradation triggers more optional chan
 }
 
 // ---------------------------------------------------------------------------
+// Multi-driver fairness with uneven (tyre-economics-driven) stint lengths
+// ---------------------------------------------------------------------------
+section('Multi-driver minimums survive short tyre-economics "remainder" stints');
+{
+  // Medium's tyre life (25 laps) doesn't divide evenly into the fuel range (22
+  // laps), so once the economics decide it's cheaper to run a tyre's last few
+  // laps than pay tireChangeSecs early, the race naturally produces a mix of
+  // long (~22-lap) and short (~3-lap) stints. Three drivers each need a full
+  // hour in a 4h race: pickNextDriver must not waste a short remainder stint
+  // on whoever owes the most (they still won't be caught up afterward) when
+  // it could instead fully cover a driver who owes less.
+  const H = { id: 'H', name: 'Hard', tireLife: 40, mandatory: false, startLapTime: '2:00', halfLapTime: '2:01', endLapTime: '2:03' };
+  const M = { id: 'M', name: 'Medium', tireLife: 25, mandatory: false, startLapTime: '1:58', halfLapTime: '1:59', endLapTime: '2:01' };
+  const res = findBestStrategies({
+    raceDurationHours: 4, tankSize: 80, lapsPerFullTank: 22, fuelMap: 1.0,
+    compounds: [{ ...H }, { ...M }],
+    pitBaseSecs: 25, tireChangeSecs: 27, fuelRateLitersPerSec: 4.0,
+    mandatoryStops: 2, midRaceMode: false,
+    drivers: [
+      { id: 'd1', name: 'Alice', compounds: {} },
+      { id: 'd2', name: 'Bob', compounds: {} },
+      { id: 'd3', name: 'Carol', compounds: {} },
+    ],
+    minDriverTimeSecs: 3600,
+  });
+  assert('Returns strategies', res.length > 0);
+  if (res.length > 0) {
+    const summary = res[0].strategy.driverSummary;
+    assert('Driver summary has 3 entries', summary.length === 3, `got ${summary.length}`);
+    for (const d of summary) {
+      assert(`${d.name}: metMinimum`, d.metMinimum, `totalTimeSecs=${d.totalTimeSecs?.toFixed(0)}s, required=3600`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Mandatory compound filter
 // ---------------------------------------------------------------------------
 section('Mandatory compound hard filter');
