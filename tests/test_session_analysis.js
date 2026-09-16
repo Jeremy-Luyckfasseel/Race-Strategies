@@ -10,7 +10,7 @@
  * Run with: node tests/test_session_analysis.js
  */
 
-import { analyzeCapture, mergeAnalysisIntoInputs, deriveStrategyInputs, mergeDriverSessions } from '../src/logic/sessionAnalysis.js';
+import { analyzeCapture, mergeAnalysisIntoInputs, deriveStrategyInputs, mergeDriverSessions, buildObservedTimes } from '../src/logic/sessionAnalysis.js';
 import { findBestStrategies, parseLapTime } from '../src/logic/strategy.js';
 
 let passed = 0;
@@ -224,6 +224,60 @@ section('mergeDriverSessions — combine drivers, keep per-driver pace');
   const ranked = findBestStrategies(out);
   assert('engine runs the multi-driver team plan', Array.isArray(ranked) && ranked.length > 0);
   assert('plan covers both drivers', ranked[0].strategy.driverSummary.length === 2);
+}
+
+section('mergeDriverSessions — per-driver times rebuilt at the SHARED tyre life');
+{
+  // Two drivers with the SAME degradation curve but DIFFERENT recorded stint
+  // lengths for the same compound (the normal case — nobody's home session
+  // matches another's lap-for-lap). strategy.js always un-corrects a driver's
+  // override using the compound's shared/merged tireLife, so each driver's
+  // half/end time must be rebuilt at that SAME merged life, not baked at their
+  // own observedLife — otherwise the fuel-weight correction it re-applies no
+  // longer matches the fuel level the time was actually measured at.
+  const deg = { start: 120, half: 121, end: 123 };
+  const tank = 100,
+    fuelPerLap = 3,
+    penalty = 0.03;
+  const shortLife = 10,
+    longLife = 28;
+  function fakeSession(name, life) {
+    return {
+      driver: name,
+      analysis: {
+        tank,
+        fuel: { value: fuelPerLap },
+        fuelWeight: { identifiable: true, sPerLiter: penalty },
+        compounds: [{ id: 'M', name: 'Medium', observedLife: life, deg, observed: buildObservedTimes(deg, penalty, fuelPerLap, tank, life) }],
+      },
+    };
+  }
+  const shortSession = fakeSession('Short', shortLife);
+  const longSession = fakeSession('Long', longLife);
+  const out2 = mergeDriverSessions([shortSession, longSession], { compounds: [] });
+
+  const mergedLife = out2.compounds.find((c) => c.id === 'M').tireLife;
+  assert('merged tyre life is the longest observed', mergedLife === longLife);
+
+  const expected = buildObservedTimes(deg, penalty, fuelPerLap, tank, mergedLife);
+  near(
+    'short-stint driver half time rebuilt at the merged life',
+    parseLapTime(out2.drivers[0].compounds.M.halfLapTime),
+    parseLapTime(expected.half),
+    0.01
+  );
+  near(
+    'short-stint driver end time rebuilt at the merged life',
+    parseLapTime(out2.drivers[0].compounds.M.endLapTime),
+    parseLapTime(expected.end),
+    0.01
+  );
+  near(
+    'long-stint driver end time matches (same deg curve, same merged life)',
+    parseLapTime(out2.drivers[1].compounds.M.endLapTime),
+    parseLapTime(out2.drivers[0].compounds.M.endLapTime),
+    0.001
+  );
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

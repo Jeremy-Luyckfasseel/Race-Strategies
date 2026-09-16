@@ -439,17 +439,33 @@ export function mergeDriverSessions(sessions, base = {}) {
   const pens = valid.filter((s) => s.analysis.fuelWeight.identifiable).map((s) => s.analysis.fuelWeight.sPerLiter);
   const penalty = pens.length ? round3(avg(pens)) : Number(base.fuelWeightPenaltyPerLiter) || ASSUMED_PENALTY;
 
-  // Per-compound: collect tyre life + each driver's observed times.
+  // Per-compound: collect tyre life + each driver's degradation curve.
   const compMap = {};
   for (const s of valid) {
     for (const c of s.analysis.compounds) {
       if (!c.deg || !c.observed) continue;
-      const m = (compMap[c.id] ||= { name: c.name, life: [], start: [], half: [], end: [] });
+      const m = (compMap[c.id] ||= { name: c.name, life: [], curves: [] });
       m.life.push(c.observedLife);
-      m.start.push(parseLapTime(c.observed.start));
-      m.half.push(parseLapTime(c.observed.half));
-      m.end.push(parseLapTime(c.observed.end));
+      m.curves.push(c.deg);
     }
+  }
+
+  // The merged tyre life is the longest life any driver actually ran. Every
+  // driver's observed start/half/end must be rebuilt against THIS SAME life
+  // (not each driver's own observedLife) — strategy.js un-corrects per-driver
+  // lap times using the compound's shared tireLife, so if a time were left
+  // baked at a different life, the fuel-weight correction it re-applies would
+  // no longer match the fuel level the time was actually measured at.
+  const globalLife = {};
+  for (const id of Object.keys(compMap)) {
+    globalLife[id] = Math.max(1, Math.round(Math.max(...compMap[id].life)));
+  }
+  for (const id of Object.keys(compMap)) {
+    const m = compMap[id];
+    const rebuilt = m.curves.map((deg) => buildObservedTimes(deg, penalty, fuelPerLap, tank, globalLife[id]));
+    m.start = rebuilt.map((o) => parseLapTime(o.start));
+    m.half = rebuilt.map((o) => parseLapTime(o.half));
+    m.end = rebuilt.map((o) => parseLapTime(o.end));
   }
 
   // Global compounds = base, with measured tyre life (max observed) + average pace
@@ -457,7 +473,7 @@ export function mergeDriverSessions(sessions, base = {}) {
   const globalCompounds = (base.compounds || []).map((bc) => {
     const m = compMap[bc.id];
     return m
-      ? { ...bc, tireLife: Math.max(1, Math.round(Math.max(...m.life))), startLapTime: formatLapTime(avg(m.start)), halfLapTime: formatLapTime(avg(m.half)), endLapTime: formatLapTime(avg(m.end)) }
+      ? { ...bc, tireLife: globalLife[bc.id], startLapTime: formatLapTime(avg(m.start)), halfLapTime: formatLapTime(avg(m.half)), endLapTime: formatLapTime(avg(m.end)) }
       : bc;
   });
   for (const id of Object.keys(compMap)) {
@@ -467,7 +483,7 @@ export function mergeDriverSessions(sessions, base = {}) {
         id,
         name: m.name,
         mandatory: false,
-        tireLife: Math.max(1, Math.round(Math.max(...m.life))),
+        tireLife: globalLife[id],
         startLapTime: formatLapTime(avg(m.start)),
         halfLapTime: formatLapTime(avg(m.half)),
         endLapTime: formatLapTime(avg(m.end)),
@@ -475,11 +491,17 @@ export function mergeDriverSessions(sessions, base = {}) {
     }
   }
 
-  // One engine driver per session, each with their OWN measured per-compound times.
+  // One engine driver per session, each with their OWN measured degradation
+  // curve but rebuilt at the merged tyre life above, so the per-driver override
+  // strategy.js reads is consistent with the shared compound.tireLife it uses
+  // to un-correct for fuel weight.
   const drivers = valid.map((s, i) => {
     const compounds = {};
     for (const c of s.analysis.compounds) {
-      if (c.deg && c.observed) compounds[c.id] = { startLapTime: c.observed.start, halfLapTime: c.observed.half, endLapTime: c.observed.end };
+      if (c.deg && c.observed) {
+        const o = buildObservedTimes(c.deg, penalty, fuelPerLap, tank, globalLife[c.id]);
+        compounds[c.id] = { startLapTime: o.start, halfLapTime: o.half, endLapTime: o.end };
+      }
     }
     return { id: `d${i + 1}`, name: s.driver || s.analysis.meta?.driver || s.analysis.meta?.team || `Driver ${i + 1}`, compounds };
   });
