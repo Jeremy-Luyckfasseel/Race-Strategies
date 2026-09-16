@@ -178,6 +178,17 @@ function cappedStintLaps(tireCapLaps, fuelCapLaps, mandatoryPacingLaps) {
  * most as usual: only they can actually be satisfied by one, so diverting a
  * full-length stint away from them would risk the same problem in reverse —
  * a fixed-length race running out of stints before everyone's minimum is met.
+ *
+ * This is a single-pass greedy heuristic, not a solved schedule. It reliably
+ * meets everyone's minimum when minDriverTimeSecs leaves reasonable slack
+ * below an even split of the race, but a minimum set right at the
+ * theoretical maximum a driver could get (e.g. exactly race-length ÷
+ * driver-count, especially with few total stints) can still leave them
+ * marginally short — confirmed even with the simplest possible config (1
+ * mandatory stop, 2 drivers, minimum = exactly half the race), predating and
+ * unrelated to the tyre-change economics above. A hard guarantee here would
+ * need a genuinely different, whole-race-aware allocation approach, not
+ * another exception bolted onto this function.
  */
 function pickNextDriver(drivers, driverTimeSecs, minDriverTimeSecs, upcomingStintSecs, normalStintSecs) {
   if (drivers.length === 1) return 0;
@@ -299,12 +310,15 @@ function simulateStrategy(p) {
     // (e.g. a tyre-economics-driven remainder stint) on whoever owes the most
     // when it can't cover their deficit anyway: see pickNextDriver.
     const estimatedStintSecs = (targetStopLap - currentLap + 1) * activeComp.avgLapTimeSecs;
-    // Bounded by tire life too, not just the fuel-tank cap — otherwise a
-    // compound whose tire life is much shorter than its fuel range makes
-    // every one of its stints look like a "fragment" relative to the
-    // (unreachably large) fuel-only normal length, diverting normal-length
-    // stints away from the driver who most needs them.
-    const normalStintSecs = Math.min(effectiveLPT, activeComp.tireLife) * activeComp.avgLapTimeSecs;
+    // Bounded by tire life AND mandatory-stop pacing too, not just the
+    // fuel-tank cap — otherwise whichever of those is actually the binding
+    // constraint for this race makes every one of its stints look like a
+    // "fragment" relative to an unreachably large reference, misfiring the
+    // exception on every stint instead of just genuinely short ones (e.g. a
+    // race with many mandatoryStops relative to its length legitimately runs
+    // uniformly short stints throughout — that's normal for THIS race, not a
+    // remainder to route around).
+    const normalStintSecs = Math.min(effectiveLPT, activeComp.tireLife, limitForMandatory) * activeComp.avgLapTimeSecs;
     currentDriverIdx = pickNextDriver(processedDrivers, driverTimeSecs, minDriverTimeSecs || 0, estimatedStintSecs, normalStintSecs);
     const currentDriver = processedDrivers[currentDriverIdx];
 
@@ -406,13 +420,7 @@ function simulateStrategy(p) {
         // (Simplification: this only weighs the upcoming stint, not any extra
         // stint length fresh tyres might unlock further down the race — a
         // full multi-stop lookahead would catch that but isn't done here.)
-        // Floored to at least 1: real stints only ever run whole laps, and
-        // cappedStintLaps can return a value below 1 (or exactly 0 when
-        // nextLimit collapses near race end) — left unguarded, the loop
-        // below would run 0 iterations, making keepSecs = freshSecs = 0 and
-        // tiresActuallyChanged = (0 + tireChangeSecs) < 0 always false,
-        // i.e. tires would never be swapped regardless of actual wear.
-        const keepStintLaps = Math.max(1, cappedStintLaps(currentTireLifeLeft, effectiveLPT, nextLimit));
+        const keepStintLaps = cappedStintLaps(currentTireLifeLeft, effectiveLPT, nextLimit);
         const ct = currentDriver.compTimes[activeComp.id] ?? activeComp;
         let keepSecs = 0;
         let freshSecs = 0;
