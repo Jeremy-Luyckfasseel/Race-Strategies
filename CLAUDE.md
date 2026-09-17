@@ -146,6 +146,7 @@ The `no-unused-vars` rule ignores variables whose names start with an uppercase 
 - Server → Browser: `{ ps5ip, fuelLiters, fuelRatio, currentLap, totalLaps, speedKmh, onTrack, lastLapMs, bestLapMs, racePos, totalCars, gear, suggestedGear, rpm, rpmLimiter, rpmWarning, throttle, brake, waterTemp, oilTemp, boost, tireTemp[], tireWear[], posX, posZ, paused, pitDetected, pitExit }` per packet
 
 **Pit and compound detection:**
+- Pit edges come from `detectPitEdges` (`src/logic/pitDetect.js` — the one module the relay shares with the app, so it stays node-testable). GT7 exposes no pit flag, so it is inferred from speed, and a stop must be **sustained** (`PIT_MIN_STOP_MS`) before it counts. Without that dwell a spin fired a full phantom pit stop: compound cleared, stint closed, driver prompt raised. It remains speed-only — a car parked on track for longer than the dwell still reads as a stop.
 - `pitDetected` — set for one packet when the car enters the pit lane (App clears the compound selection)
 - `pitExit` — set for one packet when the car exits the pit (triggers `useCompoundDetector` to request compound confirmation from user)
 - GT7 UDP does not expose compound ID; it must be set manually via the compound picker buttons after each stop
