@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { backoffDelay } from '../logic/connection';
-import { withTeamOrder, dropStaleTeams } from '../logic/teams';
+import { withTeamOrder, dropStaleTeams, coalescePacket } from '../logic/teams';
 
 /**
  * Incoming packets are collected in a ref and applied to React state on this
@@ -130,7 +130,9 @@ export function useTelemetry() {
           setScanning(false);
           setScanResults(pkt.results || []);
         } else if (pkt.ps5ip) {
-          pendingRef.current.set(pkt.ps5ip, { ...pkt, ts: Date.now() });
+          const pending = pendingRef.current;
+          const stamped = { ...pkt, ts: Date.now() };
+          pending.set(pkt.ps5ip, coalescePacket(pending.get(pkt.ps5ip), stamped));
         }
       } catch {
         /* ignore malformed packet */

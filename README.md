@@ -20,7 +20,7 @@
 
 <br>
 
-![Tests](https://img.shields.io/badge/tests-2057%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
+![Tests](https://img.shields.io/badge/tests-2066%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
 ![Engine](https://img.shields.io/badge/strategy%20engine-pure%20JS%20%C2%B7%20zero%20React-c9a227?style=flat-square)
 ![Patterns](https://img.shields.io/badge/compound%20patterns-~4%20000%20enumerated-c9a227?style=flat-square)
 
@@ -264,7 +264,7 @@ npm run dev        # → http://localhost:5173
 | `npm run dev` | Dev server at `http://localhost:5173` |
 | `npm run build` | Production build → `/dist` |
 | `npm run preview` | Preview the production build |
-| `npm test` | Full test suite — 2 057 assertions |
+| `npm test` | Full test suite — 2 066 assertions |
 | `npm run test:smoke` | Quick 1-hour race smoke test |
 | `npm run telemetry` | Start the UDP → WebSocket relay server |
 
@@ -302,7 +302,7 @@ npm run dev        # → http://localhost:5173
 The strategy engine has no React dependency and runs directly in Node:
 
 ```bash
-npm test              # 2 057 assertions across thirteen suites
+npm test              # 2 066 assertions across thirteen suites
 npm run test:smoke    # 1-hour race smoke test
 ```
 
@@ -321,7 +321,7 @@ npm run test:smoke    # 1-hour race smoke test
 | **Groups** | `tests/test_groups.js` | 18 | Team Groups → Races → Sessions state (pure, local) |
 | **Sync store** | `tests/test_sync_store.js` | 17 | Self-hosted sync server's filesystem store, path-traversal rejection |
 | **Sync client** | `tests/test_sync_client.js` | 11 | syncClient ↔ sync-server round trip over real HTTP |
-| **Teams** | `tests/test_teams.js` | 27 | Multi-car display — stable per-team colour across pruning, first-seen ordering, staleness dropout |
+| **Teams** | `tests/test_teams.js` | 36 | Multi-car display — stable per-team colour across pruning, first-seen ordering, staleness dropout |
 | **Stint log** | `tests/test_stint_log.js` | 29 | Drivers-tab bookkeeping — stint open/close, per-lap average/best/worst folding, compound sync, driver (re)assignment, defensive pit-exit reopen, out-lap/paused/off-track lap exclusion |
 
 <br><br>

@@ -61,6 +61,34 @@ export function withTeamOrder(order, ip) {
   return [...order, ip];
 }
 
+/**
+ * Edge-triggered flags the relay sets on a single packet only (see the pit
+ * detection block in server/telemetry-server.js). Everything else in a packet
+ * is a level that the next packet restates, so a plain overwrite is fine.
+ */
+const EDGE_FLAGS = ['pitDetected', 'pitExit'];
+
+/**
+ * Merge a newly-arrived packet over the one already buffered for the same car.
+ *
+ * Packets are buffered between flushes, and at ~60 Hz several arrive inside one
+ * flush window — so overwriting outright would drop any edge flag carried by
+ * the packets in between, losing the pit stop entirely (no compound clear, no
+ * driver prompt, no stint boundary). Edges are carried forward to the packet
+ * that actually gets flushed; they are cleared as usual once it is consumed.
+ */
+export function coalescePacket(prev, next) {
+  if (!prev) return next;
+  let merged = next;
+  for (const flag of EDGE_FLAGS) {
+    if (prev[flag] && !next[flag]) {
+      if (merged === next) merged = { ...next };
+      merged[flag] = true;
+    }
+  }
+  return merged;
+}
+
 /** True when this packet's timestamp is older than the staleness window. */
 export function isStalePacket(packet, nowMs, staleMs = TEAM_STALE_MS) {
   if (!packet || typeof packet.ts !== 'number') return false;

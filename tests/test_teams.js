@@ -16,6 +16,7 @@ import {
   withTeamOrder,
   isStalePacket,
   dropStaleTeams,
+  coalescePacket,
 } from '../src/logic/teams.js';
 
 let passed = 0;
@@ -68,6 +69,37 @@ section('withTeamOrder — append-only, stable references');
 
   const two = withTeamOrder(one, '10.0.0.2');
   assert('a second team is appended after the first', two[0] === '10.0.0.1' && two[1] === '10.0.0.2');
+}
+
+section('coalescePacket — a pit edge must survive the flush window');
+{
+  // The relay sets pitDetected/pitExit on exactly ONE packet. At ~60 Hz several
+  // packets land inside one 50 ms flush window, so overwriting outright would
+  // throw the edge away — no compound clear, no driver prompt, no stint break.
+  const entry = { ps5ip: 'a', speedKmh: 3, pitDetected: true, ts: 1 };
+  const after = { ps5ip: 'a', speedKmh: 4, ts: 2 };
+  const merged = coalescePacket(entry, after);
+  assert('pitDetected is carried forward onto the newer packet', merged.pitDetected === true);
+  assert('the newer packet\'s own values still win', merged.speedKmh === 4 && merged.ts === 2);
+  assert('the earlier packet is not mutated', after.pitDetected === undefined);
+
+  const exit = { ps5ip: 'a', speedKmh: 70, pitExit: true, ts: 1 };
+  assert('pitExit is carried forward too',
+    coalescePacket(exit, { ps5ip: 'a', speedKmh: 80, ts: 2 }).pitExit === true);
+
+  // Three packets in one window, the edge on the first — the realistic case.
+  let buffered = { ps5ip: 'a', pitExit: true, speedKmh: 61, ts: 1 };
+  buffered = coalescePacket(buffered, { ps5ip: 'a', speedKmh: 70, ts: 2 });
+  buffered = coalescePacket(buffered, { ps5ip: 'a', speedKmh: 82, ts: 3 });
+  assert('edge survives three coalesces in one window', buffered.pitExit === true);
+  assert('and still reports the newest speed', buffered.speedKmh === 82);
+
+  assert('first packet for a car passes straight through',
+    coalescePacket(undefined, after) === after);
+  assert('no edge flags means no needless copy',
+    coalescePacket({ ps5ip: 'a', ts: 1 }, after) === after);
+  assert('an edge on the newer packet is kept',
+    coalescePacket({ ps5ip: 'a', ts: 1 }, { ps5ip: 'a', pitDetected: true, ts: 2 }).pitDetected === true);
 }
 
 section('isStalePacket — only on a real timestamp');
