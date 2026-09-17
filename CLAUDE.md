@@ -147,19 +147,25 @@ map is `docs/CURRENT_STATE.md`; the task checklist is `docs/BACKLOG.md`.
 
 ### Locked MVP scope
 
-- **MVP = single-team / single-car / local.** GT7 on PS5, with strategy inputs
-  **auto-derived from live telemetry** (the differentiator). It must work with no
-  servers and no cooperation from anyone else.
+- **Strategy is single-team.** GT7 on PS5, with strategy inputs **auto-derived
+  from live telemetry** (the differentiator). It must work with no servers and
+  no cooperation from anyone else. Driver rosters, stint planning, the Pilotes
+  log and the calculated strategy all belong to **my team only** — there is one
+  `inputs` object and one engine run, and that is deliberate.
+- **Display is multi-car (local LAN).** Every PS5 on the same LAN, relayed by
+  the one local `telemetry-server.js`, is **shown** on the track map and the
+  multi-team leaderboard: name, position, gap, tyre, fuel, lap times. A 10+ car
+  LAN event is a supported scenario for *display*, so multi-car scaffolding
+  (leaderboard, `Map<ip,packet>`, LAN scan, `src/logic/teams.js`) is
+  **load-bearing — do not delete or de-emphasize it.**
 
 ### Out of scope (v2 — do NOT build now)
 
-- Distributed multi-car aggregation.
+- Distributed multi-car aggregation (anything beyond one local LAN + one relay).
 - Cloud server for at-home leagues.
-- Whole-field / organizer / spectator board.
+- Per-team strategy: driver rosters, inputs or a calculated plan for teams
+  other than my own.
 - F1-game support.
-
-(Existing multi-team scaffolding — leaderboard, `Map<ip,packet>`, LAN scan — stays
-but is de-emphasized, not deleted.)
 
 ### Working rules
 

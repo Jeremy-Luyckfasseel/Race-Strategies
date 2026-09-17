@@ -181,6 +181,7 @@ export default function App() {
 
   const handledPitsRef = useRef(new Set());
   const autoScannedRef = useRef(false);
+  const autoOpenedLbRef = useRef(false);
   const telem    = useTelemetry();
   const detector = useCompoundDetector(telem.teams);
   const stintLog = useStintLog(telem.teams, teamCompounds, inputs.drivers);
@@ -222,9 +223,18 @@ export default function App() {
     setSelectedIndex(0);
   }, [learner]);
 
+  // The circuit outline is a property of the track, not of any one car, so it
+  // can be traced from whoever is transmitting. Tying it to the selected car
+  // meant a multi-car event drew nothing until someone was picked by hand —
+  // and with no recorded bounds the map cannot place ANY car's dot, so the
+  // whole field stayed invisible. (Which car is *mine* is a separate question,
+  // still answered only by an explicit pick, per DECISION 4.)
+  const mapSourceIp = activeIp ?? teamKeys[0] ?? null;
   const { mapRef, resetMap } = useTrackMap(
-    telem.teams.get(activeIp ?? ''),
-    () => activeIp && updateTeamCompound(activeIp, null, false),
+    telem.teams.get(mapSourceIp ?? ''),
+    // Only my own car entering the pits may clear my compound — never some
+    // other team's car that happens to be tracing the outline.
+    () => { if (mapSourceIp === activeIp && activeIp) updateTeamCompound(activeIp, null, false); },
   );
 
   const updateTeamLabel = useCallback((ip, label) => {
@@ -283,6 +293,16 @@ export default function App() {
       telem.scan();
     }
   }, [telem.connected, telem, ps5IPs]);
+
+  // Once a second car shows up this is a multi-car event, so reveal the
+  // leaderboard rather than leaving the whole field hidden behind a toggle.
+  // Fires once — closing it afterwards sticks.
+  useEffect(() => {
+    if (!autoOpenedLbRef.current && telem.teams.size > 1) {
+      autoOpenedLbRef.current = true;
+      setShowAdvancedLb(true);
+    }
+  }, [telem.teams.size]);
 
   // Auto-pick a PS5 only when exactly one is found (DECISION 4); otherwise leave
   // it to the user to choose in the telemetry controls.
@@ -552,7 +572,7 @@ export default function App() {
                   >
                     {showAdvancedLb
                       ? "Masquer le classement multi-équipes"
-                      : "Avancé · Événement LAN — classement multi-équipes"}
+                      : `Afficher le classement multi-équipes${telem.teams.size > 1 ? ` (${telem.teams.size})` : ""}`}
                   </button>
                 )}
                 {telem.teams.size === 0 ? (
