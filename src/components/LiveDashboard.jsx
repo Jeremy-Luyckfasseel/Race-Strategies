@@ -2,12 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 
 const CANVAS_W = 420, CANVAS_H = 190, PAD = 16;
 
-// Must match TelemetryLeaderboard order
-const CAR_COLORS = [
-  '#E8002D', '#FF8000', '#00D2BE', '#0067FF', '#39B54A',
-  '#DC0000', '#B6BABD', '#005AFF', '#5EAED8', '#FFFFFF',
-];
-
 // ── Pure helpers ────────────────────────────────────────────────────────────
 
 function formatMs(ms) {
@@ -167,7 +161,7 @@ function CarDots({ live, map }) {
         const active = cars.filter(c => c.onTrack && c.posX != null);
 
         // Cull smoothed entries for cars no longer active
-        const activeIds = new Set(active.map(c => c.colorIdx));
+        const activeIds = new Set(active.map(c => c.id));
         for (const id of smoothed.keys()) if (!activeIds.has(id)) smoothed.delete(id);
 
         // Sync DOM child count
@@ -177,7 +171,7 @@ function CarDots({ live, map }) {
           root.removeChild(root.lastChild);
 
         active.forEach((c, i) => {
-          const color = CAR_COLORS[c.colorIdx % CAR_COLORS.length];
+          const color = c.color;
 
           // Entity interpolation: maintain a small ring-buffer of (x, z, timestamp)
           // entries and render at (now - DELAY_MS). This gives two bracketing points
@@ -189,10 +183,10 @@ function CarDots({ live, map }) {
           const EXTRAP_MS = 120;  // max extrapolation past the newest buffer entry
           const BUF_MAX   = 24;   // ~400 ms of history at 60 Hz
 
-          let s = smoothed.get(c.colorIdx);
+          let s = smoothed.get(c.id);
           if (!s) {
             s = { buf: [{ x: c.posX, z: c.posZ, ts }], gpX: c.posX, gpZ: c.posZ };
-            smoothed.set(c.colorIdx, s);
+            smoothed.set(c.id, s);
           } else {
             const prev = s.buf[s.buf.length - 1];
             if (prev.x !== c.posX || prev.z !== c.posZ) {
@@ -238,8 +232,8 @@ function CarDots({ live, map }) {
           const child = root.children[i];
 
           // Rebuild inner elements only when car identity changes
-          if (child._carId !== c.colorIdx) {
-            child._carId = c.colorIdx;
+          if (child._carId !== c.id) {
+            child._carId = c.id;
             while (child.firstChild) child.removeChild(child.firstChild);
             const fresh = mkDot(c.isOwn, color, c.label);
             while (fresh.firstChild) child.appendChild(fresh.firstChild);

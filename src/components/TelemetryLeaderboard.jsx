@@ -1,9 +1,5 @@
 import { useMemo, useState, Fragment } from 'react';
-
-const TEAM_COLORS = [
-  '#E8002D', '#FF8000', '#00D2BE', '#0067FF', '#39B54A',
-  '#DC0000', '#B6BABD', '#005AFF', '#FFD700', '#FFFFFF',
-];
+import { teamColor } from '../logic/teams';
 
 const COMPOUNDS = ['H', 'M', 'S', 'IM', 'W'];
 const COMPOUND_COLOR = { H: '#5EAED8', M: '#F08420', S: '#E4002B', IM: '#22CC6E', W: '#14BBCE' };
@@ -46,7 +42,7 @@ function fuelBarColor(pct) {
 }
 
 export default function TelemetryLeaderboard({
-  teams, teamLabels, teamCompounds, pendingIps, selectedIp, onSelect, onCompoundChange,
+  teams, teamOrder = [], teamLabels, teamCompounds, pendingIps, selectedIp, onSelect, onCompoundChange,
 }) {
   const [pickerIp, setPickerIp] = useState(null);
 
@@ -84,7 +80,10 @@ export default function TelemetryLeaderboard({
 
       {/* ── Rows ── */}
       {sorted.map(({ ip, d }, idx) => {
-        const color      = TEAM_COLORS[idx % TEAM_COLORS.length];
+        // Coloured by first-seen order, never by race position — a car that
+        // gains a place must not change colour, and the track map colours the
+        // same way so a dot and its row always match.
+        const color      = teamColor(teamOrder.indexOf(ip));
         const isSelected = ip === selectedIp;
         const gap        = idx === 0 ? null : formatGap(sorted[idx - 1].d, d);
         const isBestLap  = d.bestLapMs && d.bestLapMs === overallBestMs;
