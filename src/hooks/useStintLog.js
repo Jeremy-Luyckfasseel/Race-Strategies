@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { emptyEntry, openStint, closeStint, recordLap, setCompound, assignDriver as assignDriverPure } from '../logic/stintLog';
+import { emptyEntry, openStint, closeStint, reopenStint, recordLapIfClean, setCompound, assignDriver as assignDriverPure } from '../logic/stintLog';
 
 const STORAGE_KEY = 'gt7-stint-log';
 
@@ -28,7 +28,11 @@ function saveStore(store) {
  * A new stint opens on pit exit (driver pending until `assignDriver` is
  * called) and closes on the next pit entry; the very first stint of the race
  * opens on the first telemetry packet on track, defaulting to the first
- * configured driver (no pit to hang a prompt on yet).
+ * configured driver (no pit to hang a prompt on yet). Pit exit uses
+ * `reopenStint`, which archives an already-open stint first if its closing
+ * pit-entry packet was never seen, rather than losing it. Lap folding uses
+ * `recordLapIfClean`, which skips the out-lap and any lap that was paused or
+ * off track when it completed.
  *
  * Returns:
  *   logs              Map<ip, { history: Stint[], current: Stint|null }>
@@ -73,7 +77,7 @@ export function useStintLog(teams, teamCompounds, drivers) {
         const key = `${ip}-x${data.currentLap ?? 0}`;
         if (!handledExitsRef.current.has(key)) {
           handledExitsRef.current.add(key);
-          entry = openStint(entry, { driverId: null, compound: teamCompounds?.[ip] ?? null, startLap: data.currentLap ?? 0 });
+          entry = reopenStint(entry, { compound: teamCompounds?.[ip] ?? null, startLap: data.currentLap ?? 0 });
           pendingRef.current.add(ip);
           changed = true;
           pendingChanged = true;
@@ -88,8 +92,11 @@ export function useStintLog(teams, teamCompounds, drivers) {
         const lastSeen = lastLapSeenRef.current.get(ip) ?? 0;
         if ((data.currentLap ?? 0) > lastSeen) {
           lastLapSeenRef.current.set(ip, data.currentLap);
-          entry = recordLap(entry, data.lastLapMs);
-          changed = true;
+          const beforeLap = entry;
+          entry = recordLapIfClean(entry, {
+            lapMs: data.lastLapMs, currentLap: data.currentLap, paused: data.paused, onTrack: data.onTrack,
+          });
+          if (entry !== beforeLap) changed = true;
         }
       }
 

@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 function formatMs(ms) {
   if (ms == null || !Number.isFinite(ms)) return '—';
   const m = Math.floor(ms / 60000);
@@ -19,6 +21,16 @@ function formatDuration(secs) {
 }
 
 export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp, onReset }) {
+  // Ticks once a second so the in-progress stint's elapsed time counts toward
+  // its driver's total (and the "min not met" flag) instead of freezing at
+  // zero for the whole stint. Date.now() is only ever read inside this effect,
+  // never during render, so the component stays pure.
+  const [now, setNow] = useState(null);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const entry = activeIp ? logs.get(activeIp) : null;
   const stints = entry
     ? [
@@ -27,7 +39,7 @@ export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp,
           ? [{
               ...entry.current,
               endLap: null,
-              durationSecs: null,
+              durationSecs: now != null ? (now - entry.current.startTime) / 1000 : null,
               avgLapMs: entry.current.lapCount > 0 ? entry.current.lapMsSum / entry.current.lapCount : null,
               live: true,
             }]

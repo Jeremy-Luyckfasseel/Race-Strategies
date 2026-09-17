@@ -6,7 +6,7 @@
  * Run with: node tests/test_stint_log.js
  */
 
-import { emptyEntry, openStint, closeStint, recordLap, setCompound, assignDriver } from '../src/logic/stintLog.js';
+import { emptyEntry, openStint, closeStint, reopenStint, recordLap, recordLapIfClean, setCompound, assignDriver } from '../src/logic/stintLog.js';
 
 let passed = 0;
 let failed = 0;
@@ -85,6 +85,43 @@ section('assignDriver — sets driver on the active stint, no-op otherwise');
 
   const closed = emptyEntry();
   assert('no-op with no active stint', assignDriver(closed, 'd3') === closed);
+}
+
+section('reopenStint — defends against a missed pitDetected packet');
+{
+  // Normal case: current stint already closed, reopenStint behaves like openStint.
+  let entry = closeStint(openStint(emptyEntry(), { driverId: 'd1', compound: 'H', startLap: 1, now: 0 }), { endLap: 20, now: 20000 });
+  entry = reopenStint(entry, { compound: 'S', startLap: 20, now: 20000 });
+  assert('normal reopen keeps prior history and opens a fresh stint', entry.history.length === 1 && entry.current.compound === 'S' && entry.current.driverId === null);
+
+  // Defensive case: pitDetected was never seen, so `current` is still open when pitExit fires.
+  let missed = openStint(emptyEntry(), { driverId: 'd1', compound: 'H', startLap: 1, now: 0 });
+  missed = recordLap(missed, 120000);
+  missed = reopenStint(missed, { compound: 'M', startLap: 25, now: 25000 });
+  assert('the stint that never got a pitDetected is archived, not lost', missed.history.length === 1, `got ${missed.history.length}`);
+  assert('archived stint keeps its driver and lap data', missed.history[0].driverId === 'd1' && missed.history[0].lapCount === 1);
+  assert('archived stint is closed at this pit exit\'s lap', missed.history[0].endLap === 25);
+  assert('a fresh stint is opened for the new compound', missed.current.compound === 'M' && missed.current.driverId === null);
+}
+
+section('recordLapIfClean — excludes the out-lap and paused/off-track laps');
+{
+  let entry = openStint(emptyEntry(), { startLap: 10, now: 0 });
+
+  entry = recordLapIfClean(entry, { lapMs: 999000, currentLap: 11 });
+  assert('the out-lap (startLap + 1) is skipped', entry.current.lapCount === 0, `got ${entry.current.lapCount}`);
+
+  entry = recordLapIfClean(entry, { lapMs: 999000, currentLap: 12, paused: true });
+  assert('a lap that was paused when it completed is skipped', entry.current.lapCount === 0);
+
+  entry = recordLapIfClean(entry, { lapMs: 999000, currentLap: 12, onTrack: false });
+  assert('a lap that was off track when it completed is skipped', entry.current.lapCount === 0);
+
+  entry = recordLapIfClean(entry, { lapMs: 100000, currentLap: 12 });
+  assert('a normal, clean lap is recorded', entry.current.lapCount === 1 && entry.current.lapMsSum === 100000);
+
+  const noStint = emptyEntry();
+  assert('no-op with no active stint', recordLapIfClean(noStint, { lapMs: 100000, currentLap: 1 }) === noStint);
 }
 
 section('mandatory-compound-style scenario — a full pit cycle preserves prior history');

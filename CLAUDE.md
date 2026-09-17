@@ -91,7 +91,7 @@ The `no-unused-vars` rule ignores variables whose names start with an uppercase 
 |------|---------|
 | `src/logic/strategy.js` | Pure-JS strategy engine (~700 lines); exports `findBestStrategies`, `TIRE_COMPOUNDS`, `CAR_PRESETS`, `formatLapTime`, `formatRaceTime`, `parseLapTime`, `isValidLapTimeStr`, `calcPitStopTime` |
 | `src/logic/compoundDetector.js` | Placeholder/note: GT7 UDP does not expose compound ID; compound tracking is user-driven only |
-| `src/logic/stintLog.js` | Pure stint-log state machine for the Pilotes tab: `openStint`/`closeStint` (folds the running lap sum/count into a duration + average, no per-lap array kept), `recordLap` (best/worst), `setCompound`, `assignDriver` |
+| `src/logic/stintLog.js` | Pure stint-log state machine for the Pilotes tab: `openStint`/`closeStint` (folds the running lap sum/count into a duration + average, no per-lap array kept), `reopenStint` (pit-exit's entry point — archives an already-open `current` first if its closing pit-entry packet was never seen, instead of overwriting it), `recordLap`/`recordLapIfClean` (best/worst; the latter skips the out-lap and paused/off-track laps), `setCompound`, `assignDriver` |
 | `src/hooks/useStrategy.js` | React hook wrapping the engine; 600ms debounce + manual `calculate()` |
 | `src/hooks/useTelemetry.js` | WebSocket hook; exposes `connect`, `disconnect`, `sendIPs`, `scan`; returns `teams` Map<ip, packet>, `scanning`, `scanResults` |
 | `src/hooks/useCompoundDetector.js` | Watches `data.pitExit` per team; returns `pendingIps` Set + `confirmCompound(ip)` / `stopDetecting(ip)` |
