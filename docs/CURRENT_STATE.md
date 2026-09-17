@@ -99,7 +99,7 @@ Standalone Node process, **not** part of the Vite build. Run with
 | File | Role |
 |------|------|
 | `test.js` | `npm run test:smoke` — quick 1-hour race sanity check (not part of `npm test`). |
-| `test_comprehensive.js` | 132 assertions. Helpers, degradation curve, fuel tracking, pit timing, tyre-change economics, mandatory compound filter, mid-race mode, fuel-weight penalty. |
+| `test_comprehensive.js` | 135 assertions. Helpers, degradation curve, fuel tracking, pit timing, tyre-change economics, mandatory compound filter, mid-race mode, fuel-weight penalty. |
 | `test_invariants.js` | 1 640 bulk-generated assertions. Structural invariants, ranking dominance, multi-compound coverage, multi-driver minimums, race-time boundary, known-answer hand-computed scenarios, bulk no-overfill / no-overrun checks. |
 | `test_telemetry_learner.js` | 37 assertions. **Phase 1.** Synthetic seed+race sessions from known ground truth; tight (synthetic) vs live-trust tolerance bands; recovery, engine round-trip, confidence gating, single-stint non-identifiability, multi-compound segmentation. |
 | `test_recommendations.js` | 20 assertions. **Phase 1.** Propose-and-accept gating, no-mutation, ignore/material-shift re-surface, accepted value → valid ranked strategy. |
@@ -112,9 +112,9 @@ Standalone Node process, **not** part of the Vite build. Run with
 | `test_sync_client.js` | 11 assertions. `syncClient` ↔ `sync-server` round trip over real HTTP. |
 
 `npm test` runs all eleven suites above (every row except `test.js`) in
-sequence — 1 991 assertions total, all pure node; they print `✓/✗` lines and
+sequence — 1 994 assertions total, all pure node; they print `✓/✗` lines and
 exit non-zero on failure. **These are the guardrail — keep every assertion
-green.** 351 of the 1 991 are hand-written; 1 640 are bulk-generated invariant
+green.** 354 of the 1 994 are hand-written; 1 640 are bulk-generated invariant
 sweeps (see `test_invariants.js` above) — worth knowing which is which when
 judging how much a passing `npm test` actually proves. (Assertion counts
 inside loop-based checks scale with how many stints/strategies an input
@@ -280,21 +280,36 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
      mandatory-pacing so a uniformly-short-stinted race isn't misjudged as
      "all fragments") and wouldn't clear the most-behind driver's deficit
      anyway, it goes instead to whichever owing driver it WOULD fully cover.
-  2. **Longest-stint-first planning** (`planDriverAssignment`): stint lengths
-     are fixed by fuel/tyre/mandatory-pacing independent of driver identity,
-     so the whole race's stint-length sequence is knowable in advance (probed
-     with one throwaway `simulateStrategy` call before the real one).
-     Sort stints longest-first, assign each to whoever currently owes the
-     most — so big stints go to whoever needs them before only small ones are
-     left, which the chronological, one-stint-at-a-time pick can't see
-     coming.
+  2. **Longest-stint-first planning + local search** (`planDriverAssignment`):
+     stint lengths are fixed by fuel/tyre/mandatory-pacing independent of
+     driver identity, so the whole race's stint-length sequence is knowable
+     in advance (probed with one throwaway `simulateStrategy` call before the
+     real one). First pass: sort stints longest-first, assign each to
+     whoever currently owes the most — so big stints go to whoever needs
+     them before only small ones are left, which the chronological,
+     one-stint-at-a-time pick can't see coming. This first pass (LPT) still
+     commits to each assignment irrevocably and can land short of an
+     achievable split from the same stint sizes — e.g. 9 stints split
+     between 2 drivers needing 1800s each landed `[1924, 1789]` (11s short)
+     when a single stint swap reaches `[1806, 1907]` from the SAME stints
+     (total unchanged at 3713s), simply because by the time the smallest
+     stints are placed, two drivers are already near-tied. Second
+     pass: repeatedly find the single stint-swap between two drivers that
+     improves `[driversSatisfied, worstCaseTotal]` the most, apply it,
+     repeat until no swap helps — a standard local-search refinement for
+     multiway partitioning (not exact — that's NP-hard for ≥3 "bins" in
+     general — but reliable for the dozens-of-stints/≤~5-drivers an
+     endurance race actually produces, and cheap: O(stints²) per round,
+     a handful of rounds to converge).
 
-  Neither approach dominates the other — confirmed empirically across a
-  ~2000-combination parameter sweep (driver count, race length,
-  `mandatoryStops`, minimum drive time): longest-stint-first fixed 9 cases
-  chronological-only missed, but chronological-only beat longest-stint-first
-  in 2 different cases when tried alone. `findBestStrategies` runs both and
-  keeps the winner — but "winner" first respects the SAME priority the final
+  Neither top-level approach dominates the other — confirmed empirically
+  across a ~2000-combination parameter sweep (driver count, race length,
+  `mandatoryStops`, minimum drive time): longest-stint-first (with local
+  search) fixed 11 cases chronological-only missed, 0 regressions.
+  Local search alone accounts for 2 of those 11 — the exact cases where
+  plain LPT used to be worse than chronological when tried in isolation.
+  `findBestStrategies` runs both and keeps the winner — but "winner" first
+  respects the SAME priority the final
   cross-candidate ranking uses (`totalLaps` DESC, then race time ASC), only
   falling back to `[driversSatisfied, worstCaseDriverTotal]` when laps and
   race time are tied. Per-driver compound times mean the two assignments can
@@ -358,7 +373,7 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
 npm run dev          # Vite dev server :5173
 npm run build        # production build → /dist
 npm run lint         # ESLint flat config
-npm test             # all eleven suites in tests/ (see §2 Tests table) — 1 991 assertions
+npm test             # all eleven suites in tests/ (see §2 Tests table) — 1 994 assertions
 npm run test:smoke   # quick 1h race test
 npm run telemetry    # start the UDP→WS relay (separate process)
 ```

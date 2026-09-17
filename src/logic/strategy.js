@@ -226,7 +226,16 @@ function pickNextDriver(drivers, driverTimeSecs, minDriverTimeSecs, upcomingStin
  * toward their minimum (once everyone's minimum is met, to whoever has
  * driven least overall) — a standard load-balancing strategy (schedule the
  * biggest jobs first) adapted to a "reach at least X" target rather than
- * "minimize the maximum."
+ * "minimize the maximum." This first pass commits to each assignment
+ * irrevocably and can still land short of the best available split — e.g. 9
+ * stints split between 2 drivers needing 1800s each landed [1924, 1789]
+ * (short by 11s) when a single stint swap reaches [1806, 1907] from the SAME
+ * stints (total unchanged at 3713s — a swap only redistributes it between
+ * the two), simply because by the time the smallest stints are placed, the
+ * two drivers are already near-tied and whichever gets the short end, stays
+ * short. A second pass (below) fixes exactly this: local-search refinement
+ * by swapping stints between drivers whenever it helps, which finds that
+ * better split directly from the same starting point.
  *
  * Not a hard guarantee: with very few stints relative to driver count (e.g.
  * 2 drivers splitting a 2-stint race), there is only one way to split them —
@@ -268,6 +277,58 @@ function planDriverAssignment(stintSecsInOrder, numDrivers, minDriverTimeSecs) {
     assignment[index] = driverIdx;
     driverTotals[driverIdx] += secs;
   }
+
+  // Local-search refinement: repeatedly find the single stint-swap between
+  // two drivers that improves [driversSatisfied, worstCaseTotal] the most,
+  // apply it, repeat until no swap helps. This is exact multiway-partition
+  // optimization only for trivially small inputs — for the stint/driver
+  // counts an endurance race actually produces (dozens of stints, up to a
+  // handful of drivers) it isn't guaranteed globally optimal, but it reliably
+  // escapes LPT's "committed too early" failure mode (the example above):
+  // starting from [1924, 1789], swapping one 508s stint (driver A) for one
+  // 390s stint (driver B) reaches [1806, 1907] in a single step, already
+  // clearing both minimums.
+  //
+  // Every applied swap strictly improves the score in the same lexicographic
+  // order used to compare it, so the sequence of scores can't repeat a prior
+  // state — termination is guaranteed without the iteration cap; the cap is
+  // just cheap insurance against a mistake in that reasoning, not a load-
+  // bearing part of it.
+  const n = stintSecsInOrder.length;
+  const scoreOf = (totals) => [totals.filter((t) => t >= minDriverTimeSecs).length, Math.min(...totals)];
+  const isBetter = (a, b) => a[0] > b[0] || (a[0] === b[0] && a[1] > b[1]);
+
+  let guard = 0;
+  const maxIterations = n * 4;
+  for (;;) {
+    if (guard++ >= maxIterations) break;
+    let bestSwap = null;
+    let bestScore = scoreOf(driverTotals);
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const di = assignment[i];
+        const dj = assignment[j];
+        if (di === dj) continue;
+        const secsI = stintSecsInOrder[i];
+        const secsJ = stintSecsInOrder[j];
+        const trial = driverTotals.slice();
+        trial[di] += secsJ - secsI;
+        trial[dj] += secsI - secsJ;
+        const trialScore = scoreOf(trial);
+        if (isBetter(trialScore, bestScore)) {
+          bestScore = trialScore;
+          bestSwap = { i, j, di, dj, secsI, secsJ };
+        }
+      }
+    }
+    if (!bestSwap) break;
+    const { i, j, di, dj, secsI, secsJ } = bestSwap;
+    assignment[i] = dj;
+    assignment[j] = di;
+    driverTotals[di] += secsJ - secsI;
+    driverTotals[dj] += secsI - secsJ;
+  }
+
   return assignment;
 }
 
