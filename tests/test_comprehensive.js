@@ -341,6 +341,35 @@ section('Multi-driver planning — differing per-driver pace stays internally co
   }
 }
 
+section('Multi-driver planning — local-search refinement escapes a bad LPT commitment');
+{
+  // LPT (longest-stint-first, greedy) commits to each assignment as it goes
+  // and can still land short of an achievable split from the SAME stint
+  // sizes, simply because by the time the smallest stint is placed, the two
+  // drivers are already near-tied and whichever gets it, the other stays
+  // short. planDriverAssignment's local-search pass finds a stint swap that
+  // clears both minimums directly from that same LPT starting point.
+  const res = findBestStrategies({
+    raceDurationHours: 1, tankSize: 90, lapsPerFullTank: 30, fuelMap: 1.0,
+    compounds: [{ id: 'M', name: 'Medium', tireLife: 30, mandatory: false,
+      startLapTime: '2:00', halfLapTime: '2:01', endLapTime: '2:03' }],
+    pitBaseSecs: 25, tireChangeSecs: 27, fuelRateLitersPerSec: 4.0,
+    mandatoryStops: 8, midRaceMode: false,
+    drivers: [
+      { id: 'd1', name: 'Alice', compounds: {} },
+      { id: 'd2', name: 'Bob', compounds: {} },
+    ],
+    minDriverTimeSecs: 30 * 60,
+  });
+  assert('Returns strategies', res.length > 0);
+  if (res.length > 0) {
+    const summary = res[0].strategy.driverSummary;
+    for (const d of summary) {
+      assert(`${d.name}: metMinimum`, d.metMinimum, `totalTimeSecs=${d.totalTimeSecs?.toFixed(0)}s, required=1800`);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Mandatory compound filter
 // ---------------------------------------------------------------------------
