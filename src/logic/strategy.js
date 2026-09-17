@@ -227,14 +227,15 @@ function pickNextDriver(drivers, driverTimeSecs, minDriverTimeSecs, upcomingStin
  * driven least overall) — a standard load-balancing strategy (schedule the
  * biggest jobs first) adapted to a "reach at least X" target rather than
  * "minimize the maximum." This first pass commits to each assignment
- * irrevocably and can still land short of the best available split — e.g.
- * 11 stints split between 2 drivers needing 3300s each landed [3770, 3225]
- * (short) when [3340, 3764] was achievable from the SAME stint sizes, simply
- * because by the time the smallest stint is placed, two drivers are already
- * near-tied and whichever gets it, the other stays short. A second pass
- * (below) fixes exactly this: local-search refinement by swapping stints
- * between drivers whenever it helps, which finds that better split directly
- * from the same starting point.
+ * irrevocably and can still land short of the best available split — e.g. 9
+ * stints split between 2 drivers needing 1800s each landed [1924, 1789]
+ * (short by 11s) when a single stint swap reaches [1806, 1907] from the SAME
+ * stints (total unchanged at 3713s — a swap only redistributes it between
+ * the two), simply because by the time the smallest stints are placed, the
+ * two drivers are already near-tied and whichever gets the short end, stays
+ * short. A second pass (below) fixes exactly this: local-search refinement
+ * by swapping stints between drivers whenever it helps, which finds that
+ * better split directly from the same starting point.
  *
  * Not a hard guarantee: with very few stints relative to driver count (e.g.
  * 2 drivers splitting a 2-stint race), there is only one way to split them —
@@ -284,8 +285,8 @@ function planDriverAssignment(stintSecsInOrder, numDrivers, minDriverTimeSecs) {
   // counts an endurance race actually produces (dozens of stints, up to a
   // handful of drivers) it isn't guaranteed globally optimal, but it reliably
   // escapes LPT's "committed too early" failure mode (the example above):
-  // starting from [3770, 3225], swapping one 550s stint for one 1120s stint
-  // between those two drivers reaches [3340, 3495] in a single step, already
+  // starting from [1924, 1789], swapping one 508s stint (driver A) for one
+  // 390s stint (driver B) reaches [1806, 1907] in a single step, already
   // clearing both minimums.
   //
   // Every applied swap strictly improves the score in the same lexicographic

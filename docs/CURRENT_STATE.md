@@ -289,10 +289,11 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
      them before only small ones are left, which the chronological,
      one-stint-at-a-time pick can't see coming. This first pass (LPT) still
      commits to each assignment irrevocably and can land short of an
-     achievable split from the same stint sizes — e.g. 11 stints split
-     between 2 drivers needing 3300s each landed `[3770, 3225]` (one short)
-     when `[3340, 3764]` was reachable, simply because by the time the
-     smallest stint is placed, two drivers are already near-tied. Second
+     achievable split from the same stint sizes — e.g. 9 stints split
+     between 2 drivers needing 1800s each landed `[1924, 1789]` (11s short)
+     when a single stint swap reaches `[1806, 1907]` from the SAME stints
+     (total unchanged at 3713s), simply because by the time the smallest
+     stints are placed, two drivers are already near-tied. Second
      pass: repeatedly find the single stint-swap between two drivers that
      improves `[driversSatisfied, worstCaseTotal]` the most, apply it,
      repeat until no swap helps — a standard local-search refinement for
