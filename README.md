@@ -20,7 +20,7 @@
 
 <br>
 
-![Tests](https://img.shields.io/badge/tests-1999%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
+![Tests](https://img.shields.io/badge/tests-2001%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
 ![Engine](https://img.shields.io/badge/strategy%20engine-pure%20JS%20%C2%B7%20zero%20React-c9a227?style=flat-square)
 ![Patterns](https://img.shields.io/badge/compound%20patterns-~4%20000%20enumerated-c9a227?style=flat-square)
 
@@ -264,7 +264,7 @@ npm run dev        # → http://localhost:5173
 | `npm run dev` | Dev server at `http://localhost:5173` |
 | `npm run build` | Production build → `/dist` |
 | `npm run preview` | Preview the production build |
-| `npm test` | Full test suite — 1 999 assertions |
+| `npm test` | Full test suite — 2 001 assertions |
 | `npm run test:smoke` | Quick 1-hour race smoke test |
 | `npm run telemetry` | Start the UDP → WebSocket relay server |
 
@@ -302,15 +302,15 @@ npm run dev        # → http://localhost:5173
 The strategy engine has no React dependency and runs directly in Node:
 
 ```bash
-npm test              # 1 999 assertions across eleven suites
+npm test              # 2 001 assertions across eleven suites
 npm run test:smoke    # 1-hour race smoke test
 ```
 
-359 of those are hand-written unit tests; the other 1 640 are bulk-generated invariant sweeps (structural checks — no overfill, no tyre overrun, ranking correctness — repeated across many randomised inputs). Counted together because they all assert something real, but worth knowing which is which:
+361 of those are hand-written unit tests; the other 1 640 are bulk-generated invariant sweeps (structural checks — no overfill, no tyre overrun, ranking correctness — repeated across many randomised inputs). Counted together because they all assert something real, but worth knowing which is which:
 
 | Suite | File | Tests | Covers |
 | :--- | :--- | :---: | :--- |
-| **Comprehensive** | `tests/test_comprehensive.js` | 140 | Helpers, degradation curve, fuel tracking, pit timing, tyre-change economics, mandatory compound filter, mid-race mode, fuel weight penalty |
+| **Comprehensive** | `tests/test_comprehensive.js` | 142 | Helpers, degradation curve, fuel tracking, pit timing, tyre-change economics, mandatory compound filter, mid-race mode, fuel weight penalty |
 | **Invariants** *(generated sweeps)* | `tests/test_invariants.js` | 1 640 | Structural invariants on every result, ranking correctness, multi-compound enumeration, multi-driver minimums, race time boundary, known-answer scenarios, bulk no-overfill / no-tyre-overrun sweeps |
 | **Telemetry learner** | `tests/test_telemetry_learner.js` | 37 | Recovers a known fuel/lap, fuel-weight penalty, and degradation curve from synthetic live telemetry |
 | **Recommendations** | `tests/test_recommendations.js` | 20 | Propose-and-accept rules for live-measured car-model updates |
@@ -353,7 +353,7 @@ npm run test:smoke    # 1-hour race smoke test
  ┃ ┗ 📄 telemetry-server.js       Node.js UDP relay — Salsa20 decrypt → WebSocket + LAN scan
  ┣ 📂 tests/
  ┃ ┣ 📄 test.js                   smoke test
- ┃ ┣ 📄 test_comprehensive.js     140 unit tests
+ ┃ ┣ 📄 test_comprehensive.js     142 unit tests
  ┃ ┣ 📄 test_invariants.js        1 640 generated invariant sweeps
  ┃ ┗ 📄 (+ 9 more suites — see Quality Control ↑ for the full breakdown)
  ┗ 📄 package.json

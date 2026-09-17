@@ -962,9 +962,21 @@ export function findBestStrategies(params) {
         presetDriverAssignment: best._driverAssignment,
         finalStintOverride: { atPitsDone: best.strategy.numPitStops, compound: overrideComp },
       });
-      const better = overrideStrategy.totalLaps > bestFinalStrategy.totalLaps ||
+      // The mandatory-compound filter already ran (above, before ranking) on
+      // the un-overridden candidates — it has no way to know this step would
+      // exist. If the compound being swapped OUT was the only occurrence of
+      // a required compound in the plan (a real case: the cheapest way to
+      // satisfy "compound X must appear somewhere" is often to use it for
+      // just one short stint, which can legitimately be the final one), the
+      // override must not silently undo that requirement.
+      const stillSatisfiesMandatory = [...mandatoryIds].every((req) =>
+        overrideStrategy.stints.some((st) => st.compound === req)
+      );
+      const better = stillSatisfiesMandatory && (
+        overrideStrategy.totalLaps > bestFinalStrategy.totalLaps ||
         (overrideStrategy.totalLaps === bestFinalStrategy.totalLaps &&
-          overrideStrategy.estTotalRaceTimeSecs < bestFinalStrategy.estTotalRaceTimeSecs);
+          overrideStrategy.estTotalRaceTimeSecs < bestFinalStrategy.estTotalRaceTimeSecs)
+      );
       if (better) bestFinalStrategy = overrideStrategy;
     }
     if (bestFinalStrategy !== best.strategy) {

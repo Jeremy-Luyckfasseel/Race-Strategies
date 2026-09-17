@@ -402,6 +402,32 @@ section('"Banzai" final stint — override to a faster compound when degradation
   }
 }
 
+section('"Banzai" final stint — never overrides away a mandatory compound\'s only occurrence');
+{
+  // The mandatory-compound filter runs BEFORE the banzai override, on the
+  // un-overridden candidates — it has no way to know the override step
+  // exists. The cheapest way to satisfy "Soft must appear somewhere" is
+  // often to use it for just one short stint, which can legitimately be the
+  // final one (exactly what the pattern search picks here). If the override
+  // then swapped that final stint away for a faster non-mandatory compound
+  // purely on lap-time grounds, the mandatory requirement would be silently
+  // violated by the very feature meant to only ever improve things.
+  const res = findBestStrategies({
+    raceDurationHours: 2.5, tankSize: 100, lapsPerFullTank: 22, fuelMap: 1.0,
+    compounds: [
+      { id: 'H', name: 'Hard', tireLife: 60, mandatory: false, startLapTime: '2:00', halfLapTime: '2:01', endLapTime: '2:02' },
+      { id: 'S', name: 'Soft', tireLife: 15, mandatory: true, startLapTime: '1:50', halfLapTime: '2:05', endLapTime: '2:20' },
+    ],
+    pitBaseSecs: 25, tireChangeSecs: 27, fuelRateLitersPerSec: 4.0,
+    mandatoryStops: 0, midRaceMode: false,
+  });
+  assert('Returns strategies', res.length > 0);
+  if (res.length > 0) {
+    const best = res[0];
+    assert('Mandatory Soft is still present', best.compoundIds.includes('S'), `got ${JSON.stringify(best.compoundIds)}`);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Mandatory compound filter
 // ---------------------------------------------------------------------------

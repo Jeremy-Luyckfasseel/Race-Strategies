@@ -99,7 +99,7 @@ Standalone Node process, **not** part of the Vite build. Run with
 | File | Role |
 |------|------|
 | `test.js` | `npm run test:smoke` — quick 1-hour race sanity check (not part of `npm test`). |
-| `test_comprehensive.js` | 140 assertions. Helpers, degradation curve, fuel tracking, pit timing, tyre-change economics, mandatory compound filter, mid-race mode, fuel-weight penalty. |
+| `test_comprehensive.js` | 142 assertions. Helpers, degradation curve, fuel tracking, pit timing, tyre-change economics, mandatory compound filter, mid-race mode, fuel-weight penalty. |
 | `test_invariants.js` | 1 640 bulk-generated assertions. Structural invariants, ranking dominance, multi-compound coverage, multi-driver minimums, race-time boundary, known-answer hand-computed scenarios, bulk no-overfill / no-overrun checks. |
 | `test_telemetry_learner.js` | 37 assertions. **Phase 1.** Synthetic seed+race sessions from known ground truth; tight (synthetic) vs live-trust tolerance bands; recovery, engine round-trip, confidence gating, single-stint non-identifiability, multi-compound segmentation. |
 | `test_recommendations.js` | 20 assertions. **Phase 1.** Propose-and-accept gating, no-mutation, ignore/material-shift re-surface, accepted value → valid ranked strategy. |
@@ -112,9 +112,9 @@ Standalone Node process, **not** part of the Vite build. Run with
 | `test_sync_client.js` | 11 assertions. `syncClient` ↔ `sync-server` round trip over real HTTP. |
 
 `npm test` runs all eleven suites above (every row except `test.js`) in
-sequence — 1 999 assertions total, all pure node; they print `✓/✗` lines and
+sequence — 2 001 assertions total, all pure node; they print `✓/✗` lines and
 exit non-zero on failure. **These are the guardrail — keep every assertion
-green.** 359 of the 1 999 are hand-written; 1 640 are bulk-generated invariant
+green.** 361 of the 2 001 are hand-written; 1 640 are bulk-generated invariant
 sweeps (see `test_invariants.js` above) — worth knowing which is which when
 judging how much a passing `npm test` actually proves. (Assertion counts
 inside loop-based checks scale with how many stints/strategies an input
@@ -261,6 +261,20 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
     them — the effect is local to one stint and can't plausibly change which
     BASE compound plan ranks best, so this stays cheap (verified: a
     realistic 8h/3-compound/3-driver calc goes from ~115ms to ~131ms).
+  - **Mandatory-compound safety**: the mandatory-compound filter (below) runs
+    BEFORE ranking, on the un-overridden candidates — it has no way to know
+    this override step exists. The cheapest way to satisfy "compound X must
+    appear somewhere" is often to use it for just one short stint, which can
+    legitimately be the true final one (confirmed reachable: a 2.5h race
+    with Hard non-mandatory and a fast-but-short-lived Soft marked mandatory
+    naturally puts Soft only at the final stint). Every override candidate is
+    re-checked against `mandatoryIds` before being accepted (`every(req =>
+    overrideStrategy.stints.some(st => st.compound === req))`) — without
+    this, the override would happily swap away a mandatory compound's only
+    occurrence purely on lap-time grounds, silently violating a constraint
+    the user configured. Found by code review before it shipped; see
+    `tests/test_comprehensive.js`'s "never overrides away a mandatory
+    compound's only occurrence" test.
 - Pit time = `base + (tiresChanged ? tireChange : 0) + fuelToAdd / fuelRate`
   (`calcPitStopTime`) — the three terms are strictly additive, i.e. tyre change
   and refuelling are assumed **sequential**, not done in parallel by the pit
@@ -394,7 +408,7 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
 npm run dev          # Vite dev server :5173
 npm run build        # production build → /dist
 npm run lint         # ESLint flat config
-npm test             # all eleven suites in tests/ (see §2 Tests table) — 1 999 assertions
+npm test             # all eleven suites in tests/ (see §2 Tests table) — 2 001 assertions
 npm run test:smoke   # quick 1h race test
 npm run telemetry    # start the UDP→WS relay (separate process)
 ```
