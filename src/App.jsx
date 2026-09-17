@@ -6,6 +6,7 @@ import StrategyTimeline from "./components/StrategyTimeline";
 import { useStrategy } from "./hooks/useStrategy";
 import { useTelemetry } from "./hooks/useTelemetry";
 import { useCompoundDetector } from "./hooks/useCompoundDetector";
+import { useStintLog } from "./hooks/useStintLog";
 import { useTrackMap } from "./hooks/useTrackMap";
 import { useTelemetryLearner } from "./hooks/useTelemetryLearner";
 import { applyRecommendation } from "./logic/recommendations";
@@ -17,6 +18,7 @@ import LearnerRecommendations from "./components/LearnerRecommendations";
 import NowView from "./components/NowView";
 import Onboarding from "./components/Onboarding";
 import TeamPanel from "./components/TeamPanel";
+import DriversTab from "./components/DriversTab";
 import { CAR_PRESETS } from "./logic/strategy";
 import { mergeAnalysisIntoInputs, mergeDriverSessions } from "./logic/sessionAnalysis";
 import { DEFAULT_LANG, t } from "./i18n/strings";
@@ -180,6 +182,7 @@ export default function App() {
   const autoScannedRef = useRef(false);
   const telem    = useTelemetry();
   const detector = useCompoundDetector(telem.teams);
+  const stintLog = useStintLog(telem.teams, teamCompounds, inputs.drivers);
   const { result, calculating, calculate } = useStrategy(inputs);
 
   const savePS5IPs = useCallback((ips) => {
@@ -423,6 +426,15 @@ export default function App() {
                 <span className="tab-live-dot" />
               )}
             </button>
+            <button
+              className={`tab-btn${activeTab === "drivers" ? " tab-active" : ""}`}
+              onClick={() => setActiveTab("drivers")}
+            >
+              Pilotes
+              {stintLog.pendingDriverIps.size > 0 && (
+                <span className="tab-live-dot" />
+              )}
+            </button>
           </div>
 
           {activeTab === "now" && (
@@ -484,6 +496,18 @@ export default function App() {
                   <StintTable stints={selectedStrategy.strategy.stints} />
                 </>
               )}
+            </div>
+          )}
+
+          {activeTab === "drivers" && (
+            <div className="tab-content">
+              <DriversTab
+                logs={stintLog.logs}
+                drivers={inputs.drivers}
+                minDriverTimeSecs={inputs.minDriverTimeSecs}
+                activeIp={displayIp}
+                onReset={stintLog.resetAll}
+              />
             </div>
           )}
 
@@ -565,6 +589,10 @@ export default function App() {
                           pendingConfirmation={detector.pendingIps.has(displayIp)}
                           onCompoundChange={(c) => updateTeamCompound(displayIp, c)}
                           onPitEntry={() => updateTeamCompound(displayIp, null, false)}
+                          drivers={inputs.drivers}
+                          currentDriverId={stintLog.logs.get(displayIp)?.current?.driverId ?? null}
+                          pendingDriver={stintLog.pendingDriverIps.has(displayIp)}
+                          onDriverChange={(id) => stintLog.assignDriver(displayIp, id)}
                         />
                       ) : (
                         <div className="telem-no-sel">

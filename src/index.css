@@ -2666,6 +2666,11 @@ input[type="range"]::-moz-range-thumb {
   display: flex;
   gap: 4px;
 }
+.ld-driver-picker {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
 @keyframes pit-alert {
   0%, 100% { opacity: 0.45; }
   50%       { opacity: 1; }

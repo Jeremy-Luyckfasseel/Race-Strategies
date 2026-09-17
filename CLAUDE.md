@@ -77,6 +77,10 @@ Two candidate assignments are computed per strategy and the better one is kept (
 
 Neither dominates the other (confirmed empirically — each can occasionally out-perform the other), so `findBestStrategies` runs both and picks the better one — but "better" always respects the same priority the final ranking uses first: totalLaps DESC, then race time ASC. Since per-driver compound times can differ, which driver runs a stint changes how many seconds it takes, so the two assignments can occasionally complete a different number of laps for the same compound plan; only when laps and race time are tied does driver-satisfaction (then worst-case driver total) decide. This guarantees the swap never makes a candidate rank worse than it otherwise would — it only ever improves fairness when doing so is free. This closes most cases a single greedy pass missed, but is still not a hard guarantee: with very few total stints relative to driver count (e.g. 2 drivers splitting a 2-stint race) there is only one way to split them, and a minimum set right at the theoretical maximum can still leave a driver marginally short by design — that's stint lengths (fixed by fuel/tyre physics, discrete lap counts) not dividing evenly, not an assignment-quality problem, and no algorithm can fix it without changing pit timing itself. Per-driver compound lap times override global times when set.
 
+### Live driver assignment (telemetry side)
+
+This is separate from the planner's `planDriverAssignment` above — it is manual, not computed. In the Télémétrie tab, `LiveDashboard` shows a driver picker (from `inputs.drivers`) alongside the existing compound picker; both are prompted together in one banner when a pit stop finishes (`pendingDriver` from `useStintLog`, `pendingConfirmation` from `useCompoundDetector`). Picking a driver calls `useStintLog`'s `assignDriver(ip, driverId)`, which only labels the stint that's already running — it has no effect on the strategy planner's stint lengths or ranking. The Pilotes tab (`DriversTab.jsx`) reads the resulting log to show each driver's total time against `minDriverTimeSecs` and a per-stint table (duration, tyre, avg/best/worst lap); see `stintLog.js`/`useStintLog.js` above.
+
 ### ESLint config note
 
 The `no-unused-vars` rule ignores variables whose names start with an uppercase letter or underscore (pattern: `^[A-Z_]`). This is intentional to allow unused React import-style names.
@@ -87,9 +91,11 @@ The `no-unused-vars` rule ignores variables whose names start with an uppercase 
 |------|---------|
 | `src/logic/strategy.js` | Pure-JS strategy engine (~700 lines); exports `findBestStrategies`, `TIRE_COMPOUNDS`, `CAR_PRESETS`, `formatLapTime`, `formatRaceTime`, `parseLapTime`, `isValidLapTimeStr`, `calcPitStopTime` |
 | `src/logic/compoundDetector.js` | Placeholder/note: GT7 UDP does not expose compound ID; compound tracking is user-driven only |
+| `src/logic/stintLog.js` | Pure stint-log state machine for the Pilotes tab: `openStint`/`closeStint` (folds the running lap sum/count into a duration + average, no per-lap array kept), `recordLap` (best/worst), `setCompound`, `assignDriver` |
 | `src/hooks/useStrategy.js` | React hook wrapping the engine; 600ms debounce + manual `calculate()` |
 | `src/hooks/useTelemetry.js` | WebSocket hook; exposes `connect`, `disconnect`, `sendIPs`, `scan`; returns `teams` Map<ip, packet>, `scanning`, `scanResults` |
 | `src/hooks/useCompoundDetector.js` | Watches `data.pitExit` per team; returns `pendingIps` Set + `confirmCompound(ip)` / `stopDetecting(ip)` |
+| `src/hooks/useStintLog.js` | Thin adapter over `stintLog.js`: opens a stint on pit exit (driver left `null` until `assignDriver(ip, driverId)` is called), closes it on the next pit entry, persists to `localStorage` (`gt7-stint-log`); returns `{ logs, pendingDriverIps, assignDriver, resetAll }` |
 | `src/App.jsx` | Root component; owns all state; two-tab UI (Strategy / Télémétrie); wires telemetry→strategy autofill |
 | `src/components/InputPanel.jsx` | Full sidebar form: car presets, race settings, pit timings, fuel, tire compounds, mid-race mode, drivers, live telemetry |
 | `src/components/ResultsSummary.jsx` | KPI cards + driver summary chips + strategy comparison grid (top-6, expandable) |
@@ -98,6 +104,7 @@ The `no-unused-vars` rule ignores variables whose names start with an uppercase 
 | `src/components/LiveDashboard.jsx` | Single-team telemetry widget: gear/speed, RPM/throttle/brake bars, fuel bar, tire temp+wear per corner, compound picker, SVG track map (GPS recorded at 60Hz RAF) with pit lane detection and multi-car dots |
 | `src/components/TelemetryControls.jsx` | Collapsible panel: server URL + connect/disconnect, PS5 IP list management, network scan button and results |
 | `src/components/TelemetryLeaderboard.jsx` | Multi-team table sorted by race position: lap/gap, last/best lap times, compound picker, fuel bar, pit/track status |
+| `src/components/DriversTab.jsx` | Pilotes tab: per-driver total drive time vs. `minDriverTimeSecs`, and a per-stint log (driver, tyre, laps, duration, avg/best/worst lap) for the selected team, including the in-progress stint |
 | `src/index.css` | Global dark racing theme (gold accent `#FFD700`; CSS vars for all colors) |
 | `server/telemetry-server.js` | Node.js UDP relay: receives Salsa20-encrypted GT7 packets on port 33740, relays to browser via WebSocket on port 20777; supports LAN scan for PS5s and DNS hostname resolution |
 | `tests/test.js` | Smoke test (1h race) |

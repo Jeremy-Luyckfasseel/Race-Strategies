@@ -16,11 +16,14 @@ endurance race and ranks them by laps completed, then race time. It also has a
 **live telemetry** tab that reads real-time data from one or more PS5s running
 GT7 via a standalone Node UDP→WebSocket relay.
 
-Three tabs (Phase 2): **Course** (the live single-team "Now" view — default
-landing), **Stratégie** (the calculator), and **Télémétrie** (live dashboard +
-track map; the multi-team leaderboard is demoted behind an "Advanced / LAN event"
-toggle, hidden by default). UI strings are mostly French; a lightweight
-English-primary i18n layer (`src/i18n/strings.js`) was seeded for the Now view.
+Four tabs: **Course** (the live single-team "Now" view — default landing),
+**Stratégie** (the calculator), **Télémétrie** (live dashboard + track map; the
+multi-team leaderboard is demoted behind an "Advanced / LAN event" toggle,
+hidden by default), and **Pilotes** (per-driver drive-time totals + the
+per-stint log — duration, tyre, avg/best/worst lap — built from pit-exit/entry
+events; see `stintLog.js`/`useStintLog.js` below). UI strings are mostly
+French; a lightweight English-primary i18n layer (`src/i18n/strings.js`) was
+seeded for the Now view.
 
 **The telemetry→engine learning path now exists (Phase 1).** A pure learner
 (`src/logic/telemetryLearner.js`) derives fuel burn, the fuel-weight penalty, and
@@ -45,6 +48,7 @@ selected) still runs alongside. Manual inputs remain the source of truth.
 | `raceState.js` | **Phase 2.** Live "Now" decision logic: `currentStint`, `nextAction`, `fuelMarginLaps`, `liftAndCoastVerdict`, `fuelExhaustionLap`, `pitNowTrigger` (earliest-of + reason), `medianRecent` smoothing, `RACE_STATE_CONFIG`. |
 | `connection.js` | **Phase 3.** Auto-connect helpers: `backoffDelay` (capped exponential), `isSessionActive` (onTrack AND moving), `pickAutoConnectIp` (auto-pick only a single PS5), `RECONNECT_CONFIG`. |
 | `compoundDetector.js` | Doc-only stub. States that GT7 UDP does **not** expose tire compound; compound must be set by the user. No runnable code. |
+| `stintLog.js` | Pure stint-log state machine backing the Pilotes tab: `emptyEntry`, `openStint`, `closeStint` (folds the running lap sum/count into a duration + average, keeps no per-lap array), `recordLap` (best/worst tracking), `setCompound` (fills once, never overwrites), `assignDriver`. |
 
 ### React hooks — `src/hooks/`
 
@@ -55,6 +59,7 @@ selected) still runs alongside. Manual inputs remain the source of truth.
 | `useCompoundDetector.js` | Watches each team packet's `pitExit` flag. Adds the IP to a `pendingIps` Set so the UI can prompt for a one-tap compound confirmation. `confirmCompound(ip)` / `stopDetecting(ip)` clear it. Dedupes by `${ip}-${currentLap}`. |
 | `useTrackMap.js` | App-level `requestAnimationFrame` loop that records GPS (`posX`/`posZ`) into segments + an occupancy grid, persisted to `localStorage` (`gt7_track_map_v1`). Detects the pit lane from a sustained slow zone and fires `onPitEntry`. Returns `{ mapRef, resetMap }`. |
 | `useTelemetryLearner.js` | **Phase 1.** Runs `createLearner` against the selected car's live packets (resets only when the car changes), throttles `getEstimates()` to once per new lap, pushes the confirmed compound in, and manages ignore/dismiss state. Returns `{ estimates, recommendations, ignore, clearDismiss }`. Never writes to `inputs`. |
+| `useStintLog.js` | Thin React adapter over `stintLog.js`: subscribes to `teams`, dedupes pit-entry/exit/lap-completion per team (same `${ip}-${lap}` pattern as `useCompoundDetector`), persists the log to `localStorage` (`gt7-stint-log`). Opens the first stint on the first on-track packet (defaults to the first configured driver — no pit to prompt on yet), then a new stint on every pit exit with the driver left `null` until `assignDriver(ip, driverId)` is called. Returns `{ logs: Map<ip,{history,current}>, pendingDriverIps, assignDriver, resetAll }`. |
 
 ### Components — `src/components/`
 
@@ -70,6 +75,7 @@ selected) still runs alongside. Manual inputs remain the source of truth.
 | `NowView.jsx` | **Phase 2.** The glanceable in-race "Now" view (dumb renderer over `raceState.js`): current plan, big stint countdown, next action (box lap + fuel + tyres + next compound), lift-and-coast/push verdict + pit reason, and a "freeze plan" toggle. |
 | `LearnerRecommendations.jsx` | **Phase 1.** Propose-and-accept cards (Accept / Ignore + sample-size/volatility trust line) for the learner's confident, meaningfully-different estimates. |
 | `Onboarding.jsx` | **Phase 3.** First-run overlay: firewall explainer → auto-scan → detected PS5 → optional car preset → into the Now view. Gated by a `gt7-onboarded` localStorage flag. |
+| `DriversTab.jsx` | Pilotes tab: driver time totals (reusing `ResultsSummary`'s `.driver-chip` styling, flagged when a driver is under `minDriverTimeSecs`) and a per-stint log table (driver, tyre, laps, duration, avg/best/worst lap) for the selected team, including the in-progress stint. |
 
 ### Root — `src/App.jsx`
 
@@ -110,11 +116,12 @@ Standalone Node process, **not** part of the Vite build. Run with
 | `test_groups.js` | 18 assertions. Team Groups → Races → Sessions state (pure, local, `src/logic/groups.js`). |
 | `test_sync_store.js` | 17 assertions. Self-hosted sync server's filesystem store; path-traversal rejection. |
 | `test_sync_client.js` | 11 assertions. `syncClient` ↔ `sync-server` round trip over real HTTP. |
+| `test_stint_log.js` | 19 assertions. `src/logic/stintLog.js` — the Drivers-tab stint-log state machine: stint open/close, per-lap average/best/worst folding without retaining individual lap times, compound sync, driver (re)assignment. |
 
-`npm test` runs all eleven suites above (every row except `test.js`) in
-sequence — 2 001 assertions total, all pure node; they print `✓/✗` lines and
+`npm test` runs all twelve suites above (every row except `test.js`) in
+sequence — 2 020 assertions total, all pure node; they print `✓/✗` lines and
 exit non-zero on failure. **These are the guardrail — keep every assertion
-green.** 361 of the 2 001 are hand-written; 1 640 are bulk-generated invariant
+green.** 380 of the 2 020 are hand-written; 1 640 are bulk-generated invariant
 sweeps (see `test_invariants.js` above) — worth knowing which is which when
 judging how much a passing `npm test` actually proves. (Assertion counts
 inside loop-based checks scale with how many stints/strategies an input
@@ -408,7 +415,7 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
 npm run dev          # Vite dev server :5173
 npm run build        # production build → /dist
 npm run lint         # ESLint flat config
-npm test             # all eleven suites in tests/ (see §2 Tests table) — 2 001 assertions
+npm test             # all twelve suites in tests/ (see §2 Tests table) — 2 020 assertions
 npm run test:smoke   # quick 1h race test
 npm run telemetry    # start the UDP→WS relay (separate process)
 ```
