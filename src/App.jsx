@@ -21,6 +21,7 @@ import TeamPanel from "./components/TeamPanel";
 import DriversTab from "./components/DriversTab";
 import { CAR_PRESETS } from "./logic/strategy";
 import { mergeAnalysisIntoInputs, mergeDriverSessions } from "./logic/sessionAnalysis";
+import { teamColor } from "./logic/teams";
 import { DEFAULT_LANG, t } from "./i18n/strings";
 
 const DEFAULT_INPUTS = {
@@ -516,14 +517,16 @@ export default function App() {
               const d = telem.teams.get(ip);
               const raw = teamLabels[ip];
               return {
+                id: ip,
                 label: raw ? raw.slice(0, 9) : `T${i + 1}`,
                 posX: d?.posX, posZ: d?.posZ, onTrack: d?.onTrack,
                 isOwn: ip === displayIp,
-                colorIdx: i,
+                color: teamColor(telem.teamOrder.indexOf(ip)),
               };
             });
             const lbProps = {
               teams: telem.teams,
+              teamOrder: telem.teamOrder,
               teamLabels,
               teamCompounds,
               pendingIps: detector.pendingIps,
