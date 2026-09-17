@@ -191,9 +191,17 @@ function CarDots({ live, map }) {
           // backward corrections. If we've run past the buffer (packet drought), we
           // fall back to linear extrapolation from the last two points, capped to
           // EXTRAP_MS so the dot doesn't drift far from reality.
-          const DELAY_MS  = 80;   // render this many ms behind the latest packet
+          //
+          // DELAY_MS must stay comfortably above useTelemetry's FLUSH_MS (50 ms):
+          // the gap between the two is the whole slack the loop has before a late
+          // flush pushes it into extrapolating and then snapping back. Simulated at
+          // 250 km/h, 80 ms held up at normal timing but extrapolated ~2% of frames
+          // once flushes jittered by 30 ms; 130 ms holds at 0%. The cost is that the
+          // dot sits ~9 m behind reality instead of ~5.6 m, which on this canvas is
+          // well under one pixel. If FLUSH_MS ever changes, revisit this.
+          const DELAY_MS  = 130;  // render this many ms behind the newest position
           const EXTRAP_MS = 120;  // max extrapolation past the newest buffer entry
-          const BUF_MAX   = 24;   // ~400 ms of history at 60 Hz
+          const BUF_MAX   = 24;   // ~1.2 s of history at the 20 Hz flush rate
 
           let s = smoothed.get(c.id);
           if (!s) {

@@ -11,7 +11,9 @@ import { trackLapCrossings } from '../logic/gaps';
  * a second, each cloning the teams Map and re-running every effect that
  * iterates it. Flushing at 20 Hz makes the render cost independent of how many
  * cars are connected. The track map stays smooth regardless because its dots
- * interpolate on their own rAF loop, 80 ms behind the newest sample.
+ * interpolate on their own rAF loop, rendering a fixed delay behind the newest
+ * sample — see DELAY_MS in LiveDashboard's CarDots, which must stay comfortably
+ * above this value. Changing FLUSH_MS means revisiting that.
  */
 const FLUSH_MS = 50;
 
