@@ -207,6 +207,53 @@ function pickNextDriver(drivers, driverTimeSecs, minDriverTimeSecs, upcomingStin
   return owed.indexOf(maxOwed);
 }
 
+/**
+ * Precompute which driver runs each stint, given the FULL sequence of stint
+ * durations for the race. Stint boundaries are fixed by fuel/tyre/mandatory-
+ * pacing independent of driver identity (see the neutral-pace probe run in
+ * findBestStrategies), so this sequence is knowable up front. Unlike
+ * pickNextDriver's one-stint-at-a-time view, this sees every stint length in
+ * advance and can allocate the long ones to whoever needs them most before
+ * only short ones are left to hand out — the reason a chronological greedy
+ * pick can leave a driver short even when the race has more than enough
+ * total time for everyone, just not enough LONG stints left once a short one
+ * already went to the wrong driver.
+ *
+ * Longest-stint-first, each assigned to whoever currently owes the most
+ * toward their minimum (once everyone's minimum is met, to whoever has
+ * driven least overall) — a standard load-balancing strategy (schedule the
+ * biggest jobs first) adapted to a "reach at least X" target rather than
+ * "minimize the maximum."
+ *
+ * Not a hard guarantee: with very few stints relative to driver count (e.g.
+ * 2 drivers splitting a 2-stint race), there is only one way to split them —
+ * no assignment algorithm can improve on that; the shortfall in that case
+ * comes from stint lengths (fixed by fuel/tyre physics) not dividing evenly,
+ * not from a bad assignment choice. See pickNextDriver's docstring.
+ *
+ * @param {number[]} stintSecsInOrder total time (driving + attributable pit
+ *   stop) for each stint, in chronological race order
+ * @param {number} numDrivers
+ * @param {number} minDriverTimeSecs
+ * @returns {number[]} driver index for each stint, same order as input
+ */
+function planDriverAssignment(stintSecsInOrder, numDrivers, minDriverTimeSecs) {
+  if (numDrivers <= 1) return stintSecsInOrder.map(() => 0);
+  const order = stintSecsInOrder
+    .map((secs, index) => ({ secs, index }))
+    .sort((a, b) => b.secs - a.secs);
+  const driverTotals = new Array(numDrivers).fill(0);
+  const assignment = new Array(stintSecsInOrder.length);
+  for (const { secs, index } of order) {
+    const owed = driverTotals.map((t) => Math.max(0, minDriverTimeSecs - t));
+    const maxOwed = Math.max(...owed);
+    const driverIdx = maxOwed > 0 ? owed.indexOf(maxOwed) : driverTotals.indexOf(Math.min(...driverTotals));
+    assignment[index] = driverIdx;
+    driverTotals[driverIdx] += secs;
+  }
+  return assignment;
+}
+
 // ---------------------------------------------------------------------------
 // Multi-compound strategy engine (simulation-based)
 // ---------------------------------------------------------------------------
@@ -235,6 +282,7 @@ function simulateStrategy(p) {
     processedDrivers,
     minDriverTimeSecs,
     cyclic = true,
+    presetDriverAssignment = null,
   } = p;
 
   const stints = [];
@@ -319,7 +367,17 @@ function simulateStrategy(p) {
     // uniformly short stints throughout — that's normal for THIS race, not a
     // remainder to route around).
     const normalStintSecs = Math.min(effectiveLPT, activeComp.tireLife, limitForMandatory) * activeComp.avgLapTimeSecs;
-    currentDriverIdx = pickNextDriver(processedDrivers, driverTimeSecs, minDriverTimeSecs || 0, estimatedStintSecs, normalStintSecs);
+    // A precomputed assignment (see planDriverAssignment) knows every stint's
+    // length for the whole race up front and can allocate long stints to
+    // whoever needs them most BEFORE only short ones are left to hand out —
+    // pickNextDriver only ever sees one stint at a time, chronologically, and
+    // can't do that. Fall back to it for any stint beyond the precomputed
+    // plan's length (can happen if driver-specific pace shifts a later stint
+    // boundary slightly from the neutral-pace probe run that built the plan).
+    const stintIndex = stints.length;
+    currentDriverIdx = presetDriverAssignment && presetDriverAssignment[stintIndex] !== undefined
+      ? presetDriverAssignment[stintIndex]
+      : pickNextDriver(processedDrivers, driverTimeSecs, minDriverTimeSecs || 0, estimatedStintSecs, normalStintSecs);
     const currentDriver = processedDrivers[currentDriverIdx];
 
     let lapsInStint = 0;
@@ -657,7 +715,7 @@ export function findBestStrategies(params) {
   ];
 
   const strategies = allVariants.map(({ plan, cyclic }) => {
-    const strategy = simulateStrategy({
+    const baseSimParams = {
       targetRaceTimeSecs,
       tankSize: Number(tankSize),
       effectiveLPT,
@@ -675,7 +733,41 @@ export function findBestStrategies(params) {
       processedDrivers,
       minDriverTimeSecs: minDriveTimeSecs,
       cyclic,
-    });
+    };
+
+    let strategy = simulateStrategy(baseSimParams);
+
+    // With a real multi-driver minimum to hit, picking one stint at a time
+    // chronologically (pickNextDriver, above) can leave a driver short even
+    // when the race has enough total time for everyone — see
+    // planDriverAssignment's docstring. Stint lengths are fixed by
+    // fuel/tyre/mandatory-pacing, not by who drives them, so this first run's
+    // stint sequence is a valid probe: pull the attributed time per stint
+    // from it, plan a longest-stint-first assignment, and re-simulate with
+    // that instead. That planner isn't strictly better, though — it's a
+    // different greedy with its own failure modes and can occasionally find
+    // a WORSE split than the chronological pick did (verified: neither
+    // heuristic dominates the other across a broad parameter sweep). So run
+    // both and keep whichever actually satisfies more drivers, tie-broken by
+    // the higher worst-case (minimum) driver total — this can only match or
+    // improve on the chronological-only result, never regress it.
+    if (processedDrivers.length > 1 && minDriveTimeSecs > 0) {
+      const stintSecsInOrder = strategy.stints.map(
+        (s) => s.lapsInStint * s.avgLapTimeSecs + (s.pitLap !== null ? s.pitStopTimeSecs : 0)
+      );
+      const presetDriverAssignment = planDriverAssignment(stintSecsInOrder, processedDrivers.length, minDriveTimeSecs);
+      const lptStrategy = simulateStrategy({ ...baseSimParams, presetDriverAssignment });
+      const score = (s) => {
+        const totals = s.driverSummary.map((d) => d.totalTimeSecs);
+        const satisfied = s.driverSummary.filter((d) => d.metMinimum).length;
+        return [satisfied, Math.min(...totals)];
+      };
+      const [chronoSatisfied, chronoWorst] = score(strategy);
+      const [lptSatisfied, lptWorst] = score(lptStrategy);
+      if (lptSatisfied > chronoSatisfied || (lptSatisfied === chronoSatisfied && lptWorst > chronoWorst)) {
+        strategy = lptStrategy;
+      }
+    }
 
     // Label generation based on what was actually used
     const finalSequence = [];

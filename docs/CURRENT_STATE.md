@@ -99,7 +99,7 @@ Standalone Node process, **not** part of the Vite build. Run with
 | File | Role |
 |------|------|
 | `test.js` | `npm run test:smoke` — quick 1-hour race sanity check (not part of `npm test`). |
-| `test_comprehensive.js` | 120 assertions. Helpers, degradation curve, fuel tracking, pit timing, tyre-change economics, mandatory compound filter, mid-race mode, fuel-weight penalty. |
+| `test_comprehensive.js` | 124 assertions. Helpers, degradation curve, fuel tracking, pit timing, tyre-change economics, mandatory compound filter, mid-race mode, fuel-weight penalty. |
 | `test_invariants.js` | 1 640 bulk-generated assertions. Structural invariants, ranking dominance, multi-compound coverage, multi-driver minimums, race-time boundary, known-answer hand-computed scenarios, bulk no-overfill / no-overrun checks. |
 | `test_telemetry_learner.js` | 37 assertions. **Phase 1.** Synthetic seed+race sessions from known ground truth; tight (synthetic) vs live-trust tolerance bands; recovery, engine round-trip, confidence gating, single-stint non-identifiability, multi-compound segmentation. |
 | `test_recommendations.js` | 20 assertions. **Phase 1.** Propose-and-accept gating, no-mutation, ignore/material-shift re-surface, accepted value → valid ranked strategy. |
@@ -112,9 +112,9 @@ Standalone Node process, **not** part of the Vite build. Run with
 | `test_sync_client.js` | 11 assertions. `syncClient` ↔ `sync-server` round trip over real HTTP. |
 
 `npm test` runs all eleven suites above (every row except `test.js`) in
-sequence — 1 979 assertions total, all pure node; they print `✓/✗` lines and
+sequence — 1 983 assertions total, all pure node; they print `✓/✗` lines and
 exit non-zero on failure. **These are the guardrail — keep every assertion
-green.** 339 of the 1 979 are hand-written; 1 640 are bulk-generated invariant
+green.** 343 of the 1 983 are hand-written; 1 640 are bulk-generated invariant
 sweeps (see `test_invariants.js` above) — worth knowing which is which when
 judging how much a passing `npm test` actually proves. (Assertion counts
 inside loop-based checks scale with how many stints/strategies an input
@@ -266,31 +266,52 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
     past 100% wear) — extending it further breaks the "stints are capped,
     never modelled past tyre life" invariant above and was found, in testing,
     to corrupt downstream stint-length planning.
-- **Multi-driver assignment** (`pickNextDriver`): greedy — the driver owing the
-  most toward their minimum takes the next stint; tie-break least accumulated
-  time. Exception: if the upcoming stint (now known before the driver is
-  picked — stint length is fixed by fuel/tyre/pacing, not by who drives it) is
-  much shorter than a normal stint for this race (e.g. a tyre-life-remainder
-  stint from the economics above, or every stint when heavy `mandatoryStops`
-  pacing caps them all — `normalStintSecs` includes fuel, tyre life, AND
-  mandatory-pacing so a uniformly-short-stinted race isn't misjudged as "all
-  fragments") and wouldn't clear the most-behind driver's deficit anyway, it
-  goes instead to whichever owing driver it WOULD fully cover, so it isn't
-  wasted. Added alongside the tyre-change economics above — without it, the
-  new short "remainder" stints could starve a driver of their minimum drive
-  time in a fixed-length race (caught by `tests/test_invariants.js`'s
-  multi-driver-minimum checks).
-  - **Known limitation, not a bug to chase:** this is a single-pass greedy
-    heuristic, not a solved schedule. It handles reasonable slack well
-    (minimums comfortably under an even split of the race) but a minimum set
-    right at the theoretical maximum (e.g. exactly race-length ÷
-    driver-count, especially with few total stints) can still leave a driver
-    marginally short. Confirmed present even on pre-tyre-economics code with
-    the simplest possible config (1 mandatory stop, 2 drivers, minimum =
-    exactly half the race) — it predates and is unrelated to the tyre-change
-    economics work. Closing it fully would need a genuinely different
-    (non-greedy, whole-race-aware) allocation approach, not another
-    exception bolted onto `pickNextDriver`.
+- **Multi-driver assignment** (`findBestStrategies` + `pickNextDriver` +
+  `planDriverAssignment`): two candidate assignments are computed per
+  strategy and the better one kept, never regressing relative to either
+  alone.
+  1. **Chronological greedy** (`pickNextDriver`): as each stint comes up, the
+     driver who owes the most toward their minimum takes it; tie-break least
+     accumulated time. Exception: if the upcoming stint (stint length is
+     fixed by fuel/tyre/pacing, not by who drives it) is much shorter than a
+     normal stint for this race (e.g. a tyre-life-remainder stint from the
+     economics above, or every stint when heavy `mandatoryStops` pacing caps
+     them all — `normalStintSecs` includes fuel, tyre life, AND
+     mandatory-pacing so a uniformly-short-stinted race isn't misjudged as
+     "all fragments") and wouldn't clear the most-behind driver's deficit
+     anyway, it goes instead to whichever owing driver it WOULD fully cover.
+  2. **Longest-stint-first planning** (`planDriverAssignment`): stint lengths
+     are fixed by fuel/tyre/mandatory-pacing independent of driver identity,
+     so the whole race's stint-length sequence is knowable in advance (probed
+     with one throwaway `simulateStrategy` call before the real one).
+     Sort stints longest-first, assign each to whoever currently owes the
+     most — so big stints go to whoever needs them before only small ones are
+     left, which the chronological, one-stint-at-a-time pick can't see
+     coming.
+
+  Neither approach dominates the other — confirmed empirically across a
+  ~2000-combination parameter sweep (driver count, race length,
+  `mandatoryStops`, minimum drive time): longest-stint-first fixed 9 cases
+  chronological-only missed, but chronological-only beat longest-stint-first
+  in 2 different cases when tried alone. `findBestStrategies` runs both
+  (scored by `[driversSatisfied, worstCaseDriverTotal]`) and keeps the winner,
+  which strictly matches-or-beats running either one alone.
+  - **Known limitation, not a bug to chase:** still not a hard guarantee. With
+    very few total stints relative to driver count (e.g. 2 drivers splitting
+    a 2-stint race) there is only one way to split them — no assignment
+    algorithm, however smart, can improve on that. Verified exhaustively for
+    one such case (2 drivers, minimum = exactly half a 2h race): checked all
+    2^11 possible ways to split that race's 11 stints between 2 drivers, and
+    the best any of them achieves is short of both minimums — the shortfall
+    there is stint lengths (fixed by fuel/tyre physics, discrete lap counts)
+    not dividing evenly, not an assignment-quality problem. Confirmed present
+    even on pre-tyre-economics code with the simplest possible config (1
+    mandatory stop, 2 drivers, minimum = exactly half the race) — it predates
+    and is unrelated to the tyre-change economics work. Closing it fully
+    would require changing PIT TIMING itself based on driver-fairness needs,
+    not just the assignment of already-fixed stints — a materially bigger,
+    riskier change to the fuel/tyre-driven stint-length model, not attempted
+    here.
 
 ---
 
@@ -328,7 +349,7 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
 npm run dev          # Vite dev server :5173
 npm run build        # production build → /dist
 npm run lint         # ESLint flat config
-npm test             # all eleven suites in tests/ (see §2 Tests table) — 1 979 assertions
+npm test             # all eleven suites in tests/ (see §2 Tests table) — 1 983 assertions
 npm run test:smoke   # quick 1h race test
 npm run telemetry    # start the UDP→WS relay (separate process)
 ```

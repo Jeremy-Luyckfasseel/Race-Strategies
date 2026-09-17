@@ -265,6 +265,36 @@ section('Multi-driver minimums survive short tyre-economics "remainder" stints')
   }
 }
 
+section('Multi-driver minimums — longest-stint-first planning beats pure chronological greedy');
+{
+  // Heavy mandatoryStops (8 in a 2h race) forces many small, uneven stints.
+  // Picking one stint at a time chronologically (always "whoever owes most
+  // right now") can leave a driver short even though the race has enough
+  // total time for everyone, simply because the big stints ran out before
+  // that driver's turn came up again. planDriverAssignment sees every
+  // stint's length up front and assigns the big ones first.
+  const res = findBestStrategies({
+    raceDurationHours: 2, tankSize: 90, lapsPerFullTank: 30, fuelMap: 1.0,
+    compounds: [{ id: 'M', name: 'Medium', tireLife: 30, mandatory: false,
+      startLapTime: '2:00', halfLapTime: '2:01', endLapTime: '2:03' }],
+    pitBaseSecs: 25, tireChangeSecs: 27, fuelRateLitersPerSec: 4.0,
+    mandatoryStops: 8, midRaceMode: false,
+    drivers: [
+      { id: 'd1', name: 'Alice', compounds: {} },
+      { id: 'd2', name: 'Bob', compounds: {} },
+      { id: 'd3', name: 'Carol', compounds: {} },
+    ],
+    minDriverTimeSecs: 35 * 60,
+  });
+  assert('Returns strategies', res.length > 0);
+  if (res.length > 0) {
+    const summary = res[0].strategy.driverSummary;
+    for (const d of summary) {
+      assert(`${d.name}: metMinimum`, d.metMinimum, `totalTimeSecs=${d.totalTimeSecs?.toFixed(0)}s, required=2100`);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Mandatory compound filter
 // ---------------------------------------------------------------------------
