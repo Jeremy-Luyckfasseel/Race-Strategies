@@ -113,36 +113,46 @@ function CarDots({ live, map }) {
     // Per-car lerped positions: colorIdx → { cx, cy }
     const smoothed = new Map();
 
+    // My car keeps its own team colour and is marked by a halo and a slightly
+    // larger dot — not by a different colour, or it would stop matching its
+    // leaderboard row. Cars in the pits stay on the map, dimmed, so you can
+    // see who is boxed rather than having them blink out of existence.
     const mkDot = (isOwn, color, label) => {
       const g = document.createElementNS(NS, 'g');
       if (isOwn) {
         const ring = document.createElementNS(NS, 'circle');
-        ring.setAttribute('r', '7');
-        ring.setAttribute('fill', 'rgba(94,174,216,0.2)');
+        ring.setAttribute('r', '8');
+        ring.setAttribute('fill', color);
+        ring.setAttribute('fill-opacity', '0.22');
+        ring.setAttribute('stroke', color);
+        ring.setAttribute('stroke-opacity', '0.55');
+        ring.setAttribute('stroke-width', '1');
         g.appendChild(ring);
-        const dot = document.createElementNS(NS, 'circle');
-        dot.setAttribute('r', '4'); dot.setAttribute('fill', '#5EAED8');
-        g.appendChild(dot);
-        const txt = document.createElementNS(NS, 'text');
-        txt.setAttribute('text-anchor', 'middle'); txt.setAttribute('y', '-9');
-        txt.setAttribute('fill', '#5EAED8'); txt.setAttribute('font-size', '8');
-        txt.setAttribute('font-weight', '700');
-        txt.setAttribute('font-family', 'Barlow Condensed, sans-serif');
-        txt.textContent = label || '';
-        g.appendChild(txt);
-      } else {
-        const dot = document.createElementNS(NS, 'circle');
-        dot.setAttribute('r', '4'); dot.setAttribute('fill', color);
-        dot.setAttribute('fill-opacity', '0.85');
-        g.appendChild(dot);
-        const txt = document.createElementNS(NS, 'text');
-        txt.setAttribute('text-anchor', 'middle'); txt.setAttribute('y', '-7');
-        txt.setAttribute('fill', color); txt.setAttribute('fill-opacity', '0.90');
-        txt.setAttribute('font-size', '8'); txt.setAttribute('font-weight', '700');
-        txt.setAttribute('font-family', 'Barlow Condensed, sans-serif');
-        txt.textContent = label || '';
-        g.appendChild(txt);
       }
+
+      const dot = document.createElementNS(NS, 'circle');
+      dot.setAttribute('r', isOwn ? '4.5' : '4');
+      dot.setAttribute('fill', color);
+      if (!isOwn) dot.setAttribute('fill-opacity', '0.85');
+      dot.setAttribute('stroke', 'rgba(0,0,0,0.55)');
+      dot.setAttribute('stroke-width', '0.75');
+      g.appendChild(dot);
+
+      const txt = document.createElementNS(NS, 'text');
+      txt.setAttribute('text-anchor', 'middle');
+      txt.setAttribute('y', isOwn ? '-10' : '-7');
+      txt.setAttribute('fill', color);
+      txt.setAttribute('font-size', isOwn ? '8.5' : '7.5');
+      txt.setAttribute('font-weight', isOwn ? '800' : '700');
+      txt.setAttribute('font-family', 'Barlow Condensed, sans-serif');
+      // Dark outline painted behind the glyphs so short tags stay readable
+      // where a dozen cars pile up on the same corner.
+      txt.setAttribute('stroke', 'rgba(0,0,0,0.75)');
+      txt.setAttribute('stroke-width', '2');
+      txt.setAttribute('paint-order', 'stroke');
+      txt.textContent = label || '';
+      g.appendChild(txt);
+
       return g;
     };
 
@@ -158,7 +168,9 @@ function CarDots({ live, map }) {
         const ox     = PAD + ((CANVAS_W - PAD*2) - rangeX * scale) / 2;
         const oz     = PAD + ((CANVAS_H - PAD*2) - rangeZ * scale) / 2;
 
-        const active = cars.filter(c => c.onTrack && c.posX != null);
+        // Keep boxed cars on the map (dimmed) instead of dropping them — where
+        // a rival is sitting in the pit lane is exactly what a pit wall wants.
+        const active = cars.filter(c => c.posX != null);
 
         // Cull smoothed entries for cars no longer active
         const activeIds = new Set(active.map(c => c.id));
@@ -231,14 +243,19 @@ function CarDots({ live, map }) {
 
           const child = root.children[i];
 
-          // Rebuild inner elements only when car identity changes
-          if (child._carId !== c.id) {
-            child._carId = c.id;
+          // Rebuild inner elements only when what they draw actually changes —
+          // which car this slot holds, whether it is mine, or its name after a
+          // rename. Its colour is fixed for the session, so it is not a factor.
+          const shape = `${c.id}|${c.isOwn ? 1 : 0}|${c.label}`;
+          if (child._carShape !== shape) {
+            child._carShape = shape;
             while (child.firstChild) child.removeChild(child.firstChild);
             const fresh = mkDot(c.isOwn, color, c.label);
             while (fresh.firstChild) child.appendChild(fresh.firstChild);
           }
 
+          // Pit state flips often, so dim in place rather than rebuilding.
+          child.setAttribute('opacity', c.onTrack ? '1' : '0.35');
           child.setAttribute('transform', `translate(${scx.toFixed(1)},${scy.toFixed(1)})`);
         });
       }

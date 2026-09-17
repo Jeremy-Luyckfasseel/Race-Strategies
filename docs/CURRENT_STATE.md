@@ -48,7 +48,7 @@ selected) still runs alongside. Manual inputs remain the source of truth.
 | `raceState.js` | **Phase 2.** Live "Now" decision logic: `currentStint`, `nextAction`, `fuelMarginLaps`, `liftAndCoastVerdict`, `fuelExhaustionLap`, `pitNowTrigger` (earliest-of + reason), `medianRecent` smoothing, `RACE_STATE_CONFIG`. |
 | `connection.js` | **Phase 3.** Auto-connect helpers: `backoffDelay` (capped exponential), `isSessionActive` (onTrack AND moving), `pickAutoConnectIp` (auto-pick only a single PS5), `RECONNECT_CONFIG`. |
 | `compoundDetector.js` | Doc-only stub. States that GT7 UDP does **not** expose tire compound; compound must be set by the user. No runnable code. |
-| `teams.js` | Multi-car display helpers: the 16-colour `TEAM_PALETTE` + `teamColor(orderIndex)` (shared by the leaderboard and the track map so a car's colour matches in both and never changes as it gains places), append-only `withTeamOrder`, `coalescePacket` (carries one-shot pit edges across a flush window), `isStalePacket`/`dropStaleTeams` + `TEAM_STALE_MS`. |
+| `teams.js` | Multi-car display helpers: `resolveActiveCars` (splits `strategyIp` — my car, owning drivers/stint log/learner/auto-fill — from `displayIp`, the car being inspected, so clicking a rival never repoints my strategy), the 16-colour `TEAM_PALETTE` + `teamColor(orderIndex)` (shared by the leaderboard and the track map so a car's colour matches in both and never changes as it gains places), append-only `withTeamOrder`, `coalescePacket` (carries one-shot pit edges across a flush window), `isStalePacket`/`dropStaleTeams` + `TEAM_STALE_MS`. |
 | `stintLog.js` | Pure stint-log state machine backing the Pilotes tab: `emptyEntry`, `openStint`, `closeStint` (folds the running lap sum/count into a duration + average, keeps no per-lap array), `reopenStint` (pit-exit's entry point — archives an already-open `current` first if its closing pit-entry packet was never seen, rather than overwriting and losing it), `recordLap` (best/worst tracking) and `recordLapIfClean` (same, but skips the out-lap and any lap paused/off-track when it completed), `setCompound` (fills once, never overwrites), `assignDriver`. |
 
 ### React hooks — `src/hooks/`
@@ -71,8 +71,8 @@ selected) still runs alongside. Manual inputs remain the source of truth.
 | `StrategyTimeline.jsx` | Recharts horizontal bar chart of stints + pit windows. |
 | `StintTable.jsx` | Lap-by-lap stint detail; red rows for warnings. |
 | `LiveDashboard.jsx` | Single-team widget: gear/speed, RPM/throttle/brake/fuel bars, per-corner tire temp + wear, compound picker, and the SVG `TrackMap` (exported named). |
-| `TelemetryControls.jsx` | Server URL + connect/disconnect, PS5 IP list editor, LAN scan button + results. **No team-name editor** — the only thing that ever sets a team label is the auto-scan assigning a resolved hostname, so a PS5 whose IP has no reverse-DNS record shows as a bare IP with no way to rename it. |
-| `TelemetryLeaderboard.jsx` | Multi-team table sorted by race position: lap/gap, last/best lap, compound picker, fuel bar, pit/track status. Colours each row via `teamColor(teamOrder.indexOf(ip))` so a car's colour is fixed for the session and matches its dot on the track map. Revealed automatically once a second car connects. |
+| `TelemetryControls.jsx` | Server URL + connect/disconnect, PS5 IP list editor, LAN scan button + results. Team naming lives in the leaderboard, not here — the auto-scan still seeds a label from a resolved hostname. |
+| `TelemetryLeaderboard.jsx` | Multi-team table sorted by race position: lap/gap, last/best lap, compound picker, fuel bar, pit/track status. Colours each row via `teamColor(teamOrder.indexOf(ip))` so a car's colour is fixed for the session and matches its dot on the track map. Revealed automatically once a second car connects. **Also the team-management surface:** a ★ per row marks *my* team (persisted to `gt7-my-team`), and ✎ / double-click renames any team inline. |
 | `NowView.jsx` | **Phase 2.** The glanceable in-race "Now" view (dumb renderer over `raceState.js`): current plan, big stint countdown, next action (box lap + fuel + tyres + next compound), lift-and-coast/push verdict + pit reason, and a "freeze plan" toggle. |
 | `LearnerRecommendations.jsx` | **Phase 1.** Propose-and-accept cards (Accept / Ignore + sample-size/volatility trust line) for the learner's confident, meaningfully-different estimates. |
 | `Onboarding.jsx` | **Phase 3.** First-run overlay: firewall explainer → auto-scan → detected PS5 → optional car preset → into the Now view. Gated by a `gt7-onboarded` localStorage flag. |
@@ -117,13 +117,13 @@ Standalone Node process, **not** part of the Vite build. Run with
 | `test_groups.js` | 18 assertions. Team Groups → Races → Sessions state (pure, local, `src/logic/groups.js`). |
 | `test_sync_store.js` | 17 assertions. Self-hosted sync server's filesystem store; path-traversal rejection. |
 | `test_sync_client.js` | 11 assertions. `syncClient` ↔ `sync-server` round trip over real HTTP. |
-| `test_teams.js` | 36 assertions. `src/logic/teams.js` — the 16-colour palette, `teamColor` fallbacks, append-only `withTeamOrder`, `isStalePacket`/`dropStaleTeams` (same-reference returns when nothing changed), and the key multi-car invariant: a car keeps its colour when another car drops out. |
+| `test_teams.js` | 45 assertions. `src/logic/teams.js` — the 16-colour palette, `teamColor` fallbacks, append-only `withTeamOrder`, `isStalePacket`/`dropStaleTeams` (same-reference returns when nothing changed), and the key multi-car invariant: a car keeps its colour when another car drops out. |
 | `test_stint_log.js` | 29 assertions. `src/logic/stintLog.js` — the Drivers-tab stint-log state machine: stint open/close, per-lap average/best/worst folding without retaining individual lap times, compound sync, driver (re)assignment, `reopenStint`'s defensive archive-before-overwrite (a missed pit-entry packet must not lose the prior stint), `recordLapIfClean`'s out-lap/paused/off-track exclusion. |
 
 `npm test` runs all thirteen suites above (every row except `test.js`) in
-sequence — 2 066 assertions total, all pure node; they print `✓/✗` lines and
+sequence — 2 075 assertions total, all pure node; they print `✓/✗` lines and
 exit non-zero on failure. **These are the guardrail — keep every assertion
-green.** 426 of the 2 066 are hand-written; 1 640 are bulk-generated invariant
+green.** 435 of the 2 075 are hand-written; 1 640 are bulk-generated invariant
 sweeps (see `test_invariants.js` above) — worth knowing which is which when
 judging how much a passing `npm test` actually proves. (Assertion counts
 inside loop-based checks scale with how many stints/strategies an input
@@ -417,7 +417,7 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
 npm run dev          # Vite dev server :5173
 npm run build        # production build → /dist
 npm run lint         # ESLint flat config
-npm test             # all thirteen suites in tests/ (see §2 Tests table) — 2 066 assertions
+npm test             # all thirteen suites in tests/ (see §2 Tests table) — 2 075 assertions
 npm run test:smoke   # quick 1h race test
 npm run telemetry    # start the UDP→WS relay (separate process)
 ```

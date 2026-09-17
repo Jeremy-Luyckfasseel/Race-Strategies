@@ -17,6 +17,7 @@ import {
   isStalePacket,
   dropStaleTeams,
   coalescePacket,
+  resolveActiveCars,
 } from '../src/logic/teams.js';
 
 let passed = 0;
@@ -69,6 +70,37 @@ section('withTeamOrder — append-only, stable references');
 
   const two = withTeamOrder(one, '10.0.0.2');
   assert('a second team is appended after the first', two[0] === '10.0.0.1' && two[1] === '10.0.0.2');
+}
+
+section('resolveActiveCars — inspecting a rival must not repoint my strategy');
+{
+  const field = ['a', 'b', 'c'];
+
+  const mine = resolveActiveCars({ myTeamIp: 'b', teamKeys: field });
+  assert('my team drives the strategy', mine.strategyIp === 'b');
+  assert('and is shown by default', mine.displayIp === 'b');
+
+  // The whole point: clicking a rival to inspect them must leave the strategy alone.
+  const peeking = resolveActiveCars({ myTeamIp: 'b', selectedIp: 'c', teamKeys: field });
+  assert('inspecting a rival changes only the displayed car', peeking.displayIp === 'c');
+  assert('my strategy still points at my own car', peeking.strategyIp === 'b');
+
+  // A single car needs no ceremony.
+  const solo = resolveActiveCars({ teamKeys: ['only'] });
+  assert('a lone car is assumed to be mine', solo.strategyIp === 'only' && solo.displayIp === 'only');
+
+  // DECISION 4 — never auto-pick among several.
+  const crowd = resolveActiveCars({ teamKeys: field });
+  assert('a full field with no team marked picks nothing', crowd.strategyIp === null && crowd.displayIp === null);
+  assert('but an explicit click still shows that car',
+    resolveActiveCars({ selectedIp: 'a', teamKeys: field }).displayIp === 'a');
+
+  // My car being off or in the garage does not make it stop being mine.
+  const offline = resolveActiveCars({ myTeamIp: 'gone', teamKeys: field });
+  assert('a team marked mine stays mine while not transmitting', offline.strategyIp === 'gone');
+
+  assert('no teams at all resolves to nothing',
+    resolveActiveCars({}).strategyIp === null);
 }
 
 section('coalescePacket — a pit edge must survive the flush window');

@@ -21,7 +21,7 @@ import TeamPanel from "./components/TeamPanel";
 import DriversTab from "./components/DriversTab";
 import { CAR_PRESETS } from "./logic/strategy";
 import { mergeAnalysisIntoInputs, mergeDriverSessions } from "./logic/sessionAnalysis";
-import { teamColor } from "./logic/teams";
+import { teamColor, resolveActiveCars } from "./logic/teams";
 import { DEFAULT_LANG, t } from "./i18n/strings";
 
 const DEFAULT_INPUTS = {
@@ -179,12 +179,19 @@ export default function App() {
     catch { return {}; }
   });
 
+  // Which car is mine. Everything strategy-side (drivers, stint log, learner,
+  // mid-race auto-fill) follows this and not the row you happen to be clicking.
+  const [myTeamIp, setMyTeamIp] = useState(() => {
+    try { return localStorage.getItem("gt7-my-team") || ""; }
+    catch { return ""; }
+  });
+
   const handledPitsRef = useRef(new Set());
   const autoScannedRef = useRef(false);
   const autoOpenedLbRef = useRef(false);
   const telem    = useTelemetry();
   const detector = useCompoundDetector(telem.teams);
-  const stintLog = useStintLog(telem.teams, teamCompounds, inputs.drivers);
+  const stintLog = useStintLog(telem.teams, teamCompounds, inputs.drivers, myTeamIp || null);
   const { result, calculating, calculate } = useStrategy(inputs);
 
   const savePS5IPs = useCallback((ips) => {
@@ -206,15 +213,28 @@ export default function App() {
   const teamKeys = useMemo(() => [...telem.teams.keys()], [telem.teams]);
   const getTeamLabel = useCallback((ip) => teamLabels[ip] || ip, [teamLabels]);
 
-  const activeIp = telemSelectedIp || (teamKeys.length === 1 ? teamKeys[0] : null);
+  // strategyIp = my car (owns drivers/stint log/learner/auto-fill).
+  // displayIp  = the car the dashboard is inspecting, free to follow a click.
+  const { strategyIp, displayIp } = useMemo(
+    () => resolveActiveCars({ myTeamIp, selectedIp: telemSelectedIp, teamKeys }),
+    [myTeamIp, telemSelectedIp, teamKeys],
+  );
 
-  // Background telemetry learner for the selected car. Surfaces propose-and-accept
-  // recommendations; never writes to `inputs` except via an explicit Accept below.
+  const setMyTeam = useCallback((ip) => {
+    setMyTeamIp((prev) => {
+      const next = prev === ip ? "" : ip;
+      try { localStorage.setItem("gt7-my-team", next); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  // The learner proposes changes to MY car model, so it must read my car —
+  // never whichever rival's row happens to be selected.
   const learner = useTelemetryLearner({
-    activeIp,
-    data: activeIp ? telem.teams.get(activeIp) : null,
+    activeIp: strategyIp,
+    data: strategyIp ? telem.teams.get(strategyIp) : null,
     inputs,
-    confirmedCompoundId: (activeIp && teamCompounds[activeIp]) || "",
+    confirmedCompoundId: (strategyIp && teamCompounds[strategyIp]) || "",
   });
 
   const acceptRecommendation = useCallback((rec) => {
@@ -229,12 +249,12 @@ export default function App() {
   // and with no recorded bounds the map cannot place ANY car's dot, so the
   // whole field stayed invisible. (Which car is *mine* is a separate question,
   // still answered only by an explicit pick, per DECISION 4.)
-  const mapSourceIp = activeIp ?? teamKeys[0] ?? null;
+  const mapSourceIp = displayIp ?? teamKeys[0] ?? null;
   const { mapRef, resetMap } = useTrackMap(
     telem.teams.get(mapSourceIp ?? ''),
     // Only my own car entering the pits may clear my compound — never some
     // other team's car that happens to be tracing the outline.
-    () => { if (mapSourceIp === activeIp && activeIp) updateTeamCompound(activeIp, null, false); },
+    () => { if (strategyIp && mapSourceIp === strategyIp) updateTeamCompound(strategyIp, null, false); },
   );
 
   const updateTeamLabel = useCallback((ip, label) => {
@@ -316,7 +336,6 @@ export default function App() {
   const ranked = result?.ranked ?? [];
   const selectedStrategy = ranked[selectedIndex] ?? best;
 
-  const displayIp = activeIp;
 
   // --- "Now" view live state (Phase 2) ---
   // Freeze-plan toggle (DECISION 2): hold the plan steady so nothing shifts
@@ -340,13 +359,13 @@ export default function App() {
     return lpt > 0 ? tank / lpt : null;
   }, [learner.estimates, inputs.lapsPerFullTank, inputs.tankSize]);
 
-  const nowCompoundId = (activeIp && teamCompounds[activeIp]) || null;
+  const nowCompoundId = (strategyIp && teamCompounds[strategyIp]) || null;
   const nowTireLife = nowCompoundId
     ? Number(inputs.compounds.find((c) => c.id === nowCompoundId)?.tireLife) || 0
     : 0;
 
   // --- Onboarding (Phase 3, Task 3.3) ---
-  const detectedIp = activeIp || pickAutoConnectIp(telem.scanResults);
+  const detectedIp = strategyIp || pickAutoConnectIp(telem.scanResults);
   const completeOnboarding = useCallback(() => {
     try { localStorage.setItem("gt7-onboarded", "1"); } catch { /* ignore */ }
     setOnboarded(true);
@@ -466,14 +485,14 @@ export default function App() {
                 onIgnore={learner.ignore}
               />
               <NowView
-                data={activeIp ? telem.teams.get(activeIp) : null}
+                data={strategyIp ? telem.teams.get(strategyIp) : null}
                 strategy={nowBest?.strategy ?? null}
                 planLabel={nowBest?.label ?? null}
                 litersPerLap={nowLitersPerLap}
                 tireLife={nowTireLife}
                 frozen={planFrozen}
                 onToggleFreeze={toggleFreeze}
-                label={activeIp ? getTeamLabel(activeIp) : null}
+                label={strategyIp ? getTeamLabel(strategyIp) : null}
                 lang={DEFAULT_LANG}
               />
             </div>
@@ -526,7 +545,7 @@ export default function App() {
                 logs={stintLog.logs}
                 drivers={inputs.drivers}
                 minDriverTimeSecs={inputs.minDriverTimeSecs}
-                activeIp={displayIp}
+                activeIp={strategyIp}
                 onReset={stintLog.resetAll}
               />
             </div>
@@ -538,9 +557,13 @@ export default function App() {
               const raw = teamLabels[ip];
               return {
                 id: ip,
-                label: raw ? raw.slice(0, 9) : `T${i + 1}`,
+                // A short tag, not the full name: a dozen 9-character labels on
+                // a 420px-wide map is an unreadable pile on the start grid. The
+                // colour plus 3 letters identifies the car; the leaderboard has
+                // the full name.
+                label: raw ? raw.trim().slice(0, 3).toUpperCase() : `T${i + 1}`,
                 posX: d?.posX, posZ: d?.posZ, onTrack: d?.onTrack,
-                isOwn: ip === displayIp,
+                isOwn: ip === strategyIp,
                 color: teamColor(telem.teamOrder.indexOf(ip)),
               };
             });
@@ -553,6 +576,9 @@ export default function App() {
               selectedIp: displayIp,
               onSelect: setTelemSelectedIp,
               onCompoundChange: (ip, c) => updateTeamCompound(ip, c),
+              myTeamIp,
+              onSetMyTeam: setMyTeam,
+              onRenameTeam: updateTeamLabel,
             };
             return (
               <div className="tab-content tab-content--telemetry">
@@ -612,7 +638,9 @@ export default function App() {
                           pendingConfirmation={detector.pendingIps.has(displayIp)}
                           onCompoundChange={(c) => updateTeamCompound(displayIp, c)}
                           onPitEntry={() => updateTeamCompound(displayIp, null, false)}
-                          drivers={inputs.drivers}
+                          // Only my own car has a driver roster — offering my
+                          // drivers on a rival's dashboard would just log a lie.
+                          drivers={displayIp === strategyIp ? inputs.drivers : null}
                           currentDriverId={stintLog.logs.get(displayIp)?.current?.driverId ?? null}
                           pendingDriver={stintLog.pendingDriverIps.has(displayIp)}
                           onDriverChange={(id) => stintLog.assignDriver(displayIp, id)}

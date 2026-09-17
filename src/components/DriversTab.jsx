@@ -81,7 +81,10 @@ export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp,
         </div>
 
         {!activeIp ? (
-          <p className="empty-text">Sélectionnez une équipe dans l'onglet Télémétrie.</p>
+          <p className="empty-text">
+            Marquez votre équipe avec ★ dans le classement (onglet Télémétrie)
+            pour suivre vos relais ici.
+          </p>
         ) : stints.length === 0 ? (
           <p className="empty-text">Aucun relais enregistré pour l'instant.</p>
         ) : (

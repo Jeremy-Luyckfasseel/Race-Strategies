@@ -34,13 +34,19 @@ function saveStore(store) {
  * `recordLapIfClean`, which skips the out-lap and any lap that was paused or
  * off track when it completed.
  *
+ * `ownIp` is my car. Every car on the LAN gets a stint log (a rival's pit
+ * history is useful intel), but only mine carries driver names and only mine
+ * raises a driver prompt — otherwise a 10-car field would pop a confirmation
+ * every time anyone pitted, and rivals' stints would be falsely labelled with
+ * my drivers.
+ *
  * Returns:
  *   logs              Map<ip, { history: Stint[], current: Stint|null }>
  *   pendingDriverIps  Set<ip> — teams awaiting a driver pick for the new stint
  *   assignDriver(ip, driverId)
  *   resetAll()
  */
-export function useStintLog(teams, teamCompounds, drivers) {
+export function useStintLog(teams, teamCompounds, drivers, ownIp = null) {
   const storeRef = useRef(loadStore());
   const [logs, setLogs] = useState(() => loadStore());
 
@@ -59,8 +65,16 @@ export function useStintLog(teams, teamCompounds, drivers) {
     for (const [ip, data] of teams) {
       let entry = getEntry(ip);
 
+      // Only my own car has a driver roster — a rival's stints are logged for
+      // their pit history, but naming one of my drivers on them would be a lie.
+      const isOwn = ip === ownIp;
+
       if (!entry.current && entry.history.length === 0 && data.onTrack && (data.currentLap ?? 0) > 0) {
-        entry = openStint(entry, { driverId: drivers?.[0]?.id ?? null, compound: teamCompounds?.[ip] ?? null, startLap: data.currentLap });
+        entry = openStint(entry, {
+          driverId: isOwn ? (drivers?.[0]?.id ?? null) : null,
+          compound: teamCompounds?.[ip] ?? null,
+          startLap: data.currentLap,
+        });
         changed = true;
       }
 
@@ -78,9 +92,13 @@ export function useStintLog(teams, teamCompounds, drivers) {
         if (!handledExitsRef.current.has(key)) {
           handledExitsRef.current.add(key);
           entry = reopenStint(entry, { compound: teamCompounds?.[ip] ?? null, startLap: data.currentLap ?? 0 });
-          pendingRef.current.add(ip);
           changed = true;
-          pendingChanged = true;
+          // Never prompt for a rival's driver change — at a 10-car event that
+          // would be a popup every time anyone in the field pitted.
+          if (isOwn) {
+            pendingRef.current.add(ip);
+            pendingChanged = true;
+          }
         }
       }
 
@@ -108,7 +126,7 @@ export function useStintLog(teams, teamCompounds, drivers) {
       setLogs(new Map(storeRef.current));
     }
     if (pendingChanged) setPendingDriverIps(new Set(pendingRef.current));
-  }, [teams, teamCompounds, drivers, getEntry]);
+  }, [teams, teamCompounds, drivers, ownIp, getEntry]);
 
   const assignDriver = useCallback((ip, driverId) => {
     storeRef.current.set(ip, assignDriverPure(getEntry(ip), driverId));
