@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { backoffDelay } from '../logic/connection';
 import { withTeamOrder, dropStaleTeams, coalescePacket } from '../logic/teams';
+import { trackLapCrossings } from '../logic/gaps';
 
 /**
  * Incoming packets are collected in a ref and applied to React state on this
@@ -39,6 +40,7 @@ export function useTelemetry() {
   const [reconnecting, setReconnecting] = useState(false);
   const [teams, setTeams] = useState(new Map());
   const [teamOrder, setTeamOrder] = useState([]);
+  const [lapCrossings, setLapCrossings] = useState(() => new Map());
   const [serverIPs, setServerIPs] = useState([]);
   const [scanning, setScanning] = useState(false);
   const [scanResults, setScanResults] = useState([]);
@@ -50,6 +52,7 @@ export function useTelemetry() {
   // inside one would drop packets on the second pass).
   const teamsRef = useRef(new Map());
   const orderRef = useRef([]);
+  const crossingsRef = useRef(new Map());
 
   const wsRef = useRef(null);
   const connectRef = useRef(null); // latest doConnect, for the reconnect timer
@@ -155,6 +158,14 @@ export function useTelemetry() {
 
       let next = teamsRef.current;
       if (pending.size > 0) {
+        // Read crossings from the buffered packets, before they are merged and
+        // their arrival stamps stop being distinguishable from the flush time.
+        const crossings = trackLapCrossings(crossingsRef.current, pending);
+        if (crossings !== crossingsRef.current) {
+          crossingsRef.current = crossings;
+          setLapCrossings(crossings);
+        }
+
         next = new Map(next);
         for (const [ip, packet] of pending) next.set(ip, packet);
 
@@ -204,5 +215,5 @@ export function useTelemetry() {
     []
   );
 
-  return { connected, reconnecting, teams, teamOrder, serverIPs, connect, disconnect, sendIPs, scan, scanning, scanResults };
+  return { connected, reconnecting, teams, teamOrder, lapCrossings, serverIPs, connect, disconnect, sendIPs, scan, scanning, scanResults };
 }

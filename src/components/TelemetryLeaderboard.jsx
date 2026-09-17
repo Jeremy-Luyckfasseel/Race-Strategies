@@ -1,5 +1,6 @@
 import { useMemo, useState, Fragment } from 'react';
 import { teamColor } from '../logic/teams';
+import { lapInterval, formatInterval } from '../logic/gaps';
 
 const COMPOUNDS = ['H', 'M', 'S', 'IM', 'W'];
 const COMPOUND_COLOR = { H: '#5EAED8', M: '#F08420', S: '#E4002B', IM: '#22CC6E', W: '#14BBCE' };
@@ -20,17 +21,6 @@ function formatMs(ms) {
   return `${m}:${String(s).padStart(2, '0')}.${String(t).padStart(3, '0')}`;
 }
 
-function formatGap(ahead, behind) {
-  if (!ahead || !behind) return null;
-  const lapDiff = (ahead.currentLap || 0) - (behind.currentLap || 0);
-  if (lapDiff > 0) return `+${lapDiff}L`;
-  if (ahead.lastLapMs && behind.lastLapMs) {
-    const ms = behind.lastLapMs - ahead.lastLapMs;
-    if (ms > 0) return `+${(ms / 1000).toFixed(1)}s`;
-  }
-  return null;
-}
-
 function hexRgb(hex) {
   return `${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)}`;
 }
@@ -43,7 +33,7 @@ function fuelBarColor(pct) {
 
 export default function TelemetryLeaderboard({
   teams, teamOrder = [], teamLabels, teamCompounds, pendingIps, selectedIp, onSelect, onCompoundChange,
-  myTeamIp = '', onSetMyTeam, onRenameTeam,
+  myTeamIp = '', onSetMyTeam, onRenameTeam, lapCrossings,
 }) {
   const [pickerIp, setPickerIp] = useState(null);
   const [editingIp, setEditingIp] = useState(null);
@@ -95,7 +85,13 @@ export default function TelemetryLeaderboard({
         // same way so a dot and its row always match.
         const color      = teamColor(teamOrder.indexOf(ip));
         const isSelected = ip === selectedIp;
-        const gap        = idx === 0 ? null : formatGap(sorted[idx - 1].d, d);
+        // Interval to the car in front, from their last line crossings.
+        const gap        = idx === 0
+          ? null
+          : formatInterval(lapInterval(
+              lapCrossings?.get(sorted[idx - 1].ip),
+              lapCrossings?.get(ip),
+            ));
         const isBestLap  = d.bestLapMs && d.bestLapMs === overallBestMs;
         const fuelPct    = Math.min(100, (d.fuelRatio ?? 0) * 100);
         const compound   = teamCompounds?.[ip] ?? null;
