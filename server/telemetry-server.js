@@ -39,6 +39,7 @@ import dgram from 'dgram';
 import { lookup, reverse as dnsReverse } from 'dns/promises';
 import { networkInterfaces } from 'os';
 import { WebSocketServer } from 'ws';
+import { detectPitEdges } from '../src/logic/pitDetect.js';
 
 // ── Salsa20 key (GT7, community-documented) ──────────────────────────────────
 const SALSA20_KEY = Buffer.from('Simulator Interface Packet GT7 ver 0.0', 'utf8').slice(0, 32);
@@ -58,7 +59,7 @@ const tireBaseline = new Map();
 // All IPs that have ever sent valid GT7 telemetry this session
 const seenPS5s = new Set();
 
-// Pit detection per team: 'fast' | 'slow' — fires pitDetected on first slow packet after fast
+// Pit detection per team: label → { phase, since } (see src/logic/pitDetect.js)
 const pitState = new Map();
 
 // Cache of last successful hostname→IP resolutions (survives applyIPs calls)
@@ -400,21 +401,16 @@ udp.on('message', (msg, rinfo) => {
     );
   }
 
-  // Pit detection:
-  //   pitDetected — fires once when speed drops below 5 km/h after racing speed (>60)
-  //   pitExit     — fires once when speed returns above 60 km/h after a full stop
+  // Pit detection — see src/logic/pitDetect.js. A stop must be sustained
+  // (PIT_MIN_STOP_MS) before it counts, so a spin or an off-track stop no
+  // longer fires a phantom pit stop that would clear the car's compound and
+  // break its stint in the Pilotes log.
+  //   pitDetected — once, after the car has been stopped long enough to be a real stop
+  //   pitExit     — once, when it returns to racing speed after such a stop
   //                 The car exits the pit lane with fresh tires; tireRadius reflects the new set.
-  const spd = parsed.speedKmh ?? 0;
-  const ps = pitState.get(label);
-  let pitDetected = false;
-  let pitExit = false;
-  if (spd > 60) {
-    if (ps === 'slow') pitExit = true;
-    pitState.set(label, 'fast');
-  } else if (spd < 5 && ps === 'fast') {
-    pitState.set(label, 'slow');
-    pitDetected = true;
-  }
+  const { state: nextPitState, pitDetected, pitExit } =
+    detectPitEdges(pitState.get(label), parsed.speedKmh, Date.now());
+  pitState.set(label, nextPitState);
 
   broadcast({ ps5ip: label, ...parsed, ...(pitDetected ? { pitDetected: true } : {}), ...(pitExit ? { pitExit: true } : {}) });
 });
