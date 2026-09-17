@@ -579,6 +579,7 @@ export default function App() {
               myTeamIp,
               onSetMyTeam: setMyTeam,
               onRenameTeam: updateTeamLabel,
+              lapCrossings: telem.lapCrossings,
             };
             return (
               <div className="tab-content tab-content--telemetry">

@@ -20,7 +20,7 @@
 
 <br>
 
-![Tests](https://img.shields.io/badge/tests-2095%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
+![Tests](https://img.shields.io/badge/tests-2115%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
 ![Engine](https://img.shields.io/badge/strategy%20engine-pure%20JS%20%C2%B7%20zero%20React-c9a227?style=flat-square)
 ![Patterns](https://img.shields.io/badge/compound%20patterns-~4%20000%20enumerated-c9a227?style=flat-square)
 
@@ -60,7 +60,7 @@
 | **Multi-driver support** | Per-driver lap times per compound, configurable minimum drive time. Two stint-assignment strategies run per plan — one picks stint-by-stint by who owes the most, the other allocates the longest stints first and then refines the split by swapping stints between drivers — and the engine keeps whichever leaves every driver furthest from falling short. Works reliably with reasonable slack (minimums comfortably under an even split of the race); a minimum set right at the theoretical maximum a driver could get can still leave them a little short — that's the race's stint lengths not dividing evenly, not the assignment. |
 | **Mid-race recalculation** | Enter current lap + fuel for an updated strategy on the fly. Connects directly to live PS5 telemetry for automatic updates. |
 | **Live PS5 telemetry** | Full Télémétrie tab: dedicated live dashboard per team with speed, gear, RPM/throttle/brake bars, tyre temp + wear per corner, last/best lap times, and fuel level. |
-| **Multi-team leaderboard** | All PS5s in the room on one sortable table — position, lap gap to leader, compound, fuel bar, and pit/on-track status. |
+| **Multi-team leaderboard** | Every PS5 on the LAN on one table — position, interval to the car ahead (measured from start/finish crossings), compound, fuel bar, pit/on-track status. Name each team inline, and mark one as yours with ★. |
 | **GPS track map** | SVG circuit drawn live from PS5 position data at 60 Hz. Pit lane auto-detected. All tracked cars shown as colour-coded dots. |
 | **Compound tracking** | Pit exit detected from telemetry — app prompts to confirm which compound was fitted. Tracks each team's current tyre independently. |
 | **LAN PS5 scan** | One click scans the local network for active GT7 PS5s and adds them automatically, with DNS hostname resolution. |
@@ -264,7 +264,7 @@ npm run dev        # → http://localhost:5173
 | `npm run dev` | Dev server at `http://localhost:5173` |
 | `npm run build` | Production build → `/dist` |
 | `npm run preview` | Preview the production build |
-| `npm test` | Full test suite — 2 095 assertions |
+| `npm test` | Full test suite — 2 115 assertions |
 | `npm run test:smoke` | Quick 1-hour race smoke test |
 | `npm run telemetry` | Start the UDP → WebSocket relay server |
 
@@ -302,7 +302,7 @@ npm run dev        # → http://localhost:5173
 The strategy engine has no React dependency and runs directly in Node:
 
 ```bash
-npm test              # 2 095 assertions across fourteen suites
+npm test              # 2 115 assertions across fifteen suites
 npm run test:smoke    # 1-hour race smoke test
 ```
 
@@ -321,6 +321,7 @@ npm run test:smoke    # 1-hour race smoke test
 | **Groups** | `tests/test_groups.js` | 18 | Team Groups → Races → Sessions state (pure, local) |
 | **Sync store** | `tests/test_sync_store.js` | 17 | Self-hosted sync server's filesystem store, path-traversal rejection |
 | **Sync client** | `tests/test_sync_client.js` | 11 | syncClient ↔ sync-server round trip over real HTTP |
+| **Gaps** | `tests/test_gaps.js` | 20 | Leaderboard intervals from line crossings — the 30 s gap the old last-lap-time subtraction could not see |
 | **Pit detection** | `tests/test_pit_detect.js` | 20 | Relay pit entry/exit edges — a spin must fire nothing, a real stop exactly one entry + one exit, standing start ignored |
 | **Teams** | `tests/test_teams.js` | 45 | Multi-car display — stable per-team colour across pruning, first-seen ordering, staleness dropout |
 | **Stint log** | `tests/test_stint_log.js` | 29 | Drivers-tab bookkeeping — stint open/close, per-lap average/best/worst folding, compound sync, driver (re)assignment, defensive pit-exit reopen, out-lap/paused/off-track lap exclusion |
