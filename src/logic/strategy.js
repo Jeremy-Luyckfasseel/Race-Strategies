@@ -361,6 +361,7 @@ function simulateStrategy(p) {
     minDriverTimeSecs,
     cyclic = true,
     presetDriverAssignment = null,
+    finalStintOverride = null,
   } = p;
 
   const stints = [];
@@ -514,7 +515,18 @@ function simulateStrategy(p) {
       pitsDone++;
       let timeRemainingAtPit = targetRaceTimeSecs - elapsedSecs;
       
-      let nextComp = cyclic
+      // A "banzai" final-stint override (see findFinalStintOverrides): the
+      // compound plan is otherwise unchanged, everything up to this pit is
+      // identical to the un-overridden run — only the compound chosen for
+      // what turns out to be the last stint is swapped, to try a fresher/
+      // faster compound where degradation barely matters because there
+      // isn't enough race left to wear it. Which specific pit this fires at
+      // is decided by the CALLER from a prior, un-overridden run of this
+      // same plan (pitsDone there is only known after simulating once), not
+      // computed here — this branch just needs to honour it when it matches.
+      let nextComp = (finalStintOverride && pitsDone === finalStintOverride.atPitsDone)
+        ? finalStintOverride.compound
+        : cyclic
         ? compoundPlan[pitsDone % compoundPlan.length]
         : compoundPlan[Math.min(pitsDone, compoundPlan.length - 1)];
       let estRemainingLaps = Math.ceil(timeRemainingAtPit / activeComp.avgLapTimeSecs);
@@ -657,6 +669,21 @@ function simulateStrategy(p) {
 // ---------------------------------------------------------------------------
 // Strategy enumeration — test bounded compound sequences
 // ---------------------------------------------------------------------------
+
+/** Human-readable compound sequence + the set of compounds actually used, from a simulated strategy's stints. */
+function labelStrategy(strategy) {
+  const finalSequence = [];
+  let lastId = null;
+  const compoundIds = [];
+  for (const st of strategy.stints) {
+    if (st.compound !== lastId) {
+      finalSequence.push({ id: st.compound, name: st.compoundName });
+      lastId = st.compound;
+    }
+    if (!compoundIds.includes(st.compound)) compoundIds.push(st.compound);
+  }
+  return { label: finalSequence.map((f) => f.name).join(' → '), compoundIds };
+}
 
 /**
  * Generate and rank all valid multi-compound strategies.
@@ -814,6 +841,7 @@ export function findBestStrategies(params) {
     };
 
     let strategy = simulateStrategy(baseSimParams);
+    let usedDriverAssignment = null;
 
     // With a real multi-driver minimum to hit, picking one stint at a time
     // chronologically (pickNextDriver, above) can leave a driver short even
@@ -858,27 +886,20 @@ export function findBestStrategies(params) {
         const [lptSatisfied, lptWorst] = fairnessScore(lptStrategy);
         useLpt = lptSatisfied > chronoSatisfied || (lptSatisfied === chronoSatisfied && lptWorst > chronoWorst);
       }
-      if (useLpt) strategy = lptStrategy;
+      if (useLpt) {
+        strategy = lptStrategy;
+        usedDriverAssignment = presetDriverAssignment;
+      }
     }
 
-    // Label generation based on what was actually used
-    const finalSequence = [];
-    let lastId = null;
-    let actuallyUsedArr = [];
-    for (const st of strategy.stints) {
-      if (st.compound !== lastId) {
-        finalSequence.push({ id: st.compound, name: st.compoundName });
-        lastId = st.compound;
-      }
-      if (!actuallyUsedArr.includes(st.compound)) {
-        actuallyUsedArr.push(st.compound);
-      }
-    }
+    const { label, compoundIds } = labelStrategy(strategy);
 
     return {
-      label: finalSequence.map(f => f.name).join(' → '),
-      compoundIds: actuallyUsedArr,
-      strategy
+      label,
+      compoundIds,
+      strategy,
+      _simParams: baseSimParams,
+      _driverAssignment: usedDriverAssignment,
     };
   });
 
@@ -909,6 +930,49 @@ export function findBestStrategies(params) {
     return a.strategy.estTotalRaceTimeSecs - b.strategy.estTotalRaceTimeSecs;
   });
 
-  return uniqueStrats;
+  // "Banzai" final stint: no compound pattern (cyclic or hold-last) can
+  // express "run X for the whole race, but Y just for the true final stint"
+  // — cyclic repeats a compound periodically, hold-last locks it in forever
+  // once reached, neither means "only at the very end regardless of how many
+  // stops the race has." That's a real tactic though: degradation barely
+  // matters over a short closing stint (not enough distance to wear tyres),
+  // so a fresher/faster compound can gain a little there even when it would
+  // lose over a full stint. Tried only on the #1 result, not all ~4-8k
+  // candidates — the effect is local to one stint, so it can't plausibly
+  // change which BASE compound plan ranks best; re-simulating it here ~4
+  // extra times is far cheaper than doing so for every candidate.
+  //
+  // Reuses whichever driver assignment the winning strategy actually used
+  // (chronological or the LPT/local-search plan) via finalStintOverride,
+  // which only changes the compound chosen for the specific pit that led to
+  // the ORIGINAL run's last stint — everything before that pit is simulated
+  // identically either way, by causality (a pit choice can't affect what
+  // already happened before it), and if the override compound turns out to
+  // need an unplanned extra stop, the fallback in simulateStrategy reverts to
+  // the plan's normal pattern for it, so a backfiring override just produces
+  // a worse totalLaps/race-time and gets correctly rejected below.
+  if (uniqueStrats.length > 0) {
+    const best = uniqueStrats[0];
+    const finalCompoundId = best.strategy.stints[best.strategy.stints.length - 1].compound;
+    let bestFinalStrategy = best.strategy;
+    for (const overrideComp of activeCompounds) {
+      if (overrideComp.id === finalCompoundId) continue;
+      const overrideStrategy = simulateStrategy({
+        ...best._simParams,
+        presetDriverAssignment: best._driverAssignment,
+        finalStintOverride: { atPitsDone: best.strategy.numPitStops, compound: overrideComp },
+      });
+      const better = overrideStrategy.totalLaps > bestFinalStrategy.totalLaps ||
+        (overrideStrategy.totalLaps === bestFinalStrategy.totalLaps &&
+          overrideStrategy.estTotalRaceTimeSecs < bestFinalStrategy.estTotalRaceTimeSecs);
+      if (better) bestFinalStrategy = overrideStrategy;
+    }
+    if (bestFinalStrategy !== best.strategy) {
+      best.strategy = bestFinalStrategy;
+      Object.assign(best, labelStrategy(bestFinalStrategy));
+    }
+  }
+
+  return uniqueStrats.map((s) => ({ label: s.label, compoundIds: s.compoundIds, strategy: s.strategy }));
 }
 

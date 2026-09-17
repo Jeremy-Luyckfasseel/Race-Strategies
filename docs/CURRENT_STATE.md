@@ -99,7 +99,7 @@ Standalone Node process, **not** part of the Vite build. Run with
 | File | Role |
 |------|------|
 | `test.js` | `npm run test:smoke` — quick 1-hour race sanity check (not part of `npm test`). |
-| `test_comprehensive.js` | 135 assertions. Helpers, degradation curve, fuel tracking, pit timing, tyre-change economics, mandatory compound filter, mid-race mode, fuel-weight penalty. |
+| `test_comprehensive.js` | 140 assertions. Helpers, degradation curve, fuel tracking, pit timing, tyre-change economics, mandatory compound filter, mid-race mode, fuel-weight penalty. |
 | `test_invariants.js` | 1 640 bulk-generated assertions. Structural invariants, ranking dominance, multi-compound coverage, multi-driver minimums, race-time boundary, known-answer hand-computed scenarios, bulk no-overfill / no-overrun checks. |
 | `test_telemetry_learner.js` | 37 assertions. **Phase 1.** Synthetic seed+race sessions from known ground truth; tight (synthetic) vs live-trust tolerance bands; recovery, engine round-trip, confidence gating, single-stint non-identifiability, multi-compound segmentation. |
 | `test_recommendations.js` | 20 assertions. **Phase 1.** Propose-and-accept gating, no-mutation, ignore/material-shift re-surface, accepted value → valid ranked strategy. |
@@ -112,9 +112,9 @@ Standalone Node process, **not** part of the Vite build. Run with
 | `test_sync_client.js` | 11 assertions. `syncClient` ↔ `sync-server` round trip over real HTTP. |
 
 `npm test` runs all eleven suites above (every row except `test.js`) in
-sequence — 1 994 assertions total, all pure node; they print `✓/✗` lines and
+sequence — 1 999 assertions total, all pure node; they print `✓/✗` lines and
 exit non-zero on failure. **These are the guardrail — keep every assertion
-green.** 354 of the 1 994 are hand-written; 1 640 are bulk-generated invariant
+green.** 359 of the 1 999 are hand-written; 1 640 are bulk-generated invariant
 sweeps (see `test_invariants.js` above) — worth knowing which is which when
 judging how much a passing `npm test` actually proves. (Assertion counts
 inside loop-based checks scale with how many stints/strategies an input
@@ -240,6 +240,27 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
 - Generates all cyclic compound patterns up to length 5 (`MAX_PATTERN_LENGTH`),
   plus non-cyclic "hold last" variants, simulates each, filters by mandatory
   rules, dedupes by stint signature, ranks. < ~4000 patterns for 5 compounds.
+  - **Known gap in this pattern language, and how it's closed**: neither
+    cyclic nor hold-last can express "run compound X for the whole race, but
+    Y just for the true final stint" once a race needs MORE than 5 total
+    stops — cyclic would repeat Y periodically throughout the race, hold-last
+    would lock Y in forever the first time it's reached; neither means "only
+    at the very end, however many stops that turns out to be." This is a
+    real racing tactic (degradation barely matters over a short closing
+    stint, so a fresher/faster compound can win there even though it loses
+    over a full stint) that the language structurally can't reach on its
+    own. Closed by `findBestStrategies` re-simulating just the #1-ranked
+    result once per OTHER active compound, via `simulateStrategy`'s
+    `finalStintOverride: { atPitsDone, compound }` param — only the compound
+    decision at that one specific pit changes; everything before it is
+    identical by causality (an earlier stint can't be affected by a later
+    compound choice), and if the override compound needs an unplanned extra
+    stop, `simulateStrategy` falls back to the plan's normal pattern for it,
+    so a backfiring override just produces worse totalLaps/race-time and is
+    correctly rejected. Only tried on the #1 candidate, not all ~4-8k of
+    them — the effect is local to one stint and can't plausibly change which
+    BASE compound plan ranks best, so this stays cheap (verified: a
+    realistic 8h/3-compound/3-driver calc goes from ~115ms to ~131ms).
 - Pit time = `base + (tiresChanged ? tireChange : 0) + fuelToAdd / fuelRate`
   (`calcPitStopTime`) — the three terms are strictly additive, i.e. tyre change
   and refuelling are assumed **sequential**, not done in parallel by the pit
@@ -373,7 +394,7 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
 npm run dev          # Vite dev server :5173
 npm run build        # production build → /dist
 npm run lint         # ESLint flat config
-npm test             # all eleven suites in tests/ (see §2 Tests table) — 1 994 assertions
+npm test             # all eleven suites in tests/ (see §2 Tests table) — 1 999 assertions
 npm run test:smoke   # quick 1h race test
 npm run telemetry    # start the UDP→WS relay (separate process)
 ```
