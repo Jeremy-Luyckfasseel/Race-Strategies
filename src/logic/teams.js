@@ -62,6 +62,27 @@ export function withTeamOrder(order, ip) {
 }
 
 /**
+ * Once several cars are on screen, "the car I am looking at" and "the car my
+ * strategy is about" stop being the same thing, so they are resolved
+ * separately:
+ *
+ *   strategyIp — my own car. Owns the drivers, the stint log, the learner's
+ *                recommendations and the mid-race auto-fill. Changing which
+ *                row is highlighted must never repoint any of that at a rival.
+ *   displayIp  — the car the dashboard widget is inspecting. Free to follow a
+ *                click so you can look at anyone's telemetry.
+ *
+ * With no team marked as mine and several cars connected, both stay null
+ * rather than guessing (DECISION 4: never auto-pick among several PS5s). A
+ * team marked as mine stays mine even while it is not transmitting — that is
+ * a car that is off or in the garage, not a car that stopped being mine.
+ */
+export function resolveActiveCars({ myTeamIp = null, selectedIp = null, teamKeys = [] } = {}) {
+  const strategyIp = myTeamIp || (teamKeys.length === 1 ? teamKeys[0] : null);
+  return { strategyIp, displayIp: selectedIp || strategyIp };
+}
+
+/**
  * Edge-triggered flags the relay sets on a single packet only (see the pit
  * detection block in server/telemetry-server.js). Everything else in a packet
  * is a level that the next packet restates, so a plain overwrite is fine.

@@ -43,8 +43,18 @@ function fuelBarColor(pct) {
 
 export default function TelemetryLeaderboard({
   teams, teamOrder = [], teamLabels, teamCompounds, pendingIps, selectedIp, onSelect, onCompoundChange,
+  myTeamIp = '', onSetMyTeam, onRenameTeam,
 }) {
   const [pickerIp, setPickerIp] = useState(null);
+  const [editingIp, setEditingIp] = useState(null);
+
+  const commitRename = (ip, value) => {
+    const name = value.trim();
+    // An empty name clears the override and falls back to the IP, rather than
+    // leaving a blank row you can no longer identify.
+    onRenameTeam?.(ip, name);
+    setEditingIp(null);
+  };
 
   const sorted = useMemo(() => {
     const entries = [...teams.entries()].map(([ip, d]) => ({ ip, d }));
@@ -92,13 +102,15 @@ export default function TelemetryLeaderboard({
         const pending    = pendingIps?.has(ip) ?? false;
         const pickerOpen = pickerIp === ip;
         const pos        = d.racePos > 0 ? d.racePos : idx + 1;
+        const isMine     = ip === myTeamIp;
+        const isEditing  = editingIp === ip;
 
         const posClass = pos === 1 ? ' lbp-gold' : pos === 2 ? ' lbp-silver' : pos === 3 ? ' lbp-bronze' : '';
 
         return (
           <Fragment key={ip}>
             <div
-              className={`lb-row${isSelected ? ' lb-row-sel' : ''}${!d.onTrack ? ' lb-row-pit' : ''}${pickerOpen ? ' lb-row-expanded' : ''}`}
+              className={`lb-row${isSelected ? ' lb-row-sel' : ''}${!d.onTrack ? ' lb-row-pit' : ''}${pickerOpen ? ' lb-row-expanded' : ''}${isMine ? ' lb-row-mine' : ''}`}
               style={{ '--tc': color, '--tcr': hexRgb(color) }}
               onClick={() => { setPickerIp(null); onSelect?.(isSelected ? '' : ip); }}
             >
@@ -112,7 +124,48 @@ export default function TelemetryLeaderboard({
                 <span className="lb-stripe" style={{ background: color }} />
                 <div className="lb-team-inner">
                   <div className="lb-team-top">
-                    <span className="lb-tname">{teamLabels[ip] || ip}</span>
+                    <button
+                      className={`lb-mine-btn${isMine ? ' is-mine' : ''}`}
+                      onClick={(e) => { e.stopPropagation(); onSetMyTeam?.(ip); }}
+                      title={isMine ? 'Mon équipe — cliquer pour retirer' : 'Définir comme mon équipe'}
+                      aria-pressed={isMine}
+                    >
+                      {isMine ? '★' : '☆'}
+                    </button>
+                    {isEditing ? (
+                      <input
+                        className="lb-tname-input"
+                        autoFocus
+                        defaultValue={teamLabels[ip] || ''}
+                        placeholder={ip}
+                        maxLength={24}
+                        spellCheck={false}
+                        onClick={(e) => e.stopPropagation()}
+                        onBlur={(e) => commitRename(ip, e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') commitRename(ip, e.target.value);
+                          if (e.key === 'Escape') setEditingIp(null);
+                        }}
+                      />
+                    ) : (
+                      <>
+                        <span
+                          className="lb-tname"
+                          onDoubleClick={(e) => { e.stopPropagation(); setEditingIp(ip); }}
+                          title={teamLabels[ip] ? `${teamLabels[ip]} · ${ip}` : ip}
+                        >
+                          {teamLabels[ip] || ip}
+                        </span>
+                        <button
+                          className="lb-rename-btn"
+                          onClick={(e) => { e.stopPropagation(); setEditingIp(ip); }}
+                          title="Renommer l'équipe"
+                        >
+                          ✎
+                        </button>
+                      </>
+                    )}
+                    {isMine && <span className="lb-mine-pill">MOI</span>}
                     {!d.onTrack && <span className="lb-box-pill">BOX</span>}
                   </div>
                   <div className="lb-inline-fuel">

@@ -2170,6 +2170,70 @@ input[type="range"]::-moz-range-thumb {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* ── My team: star toggle, inline rename, MOI badge ── */
+.lb-mine-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 5px 0 0;
+  font-size: 0.8rem;
+  line-height: 1;
+  color: var(--text-muted);
+  opacity: 0.45;
+  transition: opacity var(--t-fast), color var(--t-fast);
+}
+.lb-mine-btn:hover { opacity: 1; color: #FFD700; }
+.lb-mine-btn.is-mine { opacity: 1; color: #FFD700; }
+
+.lb-rename-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 0.65rem;
+  line-height: 1;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity var(--t-fast), color var(--t-fast);
+}
+.lb-row:hover .lb-rename-btn { opacity: 0.6; }
+.lb-rename-btn:hover { opacity: 1 !important; color: var(--text-primary); }
+
+.lb-tname-input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.73rem;
+  letter-spacing: 0.025em;
+  color: var(--text-primary);
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,215,0,0.45);
+  border-radius: 3px;
+  padding: 1px 5px;
+  outline: none;
+}
+
+.lb-mine-pill {
+  flex-shrink: 0;
+  margin-left: 5px;
+  font-family: var(--font-display);
+  font-size: 0.40rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  padding: 1px 4px 0;
+  border-radius: 2px;
+  background: rgba(255,215,0,0.14);
+  color: #FFD700;
+  border: 1px solid rgba(255,215,0,0.35);
+  line-height: 1.6;
+}
+
+.lb-row.lb-row-mine { background: rgba(255,215,0,0.045); }
+.lb-row.lb-row-mine:hover { background: rgba(255,215,0,0.075); }
+
 .lb-box-pill {
   flex-shrink: 0;
   margin-left: 5px;

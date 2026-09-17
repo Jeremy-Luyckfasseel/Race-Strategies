@@ -77,6 +77,25 @@ Two candidate assignments are computed per strategy and the better one is kept (
 
 Neither dominates the other (confirmed empirically — each can occasionally out-perform the other), so `findBestStrategies` runs both and picks the better one — but "better" always respects the same priority the final ranking uses first: totalLaps DESC, then race time ASC. Since per-driver compound times can differ, which driver runs a stint changes how many seconds it takes, so the two assignments can occasionally complete a different number of laps for the same compound plan; only when laps and race time are tied does driver-satisfaction (then worst-case driver total) decide. This guarantees the swap never makes a candidate rank worse than it otherwise would — it only ever improves fairness when doing so is free. This closes most cases a single greedy pass missed, but is still not a hard guarantee: with very few total stints relative to driver count (e.g. 2 drivers splitting a 2-stint race) there is only one way to split them, and a minimum set right at the theoretical maximum can still leave a driver marginally short by design — that's stint lengths (fixed by fuel/tyre physics, discrete lap counts) not dividing evenly, not an assignment-quality problem, and no algorithm can fix it without changing pit timing itself. Per-driver compound lap times override global times when set.
 
+### My team vs. the car you're looking at
+
+Once several cars are on screen these are two different things, and conflating
+them silently repoints the strategy at a rival. `resolveActiveCars`
+(`src/logic/teams.js`) splits them:
+
+- **`strategyIp`** — my car, marked with ★ in the leaderboard and persisted to
+  `gt7-my-team`. Owns the drivers, the stint log and its driver prompts, the
+  learner's recommendations, the Now view and the mid-race auto-fill. A car
+  marked mine stays mine while it is not transmitting.
+- **`displayIp`** — the car the dashboard widget is inspecting; follows a
+  leaderboard click so you can look at anyone.
+
+Every car gets a stint log (a rival's pit history is useful), but only mine
+carries driver names or raises a driver prompt — otherwise a 10-car field
+would pop a confirmation every time anyone pitted. With no team marked and
+several cars connected, both resolve to `null` rather than guessing
+(DECISION 4).
+
 ### Live driver assignment (telemetry side)
 
 This is separate from the planner's `planDriverAssignment` above — it is manual, not computed. In the Télémétrie tab, `LiveDashboard` shows a driver picker (from `inputs.drivers`) alongside the existing compound picker; both are prompted together in one banner when a pit stop finishes (`pendingDriver` from `useStintLog`, `pendingConfirmation` from `useCompoundDetector`). Picking a driver calls `useStintLog`'s `assignDriver(ip, driverId)`, which only labels the stint that's already running — it has no effect on the strategy planner's stint lengths or ranking. The Pilotes tab (`DriversTab.jsx`) reads the resulting log to show each driver's total time against `minDriverTimeSecs` and a per-stint table (duration, tyre, avg/best/worst lap); see `stintLog.js`/`useStintLog.js` above.
