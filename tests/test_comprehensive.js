@@ -370,6 +370,64 @@ section('Multi-driver planning — local-search refinement escapes a bad LPT com
   }
 }
 
+section('"Banzai" final stint — override to a faster compound when degradation barely matters');
+{
+  // No cyclic-or-hold-last compound pattern (max 5 elements) can express
+  // "run Hard for the whole race, but Soft just for the true final stint" —
+  // once the race needs MORE than 5 total stops, cyclic repeats Soft
+  // periodically (wrong) and hold-last locks it in forever once reached
+  // (also wrong). Soft's fast start beats Hard over a genuinely short
+  // closing stint even though it loses over a full one (steep late-stint
+  // degradation) — a real tactic the pattern language structurally can't
+  // reach on its own, closed by trying the override on just the #1 result.
+  const res = findBestStrategies({
+    raceDurationHours: 5.0, tankSize: 100, lapsPerFullTank: 22, fuelMap: 1.0,
+    compounds: [
+      { id: 'H', name: 'Hard', tireLife: 60, mandatory: false, startLapTime: '2:00', halfLapTime: '2:01', endLapTime: '2:02' },
+      { id: 'S', name: 'Soft', tireLife: 15, mandatory: false, startLapTime: '1:50', halfLapTime: '2:05', endLapTime: '2:20' },
+    ],
+    pitBaseSecs: 25, tireChangeSecs: 27, fuelRateLitersPerSec: 4.0,
+    mandatoryStops: 0, midRaceMode: false,
+  });
+  assert('Returns strategies', res.length > 0);
+  if (res.length > 0) {
+    const best = res[0].strategy;
+    assert('Race needs more than 5 stints (the case the pattern language can\'t reach alone)',
+      best.stints.length > 5, `got ${best.stints.length}`);
+    const lastStint = best.stints[best.stints.length - 1];
+    assert('Final stint switches to Soft', lastStint.compound === 'S', `got ${lastStint.compound}`);
+    assert('Same total laps as the all-Hard base plan', best.totalLaps === 146, `got ${best.totalLaps}`);
+    assert('Race time improves over the all-Hard base plan (18020.0s)',
+      best.estTotalRaceTimeSecs < 18020.0, `got ${best.estTotalRaceTimeSecs.toFixed(1)}`);
+  }
+}
+
+section('"Banzai" final stint — never overrides away a mandatory compound\'s only occurrence');
+{
+  // The mandatory-compound filter runs BEFORE the banzai override, on the
+  // un-overridden candidates — it has no way to know the override step
+  // exists. The cheapest way to satisfy "Soft must appear somewhere" is
+  // often to use it for just one short stint, which can legitimately be the
+  // final one (exactly what the pattern search picks here). If the override
+  // then swapped that final stint away for a faster non-mandatory compound
+  // purely on lap-time grounds, the mandatory requirement would be silently
+  // violated by the very feature meant to only ever improve things.
+  const res = findBestStrategies({
+    raceDurationHours: 2.5, tankSize: 100, lapsPerFullTank: 22, fuelMap: 1.0,
+    compounds: [
+      { id: 'H', name: 'Hard', tireLife: 60, mandatory: false, startLapTime: '2:00', halfLapTime: '2:01', endLapTime: '2:02' },
+      { id: 'S', name: 'Soft', tireLife: 15, mandatory: true, startLapTime: '1:50', halfLapTime: '2:05', endLapTime: '2:20' },
+    ],
+    pitBaseSecs: 25, tireChangeSecs: 27, fuelRateLitersPerSec: 4.0,
+    mandatoryStops: 0, midRaceMode: false,
+  });
+  assert('Returns strategies', res.length > 0);
+  if (res.length > 0) {
+    const best = res[0];
+    assert('Mandatory Soft is still present', best.compoundIds.includes('S'), `got ${JSON.stringify(best.compoundIds)}`);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Mandatory compound filter
 // ---------------------------------------------------------------------------
