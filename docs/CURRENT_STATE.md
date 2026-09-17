@@ -293,9 +293,18 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
   ~2000-combination parameter sweep (driver count, race length,
   `mandatoryStops`, minimum drive time): longest-stint-first fixed 9 cases
   chronological-only missed, but chronological-only beat longest-stint-first
-  in 2 different cases when tried alone. `findBestStrategies` runs both
-  (scored by `[driversSatisfied, worstCaseDriverTotal]`) and keeps the winner,
-  which strictly matches-or-beats running either one alone.
+  in 2 different cases when tried alone. `findBestStrategies` runs both and
+  keeps the winner — but "winner" first respects the SAME priority the final
+  cross-candidate ranking uses (`totalLaps` DESC, then race time ASC), only
+  falling back to `[driversSatisfied, worstCaseDriverTotal]` when laps and
+  race time are tied. Per-driver compound times mean the two assignments can
+  occasionally finish a different number of laps for the same compound plan
+  (whoever drives a stint changes how long it takes); without this
+  lap-count-first check, a fairness-motivated swap could pick an assignment
+  that satisfies more drivers but completes fewer laps — which is the metric
+  `findBestStrategies` actually ranks candidates by, so that swap would make
+  the candidate rank worse for no guaranteed benefit. With this check, the
+  swap can only ever improve fairness "for free," never at a lap-count cost.
   - **Known limitation, not a bug to chase:** still not a hard guarantee. With
     very few total stints relative to driver count (e.g. 2 drivers splitting
     a 2-stint race) there is only one way to split them — no assignment
