@@ -20,7 +20,7 @@
 
 <br>
 
-![Tests](https://img.shields.io/badge/tests-2001%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
+![Tests](https://img.shields.io/badge/tests-2030%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
 ![Engine](https://img.shields.io/badge/strategy%20engine-pure%20JS%20%C2%B7%20zero%20React-c9a227?style=flat-square)
 ![Patterns](https://img.shields.io/badge/compound%20patterns-~4%20000%20enumerated-c9a227?style=flat-square)
 
@@ -264,7 +264,7 @@ npm run dev        # → http://localhost:5173
 | `npm run dev` | Dev server at `http://localhost:5173` |
 | `npm run build` | Production build → `/dist` |
 | `npm run preview` | Preview the production build |
-| `npm test` | Full test suite — 2 001 assertions |
+| `npm test` | Full test suite — 2 030 assertions |
 | `npm run test:smoke` | Quick 1-hour race smoke test |
 | `npm run telemetry` | Start the UDP → WebSocket relay server |
 
@@ -302,11 +302,11 @@ npm run dev        # → http://localhost:5173
 The strategy engine has no React dependency and runs directly in Node:
 
 ```bash
-npm test              # 2 001 assertions across eleven suites
+npm test              # 2 030 assertions across twelve suites
 npm run test:smoke    # 1-hour race smoke test
 ```
 
-361 of those are hand-written unit tests; the other 1 640 are bulk-generated invariant sweeps (structural checks — no overfill, no tyre overrun, ranking correctness — repeated across many randomised inputs). Counted together because they all assert something real, but worth knowing which is which:
+380 of those are hand-written unit tests; the other 1 640 are bulk-generated invariant sweeps (structural checks — no overfill, no tyre overrun, ranking correctness — repeated across many randomised inputs). Counted together because they all assert something real, but worth knowing which is which:
 
 | Suite | File | Tests | Covers |
 | :--- | :--- | :---: | :--- |
@@ -321,6 +321,7 @@ npm run test:smoke    # 1-hour race smoke test
 | **Groups** | `tests/test_groups.js` | 18 | Team Groups → Races → Sessions state (pure, local) |
 | **Sync store** | `tests/test_sync_store.js` | 17 | Self-hosted sync server's filesystem store, path-traversal rejection |
 | **Sync client** | `tests/test_sync_client.js` | 11 | syncClient ↔ sync-server round trip over real HTTP |
+| **Stint log** | `tests/test_stint_log.js` | 29 | Drivers-tab bookkeeping — stint open/close, per-lap average/best/worst folding, compound sync, driver (re)assignment, defensive pit-exit reopen, out-lap/paused/off-track lap exclusion |
 
 <br><br>
 
@@ -339,13 +340,16 @@ npm run test:smoke    # 1-hour race smoke test
  ┃ ┃ ┣ 📄 StintTable.jsx          lap-by-lap stint detail table
  ┃ ┃ ┣ 📄 LiveDashboard.jsx       ⭐ single-team widget — speed/gear, RPM/pedals, tyre temps/wear, GPS track map
  ┃ ┃ ┣ 📄 TelemetryControls.jsx   connection panel — server URL, PS5 IPs, LAN scan
- ┃ ┃ ┗ 📄 TelemetryLeaderboard.jsx multi-team table — pos, lap gap, times, compound, fuel, status
+ ┃ ┃ ┣ 📄 TelemetryLeaderboard.jsx multi-team table — pos, lap gap, times, compound, fuel, status
+ ┃ ┃ ┗ 📄 DriversTab.jsx          driver time totals + per-stint log (duration, tyre, avg/best/worst lap)
  ┃ ┣ 📂 hooks/
  ┃ ┃ ┣ 📄 useStrategy.js          debounced wrapper around findBestStrategies() (600 ms)
  ┃ ┃ ┣ 📄 useTelemetry.js         WebSocket hook — multi-team Map, scan support
- ┃ ┃ ┗ 📄 useCompoundDetector.js  pit-exit detection → compound confirmation prompt
+ ┃ ┃ ┣ 📄 useCompoundDetector.js  pit-exit detection → compound confirmation prompt
+ ┃ ┃ ┗ 📄 useStintLog.js          pit-exit/entry → stint log, driver-assignment prompt
  ┃ ┣ 📂 logic/
  ┃ ┃ ┣ 📄 strategy.js             ⭐ pure-JS engine · zero React · testable with node
+ ┃ ┃ ┣ 📄 stintLog.js             pure stint-log state machine backing useStintLog
  ┃ ┃ ┗ 📄 compoundDetector.js     note: GT7 UDP has no compound ID — tracking is user-driven
  ┃ ┣ 📄 App.jsx                   root component — owns all state, two-tab UI
  ┃ ┗ 📄 index.css                 dark racing theme (gold #FFD700)
@@ -355,7 +359,7 @@ npm run test:smoke    # 1-hour race smoke test
  ┃ ┣ 📄 test.js                   smoke test
  ┃ ┣ 📄 test_comprehensive.js     142 unit tests
  ┃ ┣ 📄 test_invariants.js        1 640 generated invariant sweeps
- ┃ ┗ 📄 (+ 9 more suites — see Quality Control ↑ for the full breakdown)
+ ┃ ┗ 📄 (+ 10 more suites — see Quality Control ↑ for the full breakdown)
  ┗ 📄 package.json
 ```
 

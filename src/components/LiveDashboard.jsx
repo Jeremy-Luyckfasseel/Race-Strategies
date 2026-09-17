@@ -404,7 +404,10 @@ export function TrackMap({ currentLap, cars, mapRef, onReset }) {
 
 // ── LiveDashboard ───────────────────────────────────────────────────────────
 
-export default function LiveDashboard({ data, label, compound, pendingConfirmation, onCompoundChange, onPitEntry }) {
+export default function LiveDashboard({
+  data, label, compound, pendingConfirmation, onCompoundChange, onPitEntry,
+  drivers, currentDriverId, pendingDriver, onDriverChange,
+}) {
   const [showVitals, setShowVitals] = useState(false);
 
   if (!data) return null;
@@ -551,9 +554,29 @@ export default function LiveDashboard({ data, label, compound, pendingConfirmati
 
             {data.tireWear && (
               <div className="ld-tire-section">
-                {pendingConfirmation && (
+                {(pendingConfirmation || pendingDriver) && (
                   <div className="ld-confirm-banner">
-                    PNEUS CHANGÉS — CONFIRMEZ LE COMPOSÉ ↓
+                    {pendingConfirmation && pendingDriver
+                      ? 'ARRÊT TERMINÉ — CONFIRMEZ PNEU ET PILOTE ↓'
+                      : pendingDriver
+                      ? 'NOUVEAU RELAIS — QUI CONDUIT ↓'
+                      : 'PNEUS CHANGÉS — CONFIRMEZ LE COMPOSÉ ↓'}
+                  </div>
+                )}
+                {drivers && drivers.length > 0 && (
+                  <div className="ld-tire-section-header">
+                    <span className="ld-section-label">PILOTE</span>
+                    <div className={`ld-driver-picker${pendingDriver ? ' ld-compound-picker--pending' : ''}`}>
+                      {drivers.map((d) => (
+                        <button
+                          key={d.id}
+                          className={`ld-cp-btn${currentDriverId === d.id ? ' active' : ''}`}
+                          onClick={() => onDriverChange?.(d.id)}
+                        >
+                          {d.name}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
                 <div className="ld-tire-section-header">
