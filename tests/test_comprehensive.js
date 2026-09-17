@@ -295,6 +295,52 @@ section('Multi-driver minimums — longest-stint-first planning beats pure chron
   }
 }
 
+section('Multi-driver planning — differing per-driver pace stays internally consistent');
+{
+  // The longest-stint-first plan is built from a PROBE run's stint lengths,
+  // then replayed for real. If a driver's own pace differs from the probe's
+  // (Bob is notably slower here via a per-compound override), the real run's
+  // stint boundaries can drift from what the probe assumed — a driver "meant
+  // for the big stint" can land on a shifted one instead. That's a fairness-
+  // plan-quality risk, not a correctness one: each simulation run is always
+  // self-consistent on its own terms (fuel, tyre life, mandatory-stop count),
+  // and the totalLaps/race-time priority in findBestStrategies means a
+  // mismatched plan can only ever be rejected in favour of the chronological
+  // result, never accepted while silently corrupting the output. This test
+  // locks in that "no corruption, ever" guarantee for the one condition
+  // (differing driver pace) that makes the probe/real mismatch possible —
+  // untested until now.
+  const res = findBestStrategies({
+    raceDurationHours: 2, tankSize: 90, lapsPerFullTank: 30, fuelMap: 1.0,
+    compounds: [{ id: 'M', name: 'Medium', tireLife: 30, mandatory: false,
+      startLapTime: '2:00', halfLapTime: '2:01', endLapTime: '2:03' }],
+    pitBaseSecs: 25, tireChangeSecs: 27, fuelRateLitersPerSec: 4.0,
+    mandatoryStops: 8, midRaceMode: false,
+    drivers: [
+      { id: 'd1', name: 'Alice', compounds: {} },
+      { id: 'd2', name: 'Bob', compounds: { M: { startLapTime: '2:15', halfLapTime: '2:16', endLapTime: '2:18' } } },
+      { id: 'd3', name: 'Carol', compounds: {} },
+    ],
+    minDriverTimeSecs: 35 * 60,
+  });
+  assert('Returns strategies', res.length > 0);
+  if (res.length > 0) {
+    const best = res[0].strategy;
+    assert('driverSummary has 3 entries', best.driverSummary.length === 3, `got ${best.driverSummary.length}`);
+    assert('totalLaps is positive', best.totalLaps > 0, `got ${best.totalLaps}`);
+    const lastStint = best.stints[best.stints.length - 1];
+    assert('totalLaps matches the last stint\'s endLap', best.totalLaps === lastStint.endLap,
+      `totalLaps=${best.totalLaps}, lastStint.endLap=${lastStint.endLap}`);
+    const lapsSum = best.stints.reduce((s, st) => s + st.lapsInStint, 0);
+    assert('stint lap counts sum to totalLaps', lapsSum === best.totalLaps, `sum=${lapsSum}, totalLaps=${best.totalLaps}`);
+    for (const d of best.driverSummary) {
+      assert(`${d.name}: totalTimeSecs is non-negative and within the race`,
+        d.totalTimeSecs >= 0 && d.totalTimeSecs <= best.estTotalRaceTimeSecs,
+        `totalTimeSecs=${d.totalTimeSecs?.toFixed(0)}s, raceTime=${best.estTotalRaceTimeSecs.toFixed(0)}s`);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Mandatory compound filter
 // ---------------------------------------------------------------------------

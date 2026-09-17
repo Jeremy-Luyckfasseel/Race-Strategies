@@ -234,6 +234,20 @@ function pickNextDriver(drivers, driverTimeSecs, minDriverTimeSecs, upcomingStin
  * comes from stint lengths (fixed by fuel/tyre physics) not dividing evenly,
  * not from a bad assignment choice. See pickNextDriver's docstring.
  *
+ * Also assumes stint boundaries are driver-independent — true for LAP COUNTS
+ * (fixed by fuel/tyre/mandatory-pacing before any driver is picked), but not
+ * exactly true for durations when per-driver compound times differ: a
+ * different driver on an early stint changes elapsedSecs, which can shift
+ * where LATER stints end. `stintSecsInOrder` comes from a probe run using
+ * whichever driver the chronological pick happened to assign, so the plan
+ * built here can end up targeting a slightly different stint than the real
+ * (re-simulated) run actually has at that index. This doesn't corrupt
+ * anything — each simulation stays internally consistent on its own — and
+ * findBestStrategies' totalLaps/race-time priority means a plan that ends up
+ * worse from this drift is simply rejected in favour of the chronological
+ * result, never accepted anyway. It just means the fairness improvement is
+ * somewhat less reliable when drivers have meaningfully different pace.
+ *
  * @param {number[]} stintSecsInOrder total time (driving + attributable pit
  *   stop) for each stint, in chronological race order
  * @param {number} numDrivers
