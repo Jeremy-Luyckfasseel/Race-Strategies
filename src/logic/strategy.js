@@ -515,7 +515,8 @@ function simulateStrategy(p) {
       pitsDone++;
       let timeRemainingAtPit = targetRaceTimeSecs - elapsedSecs;
       
-      // A "banzai" final-stint override (see findFinalStintOverrides): the
+      // A "banzai" final-stint override (see the override loop in
+      // findBestStrategies, near the end of that function): the
       // compound plan is otherwise unchanged, everything up to this pit is
       // identical to the un-overridden run — only the compound chosen for
       // what turns out to be the last stint is swapped, to try a fresher/
