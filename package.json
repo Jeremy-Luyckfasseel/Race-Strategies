@@ -9,7 +9,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node tests/test_comprehensive.js && node tests/test_invariants.js && node tests/test_telemetry_learner.js && node tests/test_recommendations.js && node tests/test_race_state.js && node tests/test_connection.js && node tests/test_engine_validation.js && node tests/test_session_analysis.js && node tests/test_groups.js && node tests/test_sync_store.js && node tests/test_sync_client.js && node tests/test_stint_log.js && node tests/test_teams.js && node tests/test_pit_detect.js && node tests/test_gaps.js && node tests/test_multicar_integration.js && node tests/test_relay_e2e.js",
+    "test": "node tests/test_comprehensive.js && node tests/test_invariants.js && node tests/test_telemetry_learner.js && node tests/test_recommendations.js && node tests/test_race_state.js && node tests/test_connection.js && node tests/test_engine_validation.js && node tests/test_session_analysis.js && node tests/test_groups.js && node tests/test_sync_store.js && node tests/test_sync_client.js && node tests/test_stint_log.js && node tests/test_teams.js && node tests/test_pit_detect.js && node tests/test_gaps.js && node tests/test_multicar_integration.js && node tests/test_relay_e2e.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_leaderboard.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_trackmap.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_drivers.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_app_e2e.js",
     "test:smoke": "node tests/test.js",
     "telemetry": "node server/telemetry-server.js",
     "sync": "node server/sync-server.js",
@@ -17,7 +17,8 @@
     "validate": "node scripts/compare-session.js",
     "electron:build": "npm run build && electron .",
     "pack": "npm run build && electron-builder --dir",
-    "dist": "npm run build && electron-builder --win"
+    "dist": "npm run build && electron-builder --win",
+    "test:ui": "node --import ./tests/helpers/register-jsx.mjs tests/test_ui_leaderboard.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_trackmap.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_drivers.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_app_e2e.js"
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -36,6 +37,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "jsdom": "^24.1.3",
     "vite": "^7.3.1"
   },
   "build": {
