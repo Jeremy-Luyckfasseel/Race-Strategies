@@ -64,6 +64,31 @@ export function withTeamOrder(order, ip) {
 }
 
 /**
+ * The identity a car is reported under — what everything downstream keys on:
+ * its colour, its stint log, whether it is the starred team.
+ *
+ * Keying on the raw IP means a DHCP lease change makes a console look like a
+ * brand-new car: new colour, empty stint log, ★ lost mid-race. A hostname
+ * survives that, so one is preferred whenever we have it.
+ *
+ * Note what this deliberately does NOT do: change what the relay heartbeats.
+ * Heartbeats keep going to the IP, which always works, because a hostname that
+ * fails to forward-resolve would mean no telemetry at all. So the address is
+ * used to reach the console and the hostname only to name it.
+ *
+ * @param registered   what the browser asked the relay to track (IP or hostname)
+ * @param scannedHostname  hostname reverse-DNS found for this address, if any
+ * @param sourceIp     the address the packet actually came from
+ */
+export function stableCarId(registered, scannedHostname, sourceIp) {
+  // The user (or a previous scan) registered a real name — always honour it.
+  if (registered && registered !== sourceIp) return registered;
+  // Registered as a bare IP: upgrade to a hostname if the scan found one.
+  if (scannedHostname) return scannedHostname;
+  return sourceIp;
+}
+
+/**
  * One flush of the telemetry buffer: fold the packets that arrived since the
  * last flush into the visible state, note anyone who started a new lap, extend
  * the first-seen order, and drop cars that have gone quiet.

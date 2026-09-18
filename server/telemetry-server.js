@@ -40,6 +40,7 @@ import { lookup, reverse as dnsReverse } from 'dns/promises';
 import { networkInterfaces } from 'os';
 import { WebSocketServer } from 'ws';
 import { detectPitEdges } from '../src/logic/pitDetect.js';
+import { stableCarId } from '../src/logic/teams.js';
 
 // ── Salsa20 key (GT7, community-documented) ──────────────────────────────────
 const SALSA20_KEY = Buffer.from('Simulator Interface Packet GT7 ver 0.0', 'utf8').slice(0, 32);
@@ -64,6 +65,11 @@ const pitState = new Map();
 
 // Cache of last successful hostname→IP resolutions (survives applyIPs calls)
 const resolvedCache = new Map();
+
+// IP → hostname learned from a LAN scan. Lets a console registered by bare IP
+// still be reported under a stable name, so a DHCP lease change does not make
+// it look like a different car. Survives re-scans; only ever gains entries.
+const scannedHostnames = new Map();
 
 function getLocalSubnets() {
   const subnets = [];
@@ -96,6 +102,7 @@ async function scanForPS5s() {
         try {
           const names = await dnsReverse(ip);
           const hostname = names[0]?.replace(/\.local\.?$/, '') || null;
+          if (hostname) scannedHostnames.set(ip, hostname);
           return { ip, hostname };
         } catch {
           return { ip, hostname: null };
@@ -384,7 +391,7 @@ udp.on('message', (msg, rinfo) => {
   if (!parsed) return;
 
   seenPS5s.add(rinfo.address);
-  const label = ipToLabel.get(rinfo.address) || rinfo.address;
+  const label = stableCarId(ipToLabel.get(rinfo.address), scannedHostnames.get(rinfo.address), rinfo.address);
 
   // Tire wear: track max radius seen per tire — new tire = largest radius
   const radii = parsed.tireRadius;
