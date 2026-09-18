@@ -12,6 +12,8 @@
  * Zero React dependency.
  */
 
+import { trackLapCrossings } from './gaps.js';
+
 /**
  * 16 colours chosen to stay distinguishable from each other on the dark
  * theme. Beyond 16 cars they wrap and repeat — a real GT7 lobby caps out
@@ -59,6 +61,41 @@ export function teamColor(orderIndex) {
 export function withTeamOrder(order, ip) {
   if (order.includes(ip)) return order;
   return [...order, ip];
+}
+
+/**
+ * One flush of the telemetry buffer: fold the packets that arrived since the
+ * last flush into the visible state, note anyone who started a new lap, extend
+ * the first-seen order, and drop cars that have gone quiet.
+ *
+ * Kept pure and out of the hook so the hot path is node-testable — this runs
+ * 20 times a second with the whole field in it, and a test that reimplemented
+ * it would be testing a lookalike rather than the real thing.
+ *
+ * Every field of the returned state reuses the incoming reference when nothing
+ * about it changed, so callers can compare by identity and skip re-rendering.
+ *
+ * @param state {{teams: Map, order: string[], crossings: Map}}
+ * @param pending Map<ip, packet> — buffered arrivals, newest per car
+ * @param now epoch ms, for staleness
+ */
+export function applyFlush(state, pending, now, staleMs = TEAM_STALE_MS) {
+  let { teams, order, crossings } = state;
+
+  if (pending.size > 0) {
+    // Read crossings before merging, while each packet's own arrival stamp is
+    // still distinguishable from the flush time.
+    crossings = trackLapCrossings(crossings, pending);
+
+    teams = new Map(teams);
+    for (const [ip, packet] of pending) {
+      teams.set(ip, packet);
+      order = withTeamOrder(order, ip);
+    }
+  }
+
+  teams = dropStaleTeams(teams, now, staleMs);
+  return { teams, order, crossings };
 }
 
 /**

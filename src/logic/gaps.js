@@ -39,7 +39,13 @@ export function trackLapCrossings(prev, packets) {
     const rec = prev.get(ip);
     if (rec && rec.lap === lap) continue;
     if (next === prev) next = new Map(prev);
-    next.set(ip, { lap, crossedAt: packet.ts });
+    // The first time a car is seen we learn only which lap it is on, not when
+    // it began that lap — it could be anywhere from the first corner to the
+    // last. Stamping "now" and treating that as a crossing made every car look
+    // simultaneous, so a field spread over half a minute read as dead level
+    // until the next lap. Mark that first sighting provisional; only a lap
+    // change we actually witnessed is a real crossing.
+    next.set(ip, { lap, crossedAt: packet.ts, witnessed: rec != null });
   }
   return next;
 }
@@ -53,12 +59,19 @@ export function trackLapCrossings(prev, packets) {
 export function lapInterval(ahead, behind) {
   if (!ahead || !behind) return null;
 
+  // A lap difference comes straight from GT7's own lap counter, so it is
+  // trustworthy immediately — no crossing needs to have been witnessed.
   const lapDiff = ahead.lap - behind.lap;
   if (lapDiff > 0) return { laps: lapDiff };
   // The caller ranks the rows; if the car we were told is behind is actually
   // on a later lap, the ranking disagrees with the timing and we say nothing
   // rather than render a negative gap.
   if (lapDiff < 0) return null;
+
+  // A second-level interval is only meaningful between two crossings we
+  // actually saw happen. Until then we say nothing rather than report the
+  // near-zero gap that comparing two first-sightings would produce.
+  if (!ahead.witnessed || !behind.witnessed) return null;
 
   const secs = (behind.crossedAt - ahead.crossedAt) / 1000;
   return secs >= 0 ? { secs } : null;

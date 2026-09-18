@@ -1,7 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { backoffDelay } from '../logic/connection';
-import { withTeamOrder, dropStaleTeams, coalescePacket } from '../logic/teams';
-import { trackLapCrossings } from '../logic/gaps';
+import { coalescePacket, applyFlush } from '../logic/teams';
 
 /**
  * Incoming packets are collected in a ref and applied to React state on this
@@ -156,34 +155,28 @@ export function useTelemetry() {
   useEffect(() => {
     const id = setInterval(() => {
       const pending = pendingRef.current;
-      const now = Date.now();
+      const before = {
+        teams: teamsRef.current,
+        order: orderRef.current,
+        crossings: crossingsRef.current,
+      };
+      const after = applyFlush(before, pending, Date.now());
+      pending.clear();
 
-      let next = teamsRef.current;
-      if (pending.size > 0) {
-        // Read crossings from the buffered packets, before they are merged and
-        // their arrival stamps stop being distinguishable from the flush time.
-        const crossings = trackLapCrossings(crossingsRef.current, pending);
-        if (crossings !== crossingsRef.current) {
-          crossingsRef.current = crossings;
-          setLapCrossings(crossings);
-        }
-
-        next = new Map(next);
-        for (const [ip, packet] of pending) next.set(ip, packet);
-
-        let order = orderRef.current;
-        for (const ip of pending.keys()) order = withTeamOrder(order, ip);
-        if (order !== orderRef.current) {
-          orderRef.current = order;
-          setTeamOrder(order);
-        }
-        pending.clear();
+      // applyFlush hands back the same reference for anything it did not
+      // touch, so each of these is a no-op on a quiet tick.
+      if (after.crossings !== before.crossings) {
+        crossingsRef.current = after.crossings;
+        setLapCrossings(after.crossings);
       }
-
-      next = dropStaleTeams(next, now);
-      if (next === teamsRef.current) return;
-      teamsRef.current = next;
-      setTeams(next);
+      if (after.order !== before.order) {
+        orderRef.current = after.order;
+        setTeamOrder(after.order);
+      }
+      if (after.teams !== before.teams) {
+        teamsRef.current = after.teams;
+        setTeams(after.teams);
+      }
     }, FLUSH_MS);
     return () => clearInterval(id);
   }, []);

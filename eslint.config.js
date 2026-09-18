@@ -26,4 +26,14 @@ export default defineConfig([
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
     },
   },
+  {
+    // Everything outside src/ runs under node, not in a browser: the relay and
+    // sync server, the recorder/validator scripts, and every test. Without this
+    // each one reported `process`, `Buffer`, `console` and friends as undefined
+    // — around sixty false errors that buried anything real in the noise.
+    files: ['tests/**/*.js', 'scripts/**/*.js', 'server/**/*.js'],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
 ])

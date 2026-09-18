@@ -45,6 +45,7 @@ section('trackLapCrossings — stamps each new lap, by packet arrival time');
 
   const next = trackLapCrossings(crossings, new Map([['a', pkt(4, 122_000)]]));
   assert('a new lap re-stamps', next.get('a').crossedAt === 122_000 && next.get('a').lap === 4);
+  assert('and is a real, witnessed crossing', next.get('a').witnessed === true);
   assert('and does not mutate the previous map', crossings.get('a').lap === 3);
 
   assert('a car with no lap yet is ignored',
@@ -55,8 +56,8 @@ section('lapInterval — the gap the old code could not see');
 {
   // Two cars on the same lap, thirty seconds apart, running identical pace.
   // The old rule subtracted last-lap times, got zero, and showed nothing.
-  const ahead = { lap: 12, crossedAt: 100_000 };
-  const behind = { lap: 12, crossedAt: 130_000 };
+  const ahead = { lap: 12, crossedAt: 100_000, witnessed: true };
+  const behind = { lap: 12, crossedAt: 130_000, witnessed: true };
   const gap = lapInterval(ahead, behind);
   assert('reports the real 30 s gap', gap.secs === 30, JSON.stringify(gap));
   assert('formats it', formatInterval(gap) === '+30.0s');
@@ -73,33 +74,59 @@ section('lapInterval — lapped cars');
 section('lapInterval — refuses to invent a number');
 {
   assert('null when the car ahead has not crossed yet',
-    lapInterval(undefined, { lap: 2, crossedAt: 1 }) === null);
+    lapInterval(undefined, { lap: 2, crossedAt: 1, witnessed: true }) === null);
   assert('null when the car behind has not crossed yet',
-    lapInterval({ lap: 2, crossedAt: 1 }, undefined) === null);
+    lapInterval({ lap: 2, crossedAt: 1, witnessed: true }, undefined) === null);
   assert('null rather than a negative gap if the ranking disagrees with timing',
-    lapInterval({ lap: 12, crossedAt: 130_000 }, { lap: 12, crossedAt: 100_000 }) === null);
+    lapInterval({ lap: 12, crossedAt: 130_000, witnessed: true }, { lap: 12, crossedAt: 100_000, witnessed: true }) === null);
   assert('null when the supposedly-behind car is on a later lap',
-    lapInterval({ lap: 12, crossedAt: 0 }, { lap: 13, crossedAt: 0 }) === null);
+    lapInterval({ lap: 12, crossedAt: 0, witnessed: true }, { lap: 13, crossedAt: 0, witnessed: true }) === null);
   assert('formatInterval passes null straight through', formatInterval(null) === null);
+}
+
+section('joining mid-race — no fictitious dead heat');
+{
+  // Caught by the multi-car integration test: on startup every car is stamped
+  // at the instant the app first sees it, so a field strung out over half a
+  // minute compared as simultaneous and every gap read about zero.
+  let c = new Map();
+  c = trackLapCrossings(c, new Map([
+    ['lead', pkt(5, 1_000)],
+    ['mid', pkt(5, 1_000)],   // same flush: identical stamps, unrelated positions
+  ]));
+  assert('no interval is claimed from two first sightings',
+    lapInterval(c.get('lead'), c.get('mid')) === null);
+  assert('so the column shows nothing rather than a false dead heat',
+    formatInterval(lapInterval(c.get('lead'), c.get('mid'))) === null);
+
+  // A lap difference is straight from GT7's counter and is trustworthy at once.
+  let d = trackLapCrossings(new Map(), new Map([['a', pkt(9, 0)], ['b', pkt(8, 0)]]));
+  assert('but a lap down is reported immediately',
+    formatInterval(lapInterval(d.get('a'), d.get('b'))) === '+1L');
 }
 
 section('a three-car field over two laps');
 {
   let c = new Map();
-  // Everyone starts lap 5 a few seconds apart.
+  // First sighting — provisional for everyone.
   c = trackLapCrossings(c, new Map([
-    ['lead', pkt(5, 0)],
-    ['mid', pkt(5, 2_500)],
-    ['back', pkt(5, 9_000)],
+    ['lead', pkt(4, -118_000)],
+    ['mid', pkt(4, -118_000)],
+    ['back', pkt(4, -118_000)],
   ]));
+  assert('nothing is reported before a lap has been witnessed',
+    lapInterval(c.get('lead'), c.get('mid')) === null);
+
+  // Now each car is actually seen crossing into lap 5, a few seconds apart.
+  c = trackLapCrossings(c, new Map([['lead', pkt(5, 0)]]));
+  c = trackLapCrossings(c, new Map([['mid', pkt(5, 2_500)]]));
+  c = trackLapCrossings(c, new Map([['back', pkt(5, 9_000)]]));
   assert('mid is 2.5 s off the lead', formatInterval(lapInterval(c.get('lead'), c.get('mid'))) === '+2.5s');
   assert('back is 6.5 s off mid', formatInterval(lapInterval(c.get('mid'), c.get('back'))) === '+6.5s');
 
   // Next lap the midfielder has closed right up.
-  c = trackLapCrossings(c, new Map([
-    ['lead', pkt(6, 120_000)],
-    ['mid', pkt(6, 120_400)],
-  ]));
+  c = trackLapCrossings(c, new Map([['lead', pkt(6, 120_000)]]));
+  c = trackLapCrossings(c, new Map([['mid', pkt(6, 120_400)]]));
   assert('the closed gap shows at the next crossing',
     formatInterval(lapInterval(c.get('lead'), c.get('mid'))) === '+0.4s');
   assert('a car still on the old lap reads as a lap down',
