@@ -20,7 +20,7 @@
 
 <br>
 
-![Tests](https://img.shields.io/badge/tests-2412%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
+![Tests](https://img.shields.io/badge/tests-2419%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
 ![Engine](https://img.shields.io/badge/strategy%20engine-pure%20JS%20%C2%B7%20zero%20React-c9a227?style=flat-square)
 ![Patterns](https://img.shields.io/badge/compound%20patterns-~4%20000%20enumerated-c9a227?style=flat-square)
 
@@ -60,7 +60,7 @@
 | **Multi-driver support** | Per-driver lap times per compound, configurable minimum drive time. Two stint-assignment strategies run per plan — one picks stint-by-stint by who owes the most, the other allocates the longest stints first and then refines the split by swapping stints between drivers — and the engine keeps whichever leaves every driver furthest from falling short. Works reliably with reasonable slack (minimums comfortably under an even split of the race); a minimum set right at the theoretical maximum a driver could get can still leave them a little short — that's the race's stint lengths not dividing evenly, not the assignment. |
 | **Mid-race recalculation** | Enter current lap + fuel for an updated strategy on the fly. Connects directly to live PS5 telemetry for automatic updates. |
 | **Live PS5 telemetry** | Full Télémétrie tab: dedicated live dashboard per team with speed, gear, RPM/throttle/brake bars, tyre temperature per corner, tyre life in laps-on-set, last/best lap times, and fuel level. |
-| **Multi-team leaderboard** | Every PS5 on the LAN on one table — position, interval to the car ahead (measured from start/finish crossings), compound, fuel bar, pit/on-track status. Name each team inline, and mark one as yours with ★. |
+| **Multi-team leaderboard** | Every PS5 on the LAN on one table — position, interval to the car ahead (measured from start/finish crossings), last lap, compound, fuel bar and litres, pit/on-track status. Name each team inline, and mark one as yours with ★. |
 | **GPS track map** | SVG circuit drawn live from PS5 position data at 60 Hz. Pit lane auto-detected. All tracked cars shown as colour-coded dots. |
 | **Compound tracking** | Pit exit detected from telemetry — app prompts to confirm which compound was fitted. Tracks each team's current tyre independently. |
 | **LAN PS5 scan** | One click scans the local network for active GT7 PS5s and adds them automatically, with DNS hostname resolution. |
@@ -168,6 +168,8 @@ This captures the typical GT7 pattern where grip drops faster in the second half
 A full LAN field running at once. Every car gets its own colour, **held for the whole session** — so the stripe on a leaderboard row and its dot on the circuit are always the same car, no matter how the order changes. The starred row (★ / **MOI**) is your team: it owns your drivers, your stint log and your strategy, while clicking any other row just inspects it.
 
 The circuit draws itself from live GPS as cars lap. On the right, per-corner **tyre temperature** and tyre life counted in laps-on-set — GT7 reports no tyre wear, so nothing here pretends otherwise.
+
+Each row carries position, team, interval, last lap, fuel and compound. The column is too narrow for DERNIER / MEILLEUR / CARBU as separate columns, so the last lap and the fuel litres sit under the name instead of costing width the team name needs.
 
 <img src="docs/media/multi-car-live.gif" alt="The same view in motion: ten coloured car dots running round the circuit while the leaderboard holds its gaps" width="100%"/>
 
@@ -354,7 +356,7 @@ npm run test:smoke    # 1-hour race smoke test
 | **Groups** | `tests/test_groups.js` | 18 | Team Groups → Races → Sessions state (pure, local) |
 | **Sync store** | `tests/test_sync_store.js` | 17 | Self-hosted sync server's filesystem store, path-traversal rejection |
 | **Sync client** | `tests/test_sync_client.js` | 11 | syncClient ↔ sync-server round trip over real HTTP |
-| **UI · leaderboard** | `tests/test_ui_leaderboard.js` | 48 | The rendered board — rename via ✎/double-click/blur/Escape, ★ my-team, colour stability when the order changes, real gap column, team names surviving a crowded row, 12-car field |
+| **UI · leaderboard** | `tests/test_ui_leaderboard.js` | 55 | The rendered board — rename via ✎/double-click/blur/Escape, ★ my-team, colour stability when the order changes, real gap column, team names surviving a crowded row, the narrow column's lap-time and fuel line, 12-car field |
 | **UI · track map** | `tests/test_ui_trackmap.js` | 36 | The rendered SVG with its rAF loop stepped by hand — a dot per car, own-car halo in team colour, dimmed pit cars, 3-char outlined tags, smooth motion between packets |
 | **UI · drivers** | `tests/test_ui_drivers.js` | 35 | Pilotes tab totals and stint rows, the live stint counting once the clock ticks, and the pit banner asking only for what is missing |
 | **UI · reconnect** | `tests/test_ui_reconnect.js` | 19 | What survives a PS5 going quiet, the relay dropping, and a browser reload — and what deliberately does not |
