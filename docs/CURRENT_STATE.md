@@ -105,6 +105,8 @@ Standalone Node process, **not** part of the Vite build. Run with
 
 ### Tests — `tests/` (plain node, no runner)
 
+The UI suites add a small DOM harness (`tests/helpers/`): jsdom, React's own `act`, and a hand-stepped `requestAnimationFrame` so the map's animation loop can be driven deterministically. `.jsx` is transpiled on import by an esbuild module hook (esbuild already ships with Vite), so the tests load the real components rather than a build artefact. No test runner — the same hand-rolled assert/section style as every other suite.
+
 | File | Role |
 |------|------|
 | `test.js` | `npm run test:smoke` — quick 1-hour race sanity check (not part of `npm test`). |
@@ -119,6 +121,10 @@ Standalone Node process, **not** part of the Vite build. Run with
 | `test_groups.js` | 18 assertions. Team Groups → Races → Sessions state (pure, local, `src/logic/groups.js`). |
 | `test_sync_store.js` | 17 assertions. Self-hosted sync server's filesystem store; path-traversal rejection. |
 | `test_sync_client.js` | 11 assertions. `syncClient` ↔ `sync-server` round trip over real HTTP. |
+| `test_ui_leaderboard.js` | 43 assertions. **Renders the real component.** Rename by ✎, double-click, blur and Escape; ★ marking; that a car keeps its colour when the running order changes; the interval column; a 12-car field. |
+| `test_ui_trackmap.js` | 36 assertions. **Renders the real SVG and steps its rAF loop by hand** — the imperative `createElementNS` dot code has no other safety net. A dot per car, own-car halo in the team's own colour, boxed cars dimmed not dropped, 3-char outlined tags at grid density, and that the dot advances on frames between packets without jumping back. |
+| `test_ui_drivers.js` | 35 assertions. Pilotes tab (stint rows, driver totals, the minimum flag, the live stint counting once the 1 s clock ticks, reset) and LiveDashboard's pit confirmation (drivers offered only on my own car; banner wording per what is still unknown). |
+| `test_ui_app_e2e.js` | 26 assertions. **The whole App mounted** against a fake relay with a ten-car field: packets reaching the board, ★ persisting and reaching the map's own-car marker, a rename reaching the map tag, the Pilotes tab following the star rather than the selection, a rival's pit stop not prompting for my driver, and all four tabs rendering. |
 | `test_relay_e2e.js` | 20 assertions. **Not mocked** — spawns `server/telemetry-server.js`, opens a real WebSocket, and sends real Salsa20-encrypted GT7 packets from ten distinct loopback source addresses. Proves the crypto, byte offsets, per-console keying and pit-edge logic hold across a real socket for a whole field (~4.5k packets relayed). Takes ~13 s, most of it genuinely waiting out the pit dwell. |
 | `test_multicar_integration.js` | 36 assertions. A simulated 12-car race driven through the **real** `applyFlush` (not a copy): measures the batching ratio (~36x fewer state updates than packets), colour stability when a car retires, pit edges surviving the flush window, intervals, `resolveActiveCars`, and the stint log over a full pit cycle. |
 | `test_gaps.js` | 20 assertions. `src/logic/gaps.js` — `trackLapCrossings` (stamps by packet arrival, never re-stamps mid-lap, same-ref when unchanged) and `lapInterval` (real seconds on the same lap, laps when lapped, null rather than a negative or invented gap). |
@@ -126,10 +132,10 @@ Standalone Node process, **not** part of the Vite build. Run with
 | `test_teams.js` | 45 assertions. `src/logic/teams.js` — the 16-colour palette, `teamColor` fallbacks, append-only `withTeamOrder`, `isStalePacket`/`dropStaleTeams` (same-reference returns when nothing changed), and the key multi-car invariant: a car keeps its colour when another car drops out. |
 | `test_stint_log.js` | 29 assertions. `src/logic/stintLog.js` — the Drivers-tab stint-log state machine: stint open/close, per-lap average/best/worst folding without retaining individual lap times, compound sync, driver (re)assignment, `reopenStint`'s defensive archive-before-overwrite (a missed pit-entry packet must not lose the prior stint), `recordLapIfClean`'s out-lap/paused/off-track exclusion. |
 
-`npm test` runs all seventeen suites above (every row except `test.js`) in
-sequence — 2 176 assertions total, all pure node; they print `✓/✗` lines and
+`npm test` runs all twenty-one suites above (every row except `test.js`) in
+sequence — 2 316 assertions total, all pure node; they print `✓/✗` lines and
 exit non-zero on failure. **These are the guardrail — keep every assertion
-green.** 536 of the 2 176 are hand-written; 1 640 are bulk-generated invariant
+green.** 676 of the 2 316 are hand-written; 1 640 are bulk-generated invariant
 sweeps (see `test_invariants.js` above) — worth knowing which is which when
 judging how much a passing `npm test` actually proves. (Assertion counts
 inside loop-based checks scale with how many stints/strategies an input
@@ -423,7 +429,7 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
 npm run dev          # Vite dev server :5173
 npm run build        # production build → /dist
 npm run lint         # ESLint flat config
-npm test             # all seventeen suites in tests/ (see §2 Tests table) — 2 176 assertions
+npm test             # all twenty-one suites in tests/ (see §2 Tests table) — 2 316 assertions
 npm run test:smoke   # quick 1h race test
 npm run telemetry    # start the UDP→WS relay (separate process)
 ```

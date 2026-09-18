@@ -204,8 +204,18 @@ export function useTelemetry() {
 
   useEffect(
     () => () => {
+      // Order matters: closing the socket fires onclose, which schedules a
+      // reconnect. Clearing the timer first and closing second therefore left
+      // a fresh timer behind that woke up a second later and opened a socket
+      // for a component that no longer exists. Suppress the handler first.
+      userClosedRef.current = true;
       clearTimeout(reconnectTimerRef.current);
-      wsRef.current?.close();
+      if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.onerror = null;
+        wsRef.current.close();
+        wsRef.current = null;
+      }
     },
     []
   );

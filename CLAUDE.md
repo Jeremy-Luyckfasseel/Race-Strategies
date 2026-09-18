@@ -194,6 +194,13 @@ map is `docs/CURRENT_STATE.md`; the task checklist is `docs/BACKLOG.md`.
 - **Always run `npm test` after changes.** Keep every existing assertion passing.
   **Never delete or weaken a test to make it pass** — fix the code or the test's
   premise, never silence the guardrail.
+- **UI changes need a UI test.** The components are rendered for real in
+  `tests/test_ui_*.js` via a small jsdom harness in `tests/helpers/` (React's
+  own `act`, a hand-stepped `requestAnimationFrame`, and an esbuild module hook
+  so `.jsx` imports work under plain node). Still no test runner — the same
+  assert/section style as every other suite. The track map's dots are built
+  with raw `createElementNS` inside an rAF loop, so nothing else catches a
+  break there.
 - **`src/logic/` stays pure JS** with zero React dependency, runnable under plain
   `node`. The engine is portable and node-testable by design.
 - **One feature per git branch.** Each phase / feature gets its own branch.

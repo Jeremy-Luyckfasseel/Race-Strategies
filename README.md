@@ -20,7 +20,7 @@
 
 <br>
 
-![Tests](https://img.shields.io/badge/tests-2176%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
+![Tests](https://img.shields.io/badge/tests-2316%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
 ![Engine](https://img.shields.io/badge/strategy%20engine-pure%20JS%20%C2%B7%20zero%20React-c9a227?style=flat-square)
 ![Patterns](https://img.shields.io/badge/compound%20patterns-~4%20000%20enumerated-c9a227?style=flat-square)
 
@@ -264,7 +264,7 @@ npm run dev        # → http://localhost:5173
 | `npm run dev` | Dev server at `http://localhost:5173` |
 | `npm run build` | Production build → `/dist` |
 | `npm run preview` | Preview the production build |
-| `npm test` | Full test suite — 2 176 assertions |
+| `npm test` | Full test suite — 2 316 assertions |
 | `npm run test:smoke` | Quick 1-hour race smoke test |
 | `npm run telemetry` | Start the UDP → WebSocket relay server |
 
@@ -302,7 +302,7 @@ npm run dev        # → http://localhost:5173
 The strategy engine has no React dependency and runs directly in Node:
 
 ```bash
-npm test              # 2 176 assertions across seventeen suites
+npm test              # 2 316 assertions across twenty-one suites
 npm run test:smoke    # 1-hour race smoke test
 ```
 
@@ -321,6 +321,10 @@ npm run test:smoke    # 1-hour race smoke test
 | **Groups** | `tests/test_groups.js` | 18 | Team Groups → Races → Sessions state (pure, local) |
 | **Sync store** | `tests/test_sync_store.js` | 17 | Self-hosted sync server's filesystem store, path-traversal rejection |
 | **Sync client** | `tests/test_sync_client.js` | 11 | syncClient ↔ sync-server round trip over real HTTP |
+| **UI · leaderboard** | `tests/test_ui_leaderboard.js` | 43 | The rendered board — rename via ✎/double-click/blur/Escape, ★ my-team, colour stability when the order changes, real gap column, 12-car field |
+| **UI · track map** | `tests/test_ui_trackmap.js` | 36 | The rendered SVG with its rAF loop stepped by hand — a dot per car, own-car halo in team colour, dimmed pit cars, 3-char outlined tags, smooth motion between packets |
+| **UI · drivers** | `tests/test_ui_drivers.js` | 35 | Pilotes tab totals and stint rows, the live stint counting once the clock ticks, and the pit banner asking only for what is missing |
+| **UI · whole app** | `tests/test_ui_app_e2e.js` | 26 | The entire App mounted against a fake relay with 10 cars — ★ and renames reaching the map, the Pilotes tab following the star not the selection, all four tabs |
 | **Relay end-to-end** | `tests/test_relay_e2e.js` | 20 | Spawns the real relay and fires real encrypted GT7 packets from 10 distinct loopback IPs — crypto, byte offsets, per-console keying, pit edges, throughput |
 | **Multi-car pipeline** | `tests/test_multicar_integration.js` | 36 | A simulated 12-car race through the real `applyFlush` — batching ratio, colour stability across a dropout, pit edges surviving the buffer, gaps, car identity, stint log |
 | **Gaps** | `tests/test_gaps.js` | 20 | Leaderboard intervals from line crossings — the 30 s gap the old last-lap-time subtraction could not see |
