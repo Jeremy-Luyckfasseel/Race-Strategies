@@ -45,6 +45,7 @@ export function useTelemetry() {
   const [serverIPs, setServerIPs] = useState([]);
   const [scanning, setScanning] = useState(false);
   const [scanResults, setScanResults] = useState([]);
+  const [relayAddresses, setRelayAddresses] = useState([]);
 
   // Packets land here between flushes; the interval below moves them into state.
   const pendingRef = useRef(new Map());
@@ -128,6 +129,10 @@ export function useTelemetry() {
         if (!pkt) return;
         if (pkt.type === 'ips') {
           setServerIPs(pkt.ips || []);
+        } else if (pkt.type === 'hello') {
+          setRelayAddresses(
+            (pkt.lanAddresses || []).map((a) => `ws://${a}:${pkt.port ?? 20777}`),
+          );
         } else if (pkt.type === 'scanning') {
           setScanning(true);
         } else if (pkt.type === 'scanResult') {
@@ -220,5 +225,5 @@ export function useTelemetry() {
     []
   );
 
-  return { connected, reconnecting, teams, teamOrder, lapCrossings, serverIPs, connect, disconnect, sendIPs, scan, scanning, scanResults };
+  return { connected, reconnecting, teams, teamOrder, lapCrossings, relayAddresses, serverIPs, connect, disconnect, sendIPs, scan, scanning, scanResults };
 }

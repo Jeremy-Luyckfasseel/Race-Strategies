@@ -71,6 +71,21 @@ const resolvedCache = new Map();
 // it look like a different car. Survives re-scans; only ever gains entries.
 const scannedHostnames = new Map();
 
+/**
+ * This machine's LAN addresses. Shown in the UI so a second PC at the same
+ * event can be pointed at this relay without anyone digging through Windows
+ * network settings for an IP.
+ */
+function getLocalAddresses() {
+  const out = [];
+  for (const addrs of Object.values(networkInterfaces())) {
+    for (const addr of addrs) {
+      if (addr.family === 'IPv4' && !addr.internal) out.push(addr.address);
+    }
+  }
+  return out;
+}
+
 function getLocalSubnets() {
   const subnets = [];
   for (const addrs of Object.values(networkInterfaces())) {
@@ -344,6 +359,8 @@ wss.on('connection', ws => {
 
   // Tell the browser which labels the server is currently tracking
   ws.send(JSON.stringify({ type: 'ips', ips: [...labelToIP.keys()] }));
+  // …and where other machines on the LAN can reach this relay.
+  ws.send(JSON.stringify({ type: 'hello', lanAddresses: getLocalAddresses(), port: WS_PORT }));
 
   ws.on('message', async raw => {
     try {
