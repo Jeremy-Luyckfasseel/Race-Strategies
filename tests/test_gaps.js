@@ -133,5 +133,38 @@ section('a three-car field over two laps');
     formatInterval(lapInterval(c.get('lead'), c.get('back'))) === '+1L');
 }
 
+section('a ten-car field strung out down the road');
+{
+  // Replays the shape scripts/fake-field.mjs produces: ten cars on a 90 s lap,
+  // each 540 ms behind the one in front, every car's packet emitted on the same
+  // 60 Hz tick. Added after a live run appeared to show whole-second gaps — this
+  // proves the interval maths itself is not the cause.
+  const LAP = 90_000, HZ = 60, CARS = 10, SPACING = 0.006;
+  let c = new Map();
+  for (let e = 0; e <= 100_000; e += 1000 / HZ) {
+    const batch = new Map();
+    for (let i = 0; i < CARS; i++) {
+      const progress = e / LAP - i * SPACING;
+      batch.set(`car${i}`, { currentLap: Math.max(1, Math.floor(progress) + 1), ts: e });
+    }
+    c = trackLapCrossings(c, batch);
+  }
+
+  assert('every car has crossed and been witnessed',
+    [...c.values()].every((r) => r.witnessed && r.lap === 2));
+
+  const expected = (LAP * SPACING) / 1000;   // 0.54 s
+  const intervals = [];
+  for (let i = 1; i < CARS; i++) {
+    intervals.push(lapInterval(c.get(`car${i - 1}`), c.get(`car${i}`)).secs);
+  }
+  assert('every adjacent pair reports the real spacing, not a rounded second',
+    intervals.every((s) => Math.abs(s - expected) < 0.05),
+    JSON.stringify(intervals.map((s) => +s.toFixed(3))));
+  assert('none of them collapses to zero', intervals.every((s) => s > 0.4));
+  assert('so the field spans about five seconds end to end',
+    Math.abs(intervals.reduce((a, b) => a + b, 0) - expected * (CARS - 1)) < 0.2);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

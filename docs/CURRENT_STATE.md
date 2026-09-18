@@ -136,9 +136,9 @@ The UI suites add a small DOM harness (`tests/helpers/`): jsdom, React's own `ac
 | `test_stint_log.js` | 29 assertions. `src/logic/stintLog.js` — the Drivers-tab stint-log state machine: stint open/close, per-lap average/best/worst folding without retaining individual lap times, compound sync, driver (re)assignment, `reopenStint`'s defensive archive-before-overwrite (a missed pit-entry packet must not lose the prior stint), `recordLapIfClean`'s out-lap/paused/off-track exclusion. |
 
 `npm test` runs all twenty-three suites above (every row except `test.js`) in
-sequence — 2 403 assertions total, all pure node; they print `✓/✗` lines and
+sequence — 2 407 assertions total, all pure node; they print `✓/✗` lines and
 exit non-zero on failure. **These are the guardrail — keep every assertion
-green.** 763 of the 2 403 are hand-written; 1 640 are bulk-generated invariant
+green.** 767 of the 2 407 are hand-written; 1 640 are bulk-generated invariant
 sweeps (see `test_invariants.js` above) — worth knowing which is which when
 judging how much a passing `npm test` actually proves. (Assertion counts
 inside loop-based checks scale with how many stints/strategies an input
@@ -438,7 +438,7 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
 npm run dev          # Vite dev server :5173
 npm run build        # production build → /dist
 npm run lint         # ESLint flat config
-npm test             # all twenty-three suites in tests/ (see §2 Tests table) — 2 403 assertions
+npm test             # all twenty-three suites in tests/ (see §2 Tests table) — 2 407 assertions
 npm run test:smoke   # quick 1h race test
 npm run telemetry    # start the UDP→WS relay (separate process)
 ```

@@ -2945,11 +2945,22 @@ input[type="range"]::-moz-range-thumb {
 .telem-3col-lb .lb-inline-fuel { display: block; }
 .telem-3col-lb .lb-header,
 .telem-3col-lb .lb-row {
-  grid-template-columns: 34px 1fr 58px 46px;
+  grid-template-columns: 28px 1fr 46px 38px;
 }
 .telem-3col-lb .lb-hcol  { font-size: 0.44rem; padding: 4px 6px; }
 .telem-3col-lb .lbc      { padding: 6px 6px; }
-.telem-3col-lb .lb-tname { font-size: 0.67rem; }
+
+/* In this narrow column the ★ and ✎ were squeezing the team name to literally
+   zero width — every row showed a colour and nothing else. The pencil goes
+   (double-clicking the name still opens the editor, and the full-width
+   leaderboard keeps it), the star is tightened, and the name is given a floor
+   it cannot be compressed below. */
+.telem-3col-lb .lb-rename-btn { display: none; }
+.telem-3col-lb .lb-mine-btn   { padding: 0 3px 0 0; font-size: 0.72rem; }
+.telem-3col-lb .lb-stripe     { margin-right: 5px; }
+.telem-3col-lb .lb-tname      { font-size: 0.67rem; min-width: 4ch; }
+.telem-3col-lb .lb-mine-pill,
+.telem-3col-lb .lb-box-pill   { margin-left: 3px; padding: 1px 3px 0; }
 .telem-3col-lb .lb-picker-label { display: none; }
 .telem-3col-lb .lb-picker-grid  { flex-wrap: wrap; gap: 3px; }
 .telem-3col-lb .lb-picker       { padding: 5px 8px 6px; }
