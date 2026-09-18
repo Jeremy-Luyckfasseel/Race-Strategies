@@ -19,7 +19,8 @@
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && node scripts/build-installer.js",
     "test:ui": "node --import ./tests/helpers/register-jsx.mjs tests/test_ui_leaderboard.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_trackmap.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_drivers.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_app_e2e.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_reconnect.js",
-    "diag:tyres": "node scripts/diag-tyres.js"
+    "diag:tyres": "node scripts/diag-tyres.js",
+    "demo": "node scripts/fake-field.mjs 10 0 0.35"
   },
   "dependencies": {
     "react": "^19.2.0",
