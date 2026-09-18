@@ -20,7 +20,7 @@
 
 <br>
 
-![Tests](https://img.shields.io/badge/tests-2407%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
+![Tests](https://img.shields.io/badge/tests-2412%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
 ![Engine](https://img.shields.io/badge/strategy%20engine-pure%20JS%20%C2%B7%20zero%20React-c9a227?style=flat-square)
 ![Patterns](https://img.shields.io/badge/compound%20patterns-~4%20000%20enumerated-c9a227?style=flat-square)
 
@@ -168,6 +168,10 @@ This captures the typical GT7 pattern where grip drops faster in the second half
 A full LAN field running at once. Every car gets its own colour, **held for the whole session** — so the stripe on a leaderboard row and its dot on the circuit are always the same car, no matter how the order changes. The starred row (★ / **MOI**) is your team: it owns your drivers, your stint log and your strategy, while clicking any other row just inspects it.
 
 The circuit draws itself from live GPS as cars lap. On the right, per-corner **tyre temperature** and tyre life counted in laps-on-set — GT7 reports no tyre wear, so nothing here pretends otherwise.
+
+<img src="docs/media/multi-car-live.gif" alt="The same view in motion: ten coloured car dots running round the circuit while the leaderboard holds its gaps" width="100%"/>
+
+Moving, it looks like this. The dots are rendered a fraction of a second behind the newest packet and interpolated between samples, so the field glides instead of stuttering at the relay's update rate — the same trick game netcode uses. The **ÉCART** column is a real interval, measured from when each car last crossed the line, not a subtraction of lap times.
 
 <br>
 
@@ -350,7 +354,7 @@ npm run test:smoke    # 1-hour race smoke test
 | **Groups** | `tests/test_groups.js` | 18 | Team Groups → Races → Sessions state (pure, local) |
 | **Sync store** | `tests/test_sync_store.js` | 17 | Self-hosted sync server's filesystem store, path-traversal rejection |
 | **Sync client** | `tests/test_sync_client.js` | 11 | syncClient ↔ sync-server round trip over real HTTP |
-| **UI · leaderboard** | `tests/test_ui_leaderboard.js` | 43 | The rendered board — rename via ✎/double-click/blur/Escape, ★ my-team, colour stability when the order changes, real gap column, 12-car field |
+| **UI · leaderboard** | `tests/test_ui_leaderboard.js` | 48 | The rendered board — rename via ✎/double-click/blur/Escape, ★ my-team, colour stability when the order changes, real gap column, team names surviving a crowded row, 12-car field |
 | **UI · track map** | `tests/test_ui_trackmap.js` | 36 | The rendered SVG with its rAF loop stepped by hand — a dot per car, own-car halo in team colour, dimmed pit cars, 3-char outlined tags, smooth motion between packets |
 | **UI · drivers** | `tests/test_ui_drivers.js` | 35 | Pilotes tab totals and stint rows, the live stint counting once the clock ticks, and the pit banner asking only for what is missing |
 | **UI · reconnect** | `tests/test_ui_reconnect.js` | 19 | What survives a PS5 going quiet, the relay dropping, and a browser reload — and what deliberately does not |

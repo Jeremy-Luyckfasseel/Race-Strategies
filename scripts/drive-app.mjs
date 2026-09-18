@@ -10,10 +10,12 @@
  *   eval  <js>         evaluate an expression in the page, print the result
  *   click <selector>   click the first match
  *   text  <selector>   print textContent of all matches
+ *   frames <dir> <n> <ms> [selector]
+ *                      capture n PNGs ms apart into dir, cropped to selector
  */
 
 import { WebSocket } from 'ws';
-import { writeFileSync } from 'fs';
+import { writeFileSync, mkdirSync } from 'fs';
 
 const PORT = process.env.CDP_PORT || 9222;
 
@@ -63,6 +65,25 @@ try {
     const file = args[0] || 'shot.png';
     writeFileSync(file, Buffer.from(data, 'base64'));
     console.log(`wrote ${file}`);
+  } else if (command === 'frames') {
+    // One connection, many shots — a fresh process per frame is far too slow
+    // to catch cars actually moving.
+    const [dir, count = '60', every = '100', selector] = args;
+    mkdirSync(dir, { recursive: true });
+    let clip;
+    if (selector) {
+      const r = await evaluate(ws, `(() => { const e = document.querySelector(${JSON.stringify(selector)});
+        if (!e) return null; const b = e.getBoundingClientRect();
+        return { x: b.x, y: b.y, width: b.width, height: b.height, scale: 1 }; })()`);
+      clip = r.result?.value;
+      if (!clip) throw new Error(`selector not found: ${selector}`);
+    }
+    for (let i = 0; i < Number(count); i++) {
+      const { data } = await send(ws, 'Page.captureScreenshot', { format: 'png', ...(clip ? { clip } : {}) });
+      writeFileSync(`${dir}/f${String(i).padStart(4, '0')}.png`, Buffer.from(data, 'base64'));
+      await new Promise((r) => setTimeout(r, Number(every)));
+    }
+    console.log(`wrote ${count} frames to ${dir}`);
   } else if (command === 'eval') {
     const r = await evaluate(ws, args.join(' '));
     console.log(JSON.stringify(r.result?.value ?? r.result, null, 2));
@@ -78,7 +99,7 @@ try {
       [...document.querySelectorAll(${JSON.stringify(sel)})].map(e => e.textContent.trim())`);
     console.log(JSON.stringify(r.result?.value, null, 2));
   } else {
-    console.error('commands: shot <file> | eval <js> | click <sel> | text <sel>');
+    console.error('commands: shot <file> | frames <dir> <n> <ms> [sel] | eval <js> | click <sel> | text <sel>');
     process.exitCode = 1;
   }
 } finally {

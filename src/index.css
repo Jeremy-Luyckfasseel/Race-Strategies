@@ -1923,9 +1923,14 @@ input[type="range"]::-moz-range-thumb {
   overflow: hidden;
 }
 
-/* Left: leaderboard — ~15% of the full viewport width */
+/* Left: leaderboard — wide enough for a real team name, not just an IP.
+   At 14vw the name cell measured ~51px in the running app: enough for
+   "127.0.0.2" and nothing anyone would actually type. Measured again at 20vw
+   on a 1424px window the name cell is ~114px, which clears a long name
+   ("Bordeaux Motorsport" needs 87px) even on the starred row, where the MOI
+   pill costs another ~22px. The map keeps the rest and still gets ~735px. */
 .telem-3col-lb {
-  width: max(160px, 14vw);
+  width: max(230px, 20vw);
   flex-shrink: 0;
   border-right: 1px solid var(--rule-mid);
   overflow-y: auto;
