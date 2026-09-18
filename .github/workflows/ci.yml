@@ -1,0 +1,44 @@
+name: CI
+
+# Every push and every pull request. The suite includes tests that spawn the
+# real relay and drive real UDP sockets, so a green run here means rather more
+# than "it compiled".
+on:
+  push:
+  pull_request:
+
+# A new push to the same branch makes the previous run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Vite requires 20.19+ / 22.12+. Pinned to a version that satisfies
+          # that, rather than whatever the runner defaults to.
+          node-version: '22.12'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      # The relay end-to-end test binds 127.0.0.2-127.0.0.11 so the server sees
+      # ten distinct consoles. The whole 127/8 range is local on Linux, so this
+      # needs no extra setup — but it is the one step with an environment
+      # assumption worth naming.
+      - name: Test
+        run: npm test
