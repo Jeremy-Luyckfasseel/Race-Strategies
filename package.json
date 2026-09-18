@@ -18,7 +18,8 @@
     "electron:build": "npm run build && electron .",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder --win",
-    "test:ui": "node --import ./tests/helpers/register-jsx.mjs tests/test_ui_leaderboard.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_trackmap.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_drivers.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_app_e2e.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_reconnect.js"
+    "test:ui": "node --import ./tests/helpers/register-jsx.mjs tests/test_ui_leaderboard.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_trackmap.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_drivers.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_app_e2e.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_reconnect.js",
+    "diag:tyres": "node scripts/diag-tyres.js"
   },
   "dependencies": {
     "react": "^19.2.0",

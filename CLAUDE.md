@@ -122,7 +122,7 @@ The `no-unused-vars` rule ignores variables whose names start with an uppercase 
 | `src/components/ResultsSummary.jsx` | KPI cards + driver summary chips + strategy comparison grid (top-6, expandable) |
 | `src/components/StrategyTimeline.jsx` | Recharts horizontal bar chart with pit markers, pit-window shading, compound colors |
 | `src/components/StintTable.jsx` | Stint detail table; highlights warning rows in red |
-| `src/components/LiveDashboard.jsx` | Single-team telemetry widget: gear/speed, RPM/throttle/brake bars, fuel bar, tire temp+wear per corner, compound picker, SVG track map (GPS recorded at 60Hz RAF) with pit lane detection and multi-car dots |
+| `src/components/LiveDashboard.jsx` | Single-team telemetry widget: gear/speed, RPM/throttle/brake bars, fuel bar, **tyre temperature per corner** (the radius-derived "wear %" was removed — it never moved on real hardware; see `npm run diag:tyres`), modelled tyre life in laps-on-set vs. configured `tireLife`, driver + compound pickers, SVG track map (GPS recorded at 60Hz RAF) with pit lane detection and multi-car dots |
 | `src/components/TelemetryControls.jsx` | Collapsible panel: server URL + connect/disconnect, PS5 IP list management, network scan button and results |
 | `src/components/TelemetryLeaderboard.jsx` | Multi-team table sorted by race position: lap/gap, last/best lap times, compound picker, fuel bar, pit/track status |
 | `src/components/DriversTab.jsx` | Pilotes tab: per-driver total drive time vs. `minDriverTimeSecs`, and a per-stint log (driver, tyre, laps, duration, avg/best/worst lap) for the selected team, including the in-progress stint |

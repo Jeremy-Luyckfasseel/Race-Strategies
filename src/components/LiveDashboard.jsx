@@ -18,15 +18,71 @@ function gearLabel(g) {
   return String(g);
 }
 
-function tireWearColor(w) {
-  if (w == null) return 'var(--text-muted)';
-  if (w > 75) return '#22CC6E';
-  if (w > 50) return '#F0C800';
-  if (w > 25) return '#F08420';
+/**
+ * Tyre temperature, which GT7 actually reports — unlike the "wear" that used
+ * to sit here, which was radius-derived and never verified to move (see
+ * docs/DECISIONS.md item 4 and `npm run diag:tyres`).
+ *
+ * Bands are the usual slick working range: cold under ~70, happy 80-100,
+ * going off past ~110.
+ */
+function tireTempColor(t) {
+  if (t == null) return 'var(--text-muted)';
+  if (t < 60) return '#5EAED8';   // stone cold
+  if (t < 75) return '#7FD4E8';   // coming in
+  if (t <= 105) return '#22CC6E'; // working range
+  if (t <= 118) return '#F0C800'; // hot
+  return '#E53535';               // overheating
+}
+
+/** Fraction of the configured tyre life used up, for the age bar. */
+function tyreLifeColor(used) {
+  if (used == null) return 'var(--text-muted)';
+  if (used < 0.5) return '#22CC6E';
+  if (used < 0.75) return '#F0C800';
+  if (used < 1) return '#F08420';
   return '#E53535';
 }
 
 // ── Static sub-components ───────────────────────────────────────────────────
+
+/**
+ * How far through this set of tyres the car is, counted in laps since it left
+ * the pits and measured against the tyre life configured for that compound.
+ *
+ * Modelled, not measured — GT7 reports no tyre wear — so it is labelled as an
+ * estimate. That is the axis DECISIONS.md item 4 settled on: lap-count since
+ * the stint began, which is exact, rather than a radius reading that never
+ * moved.
+ */
+function TyreAge({ laps, life }) {
+  if (laps == null) return null;
+  const known = life > 0;
+  const used = known ? laps / life : null;
+  const colour = tyreLifeColor(used);
+  return (
+    <div className="tw-age">
+      <span className="ld-section-label">
+        VIE PNEUS <span className="ld-dim">estimée</span>
+      </span>
+      <div className="tw-age-body">
+        <span className="tw-age-val" style={{ color: colour }}>
+          {laps}
+          {known && <span className="ld-dim"> / {life}</span>}
+          <span className="tw-age-unit"> tours</span>
+        </span>
+        {known && (
+          <div className="tw-age-track">
+            <div
+              className="tw-age-fill"
+              style={{ width: `${Math.min(100, used * 100)}%`, background: colour }}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function CarTopDown() {
   return (
@@ -43,18 +99,21 @@ function CarTopDown() {
   );
 }
 
-function TireCorner({ wear, pos }) {
-  const wc = tireWearColor(wear);
-  const hasWear = wear != null;
+function TireCorner({ temp, pos }) {
+  const tc = tireTempColor(temp);
+  const has = temp != null && Number.isFinite(temp);
+  // Fill the bar across the band that matters on track (40-130 °C), so the
+  // four corners can be compared at a glance for a hot side or a cold corner.
+  const pct = has ? Math.max(0, Math.min(100, ((temp - 40) / 90) * 100)) : 0;
   return (
-    <div className="tw-corner" style={{ borderColor: hasWear ? wc : 'var(--rule)' }}>
+    <div className="tw-corner" style={{ borderColor: has ? tc : 'var(--rule)' }}>
       <span className="tw-pos">{pos}</span>
-      <span className="tw-wear-big" style={{ color: hasWear ? wc : 'var(--text-muted)' }}>
-        {hasWear ? wear.toFixed(0) : '—'}
-        {hasWear && <span className="tw-wear-unit">%</span>}
+      <span className="tw-wear-big" style={{ color: has ? tc : 'var(--text-muted)' }}>
+        {has ? temp.toFixed(0) : '—'}
+        {has && <span className="tw-wear-unit">°C</span>}
       </span>
       <div className="tw-wear-track">
-        <div className="tw-wear-fill" style={{ width: hasWear ? `${Math.min(100, wear)}%` : '0%', background: wc }} />
+        <div className="tw-wear-fill" style={{ width: `${pct}%`, background: tc }} />
       </div>
     </div>
   );
@@ -426,6 +485,7 @@ export function TrackMap({ currentLap, cars, mapRef, onReset }) {
 export default function LiveDashboard({
   data, label, compound, pendingConfirmation, onCompoundChange, onPitEntry,
   drivers, currentDriverId, pendingDriver, onDriverChange,
+  tyreLaps = null, tyreLife = null,
 }) {
   const [showVitals, setShowVitals] = useState(false);
 
@@ -571,7 +631,7 @@ export default function LiveDashboard({
               </div>
             </div>
 
-            {data.tireWear && (
+            {(data.tireTemp || compound || drivers?.length) && (
               <div className="ld-tire-section">
                 {(pendingConfirmation || pendingDriver) && (
                   <div className="ld-confirm-banner">
@@ -612,20 +672,22 @@ export default function LiveDashboard({
                     ))}
                   </div>
                 </div>
+                <TyreAge laps={tyreLaps} life={tyreLife} />
+
                 <div className="tw-grid">
                   <div className="tw-cell tw-fl">
-                    <TireCorner wear={data.tireWear[0]} pos="FL" />
+                    <TireCorner temp={data.tireTemp?.[0]} pos="FL" />
                   </div>
                   <div className="tw-center"><CarTopDown /></div>
                   <div className="tw-cell tw-fr">
-                    <TireCorner wear={data.tireWear[1]} pos="FR" />
+                    <TireCorner temp={data.tireTemp?.[1]} pos="FR" />
                   </div>
                   <div className="tw-cell tw-rl">
-                    <TireCorner wear={data.tireWear[2]} pos="RL" />
+                    <TireCorner temp={data.tireTemp?.[2]} pos="RL" />
                   </div>
                   <div className="tw-center-gap" />
                   <div className="tw-cell tw-rr">
-                    <TireCorner wear={data.tireWear[3]} pos="RR" />
+                    <TireCorner temp={data.tireTemp?.[3]} pos="RR" />
                   </div>
                 </div>
               </div>

@@ -649,6 +649,17 @@ export default function App() {
                           currentDriverId={stintLog.logs.get(displayIp)?.current?.driverId ?? null}
                           pendingDriver={stintLog.pendingDriverIps.has(displayIp)}
                           onDriverChange={(id) => stintLog.assignDriver(displayIp, id)}
+                          // Tyre life is counted in laps since this set went
+                          // on, measured against the life configured for that
+                          // compound — GT7 reports no wear of its own.
+                          tyreLaps={(() => {
+                            const open = stintLog.logs.get(displayIp)?.current;
+                            const lap = telem.teams.get(displayIp)?.currentLap;
+                            return open && lap != null ? Math.max(0, lap - open.startLap) : null;
+                          })()}
+                          tyreLife={Number(
+                            inputs.compounds.find((c) => c.id === teamCompounds[displayIp])?.tireLife,
+                          ) || null}
                         />
                       ) : (
                         <div className="telem-no-sel">
