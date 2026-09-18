@@ -195,6 +195,38 @@ section('the name is actually legible, not squeezed to nothing');
   v.unmount();
 }
 
+section('the narrow column still shows the last lap and the fuel');
+{
+  // The narrow telemetry column has no room for the DERNIER / MEILLEUR / CARBU
+  // columns, so those cells are hidden by CSS there and the two numbers worth
+  // keeping ride under the team name instead. CSS cannot be asserted from
+  // jsdom, but the markup it depends on can: if this line ever goes away, the
+  // narrow column silently loses the lap time and the fuel reading entirely.
+  const v = mount();
+  const rows = $$(v.container, '.lb-row');
+  assert('every row carries the meta line', $$(v.container, '.lb-meta').length === 4);
+  assert('it holds the fuel bar', $($$(v.container, '.lb-meta')[0], '.lb-inline-fuel') !== null);
+  assert('the last lap is there, formatted',
+    textOf($(rows[0], '.lb-meta-lap')) === '2:01.000', textOf($(rows[0], '.lb-meta-lap')));
+  assert('and the fuel in litres', textOf($(rows[0], '.lb-meta-fuel')) === '40L',
+    textOf($(rows[0], '.lb-meta-fuel')));
+
+  // Same numbers as the wide columns — one source, two placements.
+  assert('it agrees with the DERNIER column',
+    textOf($(rows[0], '.lb-meta-lap')) === textOf($(rows[0], '.lbc-last')));
+
+  const blank = mount({
+    teams: new Map([[IPS[0], car({ racePos: 1, lastLapMs: 0, fuelLiters: null })]]),
+    teamOrder: [IPS[0]],
+  });
+  assert('a car with no lap yet shows a placeholder, not NaN',
+    textOf($(blank.container, '.lb-meta-lap')) === '—',
+    textOf($(blank.container, '.lb-meta-lap')));
+  assert('and unknown fuel too', textOf($(blank.container, '.lb-meta-fuel')) === '—');
+  blank.unmount();
+  v.unmount();
+}
+
 section('colours match what the map will paint');
 {
   const v = mount();

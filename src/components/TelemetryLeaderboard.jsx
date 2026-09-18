@@ -164,11 +164,20 @@ export default function TelemetryLeaderboard({
                     {isMine && <span className="lb-mine-pill">MOI</span>}
                     {!d.onTrack && <span className="lb-box-pill">BOX</span>}
                   </div>
-                  <div className="lb-inline-fuel">
-                    <div
-                      className="lb-inline-fuel-fill"
-                      style={{ width: `${fuelPct}%`, background: fuelBarColor(fuelPct) }}
-                    />
+                  {/* Narrow column only: the DERNIER / MEILLEUR / CARBU columns
+                      do not fit there, so the two numbers worth having follow
+                      the name instead of costing another column. */}
+                  <div className="lb-meta">
+                    <div className="lb-inline-fuel">
+                      <div
+                        className="lb-inline-fuel-fill"
+                        style={{ width: `${fuelPct}%`, background: fuelBarColor(fuelPct) }}
+                      />
+                    </div>
+                    <span className="lb-meta-lap">{formatMs(d.lastLapMs)}</span>
+                    <span className="lb-meta-fuel">
+                      {d.fuelLiters != null ? `${d.fuelLiters.toFixed(0)}L` : '—'}
+                    </span>
                   </div>
                 </div>
               </div>
