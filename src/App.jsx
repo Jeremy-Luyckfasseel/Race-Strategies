@@ -721,7 +721,6 @@ export default function App() {
                           compound={teamCompounds[displayIp] || null}
                           pendingConfirmation={detector.pendingIps.has(displayIp)}
                           onCompoundChange={(c) => updateTeamCompound(displayIp, c)}
-                          onPitEntry={() => updateTeamCompound(displayIp, null, false)}
                           // Only my own car has a driver roster — offering my
                           // drivers on a rival's dashboard would just log a lie.
                           drivers={displayIp === strategyIp ? inputs.drivers : null}

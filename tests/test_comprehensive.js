@@ -178,7 +178,6 @@ section('Compound switch fuel planning — switching to faster compound');
   if (res.length > 0) {
     const hToS = res.find(r => r.label.includes('Hard') && r.label.includes('Soft'));
     if (hToS) {
-      const pits = hToS.strategy.stints.filter(s => s.pitLap !== null);
       // After switching to Soft (faster), no stint should end with a warning about insufficient fuel
       const fuelWarnings = hToS.strategy.stints.filter(s => s.warning && s.warning.includes('fuel'));
       assert('No fuel warnings in H→S strategy', fuelWarnings.length === 0,
