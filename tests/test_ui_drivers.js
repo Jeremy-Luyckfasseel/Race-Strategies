@@ -226,6 +226,78 @@ section('picking a driver');
   v.unmount();
 }
 
+section('the tyre panel reports what GT7 actually sends');
+{
+  // The per-corner readout used to be a wear percentage derived from tyre
+  // radius — docs flagged it unproven and track testing said it does not move.
+  // It now shows temperature, which the packet really carries.
+  const v = dash({ tyreLaps: 8, tyreLife: 25 });
+  const corners = $$(v.container, '.tw-corner');
+  assert('all four corners are shown', corners.length === 4, `${corners.length}`);
+
+  const readouts = corners.map((c) => textOf($(c, '.tw-wear-big')));
+  assert('each reports a temperature in °C',
+    readouts.every((r) => /^\d+°C$/.test(r)), JSON.stringify(readouts));
+  assert('the values are the ones from the packet',
+    readouts[0] === '85°C' && readouts[3] === '89°C', JSON.stringify(readouts));
+  assert('no corner claims a wear percentage any more',
+    !readouts.some((r) => r.includes('%')), JSON.stringify(readouts));
+  v.unmount();
+}
+
+section('tyre life is counted in laps, and labelled as an estimate');
+{
+  const v = dash({ tyreLaps: 8, tyreLife: 25 });
+  const age = $(v.container, '.tw-age');
+  assert('the age block is shown', age !== null);
+  assert('it reads laps used against the configured life',
+    /8\s*\/\s*25/.test(textOf(age)), textOf(age));
+  assert('in laps, not percent', /tours/i.test(textOf(age)) && !/%/.test(textOf(age)), textOf(age));
+  assert('and says plainly that it is an estimate',
+    /estim/i.test(textOf(age)), textOf(age));
+
+  const fill = $(v.container, '.tw-age-fill');
+  assert('the bar is filled to the fraction used',
+    fill.style.width === `${(8 / 25) * 100}%`, fill.style.width);
+  v.unmount();
+}
+
+section('tyre life degrades visibly and never overflows');
+{
+  const fresh = dash({ tyreLaps: 1, tyreLife: 25 });
+  const freshColour = $(fresh.container, '.tw-age-fill').style.background;
+  fresh.unmount();
+
+  const worn = dash({ tyreLaps: 24, tyreLife: 25 });
+  const wornColour = $(worn.container, '.tw-age-fill').style.background;
+  assert('a worn set is coloured differently from a fresh one', freshColour !== wornColour,
+    `${freshColour} vs ${wornColour}`);
+  worn.unmount();
+
+  const over = dash({ tyreLaps: 40, tyreLife: 25 });
+  assert('running past the configured life caps the bar at full',
+    $(over.container, '.tw-age-fill').style.width === '100%',
+    $(over.container, '.tw-age-fill').style.width);
+  assert('and still reports the true lap count', /40\s*\/\s*25/.test(textOf($(over.container, '.tw-age'))));
+  over.unmount();
+}
+
+section('tyre life stays quiet when it cannot be known');
+{
+  const noStint = dash({ tyreLaps: null, tyreLife: 25 });
+  assert('nothing is claimed before a stint is open',
+    $(noStint.container, '.tw-age') === null);
+  noStint.unmount();
+
+  // A compound with no configured life (IM/W default to 0) still reports the
+  // laps run — that part is a fact — but draws no progress bar.
+  const noLife = dash({ tyreLaps: 6, tyreLife: null });
+  assert('laps on the set are still reported', /6/.test(textOf($(noLife.container, '.tw-age'))));
+  assert('but no bar is drawn against an unknown life',
+    $(noLife.container, '.tw-age-fill') === null);
+  noLife.unmount();
+}
+
 section('the confirmation banner asks for exactly what is missing');
 {
   const both = dash({ pendingConfirmation: true, pendingDriver: true });

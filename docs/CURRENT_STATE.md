@@ -134,9 +134,9 @@ The UI suites add a small DOM harness (`tests/helpers/`): jsdom, React's own `ac
 | `test_stint_log.js` | 29 assertions. `src/logic/stintLog.js` — the Drivers-tab stint-log state machine: stint open/close, per-lap average/best/worst folding without retaining individual lap times, compound sync, driver (re)assignment, `reopenStint`'s defensive archive-before-overwrite (a missed pit-entry packet must not lose the prior stint), `recordLapIfClean`'s out-lap/paused/off-track exclusion. |
 
 `npm test` runs all twenty-two suites above (every row except `test.js`) in
-sequence — 2 335 assertions total, all pure node; they print `✓/✗` lines and
+sequence — 2 350 assertions total, all pure node; they print `✓/✗` lines and
 exit non-zero on failure. **These are the guardrail — keep every assertion
-green.** 695 of the 2 335 are hand-written; 1 640 are bulk-generated invariant
+green.** 710 of the 2 350 are hand-written; 1 640 are bulk-generated invariant
 sweeps (see `test_invariants.js` above) — worth knowing which is which when
 judging how much a passing `npm test` actually proves. (Assertion counts
 inside loop-based checks scale with how many stints/strategies an input
@@ -408,8 +408,14 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
 - **Auto-connect / auto-reconnect exist (Phase 3, done).** App auto-connects on
   launch, auto-scans, auto-picks a single PS5, and reconnects with capped backoff
   (`connection.js` + `useTelemetry.js` + `App.jsx`). Manual override still works.
-- **`tireWear` is radius-derived and unproven.** Whether it is stable/monotonic
-  enough to drive a degradation model is unverified (a Phase 1 open question).
+- **`tireWear` is radius-derived and was never shown to work.** Track testing
+  found it does not move, matching the suspicion that GT7 reports a fixed spec
+  radius; `current / max-seen` is then exactly 100% for ever. **It is no longer
+  displayed.** The relay still computes it (harmless, and `npm run diag:tyres`
+  prints the raw radii so the question can be settled on real hardware), but
+  the dashboard now shows tyre *temperature* per corner — which GT7 genuinely
+  sends — plus a modelled tyre life counted in laps-on-set against the
+  compound's configured `tireLife`, per DECISIONS.md item 4.
 - **Salsa20 key is version-sensitive.** A GT7 update can change it and silently
   break decoding.
 - **Packaging scaffolded (Phase 3, build not yet run).** Electron
@@ -430,7 +436,7 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
 npm run dev          # Vite dev server :5173
 npm run build        # production build → /dist
 npm run lint         # ESLint flat config
-npm test             # all twenty-two suites in tests/ (see §2 Tests table) — 2 335 assertions
+npm test             # all twenty-two suites in tests/ (see §2 Tests table) — 2 350 assertions
 npm run test:smoke   # quick 1h race test
 npm run telemetry    # start the UDP→WS relay (separate process)
 ```

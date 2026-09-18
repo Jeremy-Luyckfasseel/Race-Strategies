@@ -2735,6 +2735,45 @@ input[type="range"]::-moz-range-thumb {
   gap: 4px;
   flex-wrap: wrap;
 }
+
+/* ── Tyre age (modelled from laps-on-set, not from telemetry) ── */
+.tw-age {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 0 2px;
+}
+.tw-age-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tw-age-val {
+  font-family: var(--font-data);
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+.tw-age-unit {
+  font-family: var(--font-display);
+  font-size: 0.55rem;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.tw-age-track {
+  flex: 1;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.08);
+  overflow: hidden;
+}
+.tw-age-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width var(--t-fast), background var(--t-fast);
+}
 @keyframes pit-alert {
   0%, 100% { opacity: 0.45; }
   50%       { opacity: 1; }
