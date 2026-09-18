@@ -15,15 +15,22 @@ import { t } from '../i18n/strings';
 export default function Onboarding({ telem, detectedIp, carPresets, onApplyCarPreset, onRescan, onComplete, lang }) {
   const connected = telem?.connected;
   const scanning = telem?.scanning;
+  const liveCars = telem?.teams?.size ?? 0;
 
   let statusKey;
   let statusVars;
   if (!connected) statusKey = 'ob_offline';
-  else if (detectedIp) {
+  else if (liveCars > 1) {
+    // Naming one address out of a field is less useful than the count.
+    statusKey = 'ob_detected_many';
+    statusVars = { n: liveCars };
+  } else if (detectedIp) {
     statusKey = 'ob_detected';
     statusVars = { ip: detectedIp };
   } else if (scanning) statusKey = 'ob_scanning';
   else statusKey = 'ob_none';
+
+  const found = liveCars > 0 || !!detectedIp;
 
   return (
     <div className="onboarding-overlay">
@@ -32,12 +39,12 @@ export default function Onboarding({ telem, detectedIp, carPresets, onApplyCarPr
 
         <p className="ob-firewall">{t('ob_firewall', lang)}</p>
 
-        <div className={`ob-status${detectedIp ? ' ob-status--ok' : ''}`}>
-          <span className={`ob-dot${detectedIp ? ' ob-dot--ok' : scanning ? ' ob-dot--scan' : ''}`} />
+        <div className={`ob-status${found ? ' ob-status--ok' : ''}`}>
+          <span className={`ob-dot${found ? ' ob-dot--ok' : scanning ? ' ob-dot--scan' : ''}`} />
           {t(statusKey, lang, statusVars)}
         </div>
 
-        {connected && !detectedIp && (
+        {connected && !found && (
           <button className="ob-rescan" onClick={onRescan} disabled={scanning}>
             {t('ob_rescan', lang)}
           </button>

@@ -442,7 +442,10 @@ export default function App() {
     : 0;
 
   // --- Onboarding (Phase 3, Task 3.3) ---
-  const detectedIp = strategyIp || pickAutoConnectIp(telem.scanResults);
+  // A console that is actively streaming is, by any sane reading, detected.
+  // Consulting only the scan results and the starred car meant the welcome
+  // screen announced "no PS5 found" with a full field live behind it.
+  const detectedIp = strategyIp || teamKeys[0] || pickAutoConnectIp(telem.scanResults);
   const completeOnboarding = useCallback(() => {
     try { localStorage.setItem("gt7-onboarded", "1"); } catch { /* ignore */ }
     setOnboarded(true);

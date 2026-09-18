@@ -20,7 +20,7 @@
 
 <br>
 
-![Tests](https://img.shields.io/badge/tests-2403%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
+![Tests](https://img.shields.io/badge/tests-2407%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
 ![Engine](https://img.shields.io/badge/strategy%20engine-pure%20JS%20%C2%B7%20zero%20React-c9a227?style=flat-square)
 ![Patterns](https://img.shields.io/badge/compound%20patterns-~4%20000%20enumerated-c9a227?style=flat-square)
 
@@ -161,6 +161,35 @@ This captures the typical GT7 pattern where grip drops faster in the second half
 
 <br>
 
+### Ten cars, one screen
+
+<img src="docs/media/telemetry-multicar.png" alt="Télémétrie tab with ten cars connected: colour-coded leaderboard on the left, live GPS track map with ten car dots in the centre, single-car dashboard on the right" width="100%"/>
+
+A full LAN field running at once. Every car gets its own colour, **held for the whole session** — so the stripe on a leaderboard row and its dot on the circuit are always the same car, no matter how the order changes. The starred row (★ / **MOI**) is your team: it owns your drivers, your stint log and your strategy, while clicking any other row just inspects it.
+
+The circuit draws itself from live GPS as cars lap. On the right, per-corner **tyre temperature** and tyre life counted in laps-on-set — GT7 reports no tyre wear, so nothing here pretends otherwise.
+
+<br>
+
+<table>
+<tr>
+<td width="50%"><img src="docs/media/now-view.png" alt="Course tab — the glanceable in-race view" width="100%"/></td>
+<td width="50%"><img src="docs/media/drivers-tab.png" alt="Pilotes tab — per-driver drive time and the stint log" width="100%"/></td>
+</tr>
+<tr>
+<td align="center"><b>Course</b> — the glanceable in-race view</td>
+<td align="center"><b>Pilotes</b> — driver totals and the stint log</td>
+</tr>
+</table>
+
+> The screenshots above are the packaged app fed by `scripts/fake-field.mjs`, which drives any number of simulated cars into the relay with real encrypted packets. Handy for demoing or exercising the UI with no PS5 in the room:
+> ```bash
+> npm run telemetry            # or just launch the installed app
+> node scripts/fake-field.mjs 10
+> ```
+
+<br>
+
 GT7 streams live **Salsa20-encrypted UDP packets** from the PS5 to any machine on the same LAN. The relay server decrypts and forwards them to the browser in real time over WebSocket.
 
 ```mermaid
@@ -264,7 +293,7 @@ npm run dev        # → http://localhost:5173
 | `npm run dev` | Dev server at `http://localhost:5173` |
 | `npm run build` | Production build → `/dist` |
 | `npm run preview` | Preview the production build |
-| `npm test` | Full test suite — 2 403 assertions |
+| `npm test` | Full test suite — 2 407 assertions |
 | `npm run test:smoke` | Quick 1-hour race smoke test |
 | `npm run telemetry` | Start the UDP → WebSocket relay server |
 
@@ -302,7 +331,7 @@ npm run dev        # → http://localhost:5173
 The strategy engine has no React dependency and runs directly in Node:
 
 ```bash
-npm test              # 2 403 assertions across twenty-three suites
+npm test              # 2 407 assertions across twenty-three suites
 npm run test:smoke    # 1-hour race smoke test
 ```
 
