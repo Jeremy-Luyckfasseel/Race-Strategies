@@ -104,6 +104,8 @@ This is separate from the planner's `planDriverAssignment` above — it is manua
 
 The `no-unused-vars` rule ignores variables whose names start with an uppercase letter or underscore (pattern: `^[A-Z_]`). This is intentional to allow unused React import-style names.
 
+`tests/`, `scripts/` and `server/` get `globals.node`, since they run under node rather than in a browser. Without that block every one of them reported `process`, `Buffer` and `console` as undefined — about sixty false errors that buried the real ones. Keep lint quiet enough to be worth reading.
+
 ## Key files
 
 | File | Purpose |

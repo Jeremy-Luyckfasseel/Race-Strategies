@@ -48,9 +48,9 @@ selected) still runs alongside. Manual inputs remain the source of truth.
 | `raceState.js` | **Phase 2.** Live "Now" decision logic: `currentStint`, `nextAction`, `fuelMarginLaps`, `liftAndCoastVerdict`, `fuelExhaustionLap`, `pitNowTrigger` (earliest-of + reason), `medianRecent` smoothing, `RACE_STATE_CONFIG`. |
 | `connection.js` | **Phase 3.** Auto-connect helpers: `backoffDelay` (capped exponential), `isSessionActive` (onTrack AND moving), `pickAutoConnectIp` (auto-pick only a single PS5), `RECONNECT_CONFIG`. |
 | `compoundDetector.js` | Doc-only stub. States that GT7 UDP does **not** expose tire compound; compound must be set by the user. No runnable code. |
-| `gaps.js` | `trackLapCrossings(prev, packets)` + `lapInterval`/`formatInterval` — leaderboard intervals derived from start/finish crossings. Replaces a column that subtracted the two cars' last LAP TIMES (a pace difference, not a gap: two cars 30 s apart at equal pace showed nothing). Refreshes once per lap per car; going continuous would need projecting cars onto the recorded centreline. |
+| `gaps.js` | `trackLapCrossings(prev, packets)` + `lapInterval`/`formatInterval` — leaderboard intervals derived from start/finish crossings. Replaces a column that subtracted the two cars' last LAP TIMES (a pace difference, not a gap: two cars 30 s apart at equal pace showed nothing). Refreshes once per lap per car; going continuous would need projecting cars onto the recorded centreline. A car's first sighting is marked `witnessed: false` — on joining mid-race we know only which lap a car is on, not when it began, so second-level intervals wait for a lap change we actually saw (a lap *difference* is reported immediately, since it comes from GT7's own counter). |
 | `pitDetect.js` | `detectPitEdges(prev, speedKmh, now, cfg)` — the relay's pit entry/exit state machine (imported by `server/telemetry-server.js`, the one module shared across that boundary). A stop must be sustained for `PIT_MIN_STOP_MS` before it counts, so a spin no longer fires a phantom pit stop. Still speed-only: a car parked on track past the dwell reads as a stop. |
-| `teams.js` | Multi-car display helpers: `resolveActiveCars` (splits `strategyIp` — my car, owning drivers/stint log/learner/auto-fill — from `displayIp`, the car being inspected, so clicking a rival never repoints my strategy), the 16-colour `TEAM_PALETTE` + `teamColor(orderIndex)` (shared by the leaderboard and the track map so a car's colour matches in both and never changes as it gains places), append-only `withTeamOrder`, `coalescePacket` (carries one-shot pit edges across a flush window), `isStalePacket`/`dropStaleTeams` + `TEAM_STALE_MS`. |
+| `teams.js` | Multi-car display helpers: `applyFlush` (one buffer flush — merge, crossings, order, prune — kept pure and out of the hook so the 20 Hz hot path is node-testable, and exercised directly by `test_multicar_integration.js`), `resolveActiveCars` (splits `strategyIp` — my car, owning drivers/stint log/learner/auto-fill — from `displayIp`, the car being inspected, so clicking a rival never repoints my strategy), the 16-colour `TEAM_PALETTE` + `teamColor(orderIndex)` (shared by the leaderboard and the track map so a car's colour matches in both and never changes as it gains places), append-only `withTeamOrder`, `coalescePacket` (carries one-shot pit edges across a flush window), `isStalePacket`/`dropStaleTeams` + `TEAM_STALE_MS`. |
 | `stintLog.js` | Pure stint-log state machine backing the Pilotes tab: `emptyEntry`, `openStint`, `closeStint` (folds the running lap sum/count into a duration + average, keeps no per-lap array), `reopenStint` (pit-exit's entry point — archives an already-open `current` first if its closing pit-entry packet was never seen, rather than overwriting and losing it), `recordLap` (best/worst tracking) and `recordLapIfClean` (same, but skips the out-lap and any lap paused/off-track when it completed), `setCompound` (fills once, never overwrites), `assignDriver`. |
 
 ### React hooks — `src/hooks/`
@@ -119,15 +119,17 @@ Standalone Node process, **not** part of the Vite build. Run with
 | `test_groups.js` | 18 assertions. Team Groups → Races → Sessions state (pure, local, `src/logic/groups.js`). |
 | `test_sync_store.js` | 17 assertions. Self-hosted sync server's filesystem store; path-traversal rejection. |
 | `test_sync_client.js` | 11 assertions. `syncClient` ↔ `sync-server` round trip over real HTTP. |
+| `test_relay_e2e.js` | 20 assertions. **Not mocked** — spawns `server/telemetry-server.js`, opens a real WebSocket, and sends real Salsa20-encrypted GT7 packets from ten distinct loopback source addresses. Proves the crypto, byte offsets, per-console keying and pit-edge logic hold across a real socket for a whole field (~4.5k packets relayed). Takes ~13 s, most of it genuinely waiting out the pit dwell. |
+| `test_multicar_integration.js` | 36 assertions. A simulated 12-car race driven through the **real** `applyFlush` (not a copy): measures the batching ratio (~36x fewer state updates than packets), colour stability when a car retires, pit edges surviving the flush window, intervals, `resolveActiveCars`, and the stint log over a full pit cycle. |
 | `test_gaps.js` | 20 assertions. `src/logic/gaps.js` — `trackLapCrossings` (stamps by packet arrival, never re-stamps mid-lap, same-ref when unchanged) and `lapInterval` (real seconds on the same lap, laps when lapped, null rather than a negative or invented gap). |
 | `test_pit_detect.js` | 20 assertions. `src/logic/pitDetect.js` — the relay's pit edges: a sustained stop yields one entry + one exit, a spin yields none, a standing start yields none, and edges fire once rather than on every packet. |
 | `test_teams.js` | 45 assertions. `src/logic/teams.js` — the 16-colour palette, `teamColor` fallbacks, append-only `withTeamOrder`, `isStalePacket`/`dropStaleTeams` (same-reference returns when nothing changed), and the key multi-car invariant: a car keeps its colour when another car drops out. |
 | `test_stint_log.js` | 29 assertions. `src/logic/stintLog.js` — the Drivers-tab stint-log state machine: stint open/close, per-lap average/best/worst folding without retaining individual lap times, compound sync, driver (re)assignment, `reopenStint`'s defensive archive-before-overwrite (a missed pit-entry packet must not lose the prior stint), `recordLapIfClean`'s out-lap/paused/off-track exclusion. |
 
-`npm test` runs all fifteen suites above (every row except `test.js`) in
-sequence — 2 115 assertions total, all pure node; they print `✓/✗` lines and
+`npm test` runs all seventeen suites above (every row except `test.js`) in
+sequence — 2 176 assertions total, all pure node; they print `✓/✗` lines and
 exit non-zero on failure. **These are the guardrail — keep every assertion
-green.** 475 of the 2 115 are hand-written; 1 640 are bulk-generated invariant
+green.** 536 of the 2 176 are hand-written; 1 640 are bulk-generated invariant
 sweeps (see `test_invariants.js` above) — worth knowing which is which when
 judging how much a passing `npm test` actually proves. (Assertion counts
 inside loop-based checks scale with how many stints/strategies an input
@@ -421,7 +423,7 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
 npm run dev          # Vite dev server :5173
 npm run build        # production build → /dist
 npm run lint         # ESLint flat config
-npm test             # all fifteen suites in tests/ (see §2 Tests table) — 2 115 assertions
+npm test             # all seventeen suites in tests/ (see §2 Tests table) — 2 176 assertions
 npm run test:smoke   # quick 1h race test
 npm run telemetry    # start the UDP→WS relay (separate process)
 ```
