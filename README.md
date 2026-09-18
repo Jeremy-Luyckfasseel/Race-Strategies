@@ -188,11 +188,17 @@ Moving, it looks like this. The dots are rendered a fraction of a second behind 
 </tr>
 </table>
 
-> The screenshots above are the packaged app fed by `scripts/fake-field.mjs`, which drives any number of simulated cars into the relay with real encrypted packets. Handy for demoing or exercising the UI with no PS5 in the room:
+> The screenshots above are the packaged app fed by `scripts/fake-field.mjs`, which drives simulated cars into the relay with real encrypted packets. Handy for demoing or exercising the UI with no PS5 in the room — **launch the app first**, then from the repo:
 > ```bash
-> npm run telemetry            # or just launch the installed app
-> node scripts/fake-field.mjs 10
+> npm run demo        # ten cars, strung out round the lap, each pitting once
 > ```
+> The app's own relay is already listening, so do not start `npm run telemetry`
+> as well. Ctrl-C ends the demo. Only one copy can run at a time — two feed the
+> same ten addresses from different start times and every car appears to
+> teleport between two points on the circuit.
+>
+> `node scripts/fake-field.mjs [cars] [seconds] [spread]` if you want other
+> numbers: `spread` is the fraction of a lap the field is strung out over.
 
 <br>
 

@@ -3,7 +3,8 @@
  *
  * Real Salsa20-encrypted packets from distinct loopback addresses, so the relay
  * and the whole app see what they would see at an event — useful for demoing or
- * exercising the UI with no PS5 in the room.
+ * exercising the UI with no PS5 in the room. Each car pits once, staggered from
+ * two minutes in, so the pit prompts and the stint log fire too.
  *
  *   node scripts/fake-field.mjs [cars] [seconds] [spread]
  *
@@ -122,11 +123,38 @@ const SPREAD  = Number(process.argv[4] || 0.06);   // fraction of a lap, front t
 const LAP_MS = 90_000;
 const HZ = 60;
 
+// Each car makes one pit stop, staggered, so the pit-exit banner, the compound
+// and driver pickers, the BOX flag and the Pilotes stint log can all be seen
+// without a PS5 in the room. detectPitEdges needs the car stopped for
+// PIT_MIN_STOP_MS (8 s) before it counts; a real GT7 stop is 25 s+.
+const PIT_FIRST_MS  = 120_000;
+const PIT_STAGGER_MS = 20_000;
+const PIT_LENGTH_MS  = 30_000;
+
 // A rounded rectangle standing in for a circuit, in metres.
 function trackPoint(t) {
   const a = (t % 1) * Math.PI * 2;
   return { x: 600 + Math.cos(a) * 500, z: 400 + Math.sin(a) * 320 };
 }
+
+// Two copies of this script feed the relay from the same ten addresses with
+// different start times, so every car's dot flips between two points on the
+// circuit sixty times a second. It looks like a rendering bug and is not one.
+// A bound port is the cheapest lock that survives a killed parent process.
+const LOCK_PORT = 33742;
+await new Promise((resolve) => {
+  const lock = dgram.createSocket('udp4');
+  lock.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error('A fake field is already running — stop it first (Ctrl-C in its terminal).');
+      console.error('If it was killed without releasing the port, kill any leftover');
+      console.error('"node scripts/fake-field.mjs" process and try again.');
+      process.exit(1);
+    }
+    throw err;
+  });
+  lock.bind(LOCK_PORT, '127.0.0.1', resolve);
+});
 
 const socks = [];
 for (let i = 0; i < CARS; i++) {
@@ -144,12 +172,18 @@ let sent = 0;
 const timer = setInterval(() => {
   const elapsed = Date.now() - started;
   socks.forEach((car, i) => {
-    const progress = (elapsed / LAP_MS) - car.offset;
+    // The clock stops while the car is stationary in the pits, so its lap
+    // count does not advance and it rejoins genuinely behind.
+    const pitOpens = PIT_FIRST_MS + i * PIT_STAGGER_MS;
+    const inPit    = elapsed >= pitOpens && elapsed < pitOpens + PIT_LENGTH_MS;
+    const pitLost  = Math.min(Math.max(0, elapsed - pitOpens), PIT_LENGTH_MS);
+
+    const progress = ((elapsed - pitLost) / LAP_MS) - car.offset;
     const lap = Math.max(1, Math.floor(progress) + 1);
     const p = trackPoint(progress);
     car.s.send(buildPacket({
       posX: p.x, posZ: p.z,
-      speedKmh: 150 + ((i * 7) % 40),
+      speedKmh: inPit ? 0 : 150 + ((i * 7) % 40),
       currentLap: lap,
       totalLaps: 60,
       fuel: Math.max(5, 90 - (progress % 1) * 40),
