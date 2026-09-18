@@ -22,6 +22,10 @@ import DriversTab from "./components/DriversTab";
 import { CAR_PRESETS } from "./logic/strategy";
 import { mergeAnalysisIntoInputs, mergeDriverSessions } from "./logic/sessionAnalysis";
 import { teamColor, resolveActiveCars } from "./logic/teams";
+import {
+  INPUTS_KEY, buildSnapshot, validateSnapshot, applySnapshot, clearRace,
+  loadInputs, snapshotFilename,
+} from "./logic/racePersistence";
 import { DEFAULT_LANG, t } from "./i18n/strings";
 
 const DEFAULT_INPUTS = {
@@ -149,7 +153,12 @@ function CircuitSVG() {
 }
 
 export default function App() {
-  const [inputs, setInputs] = useState(DEFAULT_INPUTS);
+  // Restored silently, the way team names and tyres already are. An 8-hour
+  // race should not be lost to an accidental refresh.
+  const [inputs, setInputs] = useState(() => {
+    try { return loadInputs(localStorage.getItem(INPUTS_KEY), DEFAULT_INPUTS); }
+    catch { return DEFAULT_INPUTS; }
+  });
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [telemSelectedIp, setTelemSelectedIp] = useState("");
   // Single-team is the default landing experience (Phase 2, Task 2.2). The
@@ -318,6 +327,61 @@ export default function App() {
     }
   }, [telem.connected, telem, ps5IPs]);
 
+  // Write the race setup back to disk shortly after it settles. Debounced so
+  // typing a lap time is not a write per keystroke; 400 ms is far below the
+  // time it takes to lose a browser, so nothing meaningful is ever at risk.
+  useEffect(() => {
+    const id = setTimeout(() => {
+      try { localStorage.setItem(INPUTS_KEY, JSON.stringify(inputs)); }
+      catch { /* storage full or blocked — the app keeps working */ }
+    }, 400);
+    return () => clearTimeout(id);
+  }, [inputs]);
+
+  /** Start a new race: clear this race's data, keep the circuit and presets. */
+  const startNewRace = useCallback(() => {
+    if (!window.confirm(
+      "Effacer cette course ?\n\nPilotes, stratégie, noms d'équipe, pneus et journal "
+      + 'des relais seront remis à zéro. La carte du circuit et vos préréglages sont conservés.',
+    )) return;
+    try { clearRace((k) => localStorage.removeItem(k)); } catch { /* ignore */ }
+    window.location.reload();
+  }, []);
+
+  /** Download everything needed to rebuild this session elsewhere. */
+  const exportRace = useCallback(() => {
+    try {
+      const snap = buildSnapshot((k) => localStorage.getItem(k));
+      const blob = new Blob([JSON.stringify(snap, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = snapshotFilename();
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch { /* ignore */ }
+  }, []);
+
+  const importRace = useCallback((file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      let snap;
+      try { snap = JSON.parse(String(reader.result)); }
+      catch { window.alert('Fichier illisible.'); return; }
+
+      const check = validateSnapshot(snap);
+      if (!check.ok) { window.alert(`Import impossible : ${check.reason}.`); return; }
+      if (!window.confirm(
+        'Restaurer cette sauvegarde ?\n\nElle remplacera la course en cours.',
+      )) return;
+
+      applySnapshot(snap, (k, v) => localStorage.setItem(k, v));
+      window.location.reload();
+    };
+    reader.readAsText(file);
+  }, []);
+
   // Once a second car shows up this is a multi-car event, so reveal the
   // leaderboard rather than leaving the whole field hidden behind a toggle.
   // Fires once — closing it afterwards sticks.
@@ -427,6 +491,21 @@ export default function App() {
               Imprimer
             </button>
           )}
+          <button className="btn-header-ghost" onClick={exportRace} title="Télécharger une sauvegarde de la course">
+            Sauvegarder
+          </button>
+          <label className="btn-header-ghost" title="Restaurer une sauvegarde">
+            Restaurer
+            <input
+              type="file"
+              accept="application/json,.json"
+              style={{ display: 'none' }}
+              onChange={(e) => { importRace(e.target.files?.[0]); e.target.value = ''; }}
+            />
+          </label>
+          <button className="btn-header-ghost" onClick={startNewRace} title="Effacer la course en cours">
+            Nouvelle course
+          </button>
         </div>
       </header>
 
