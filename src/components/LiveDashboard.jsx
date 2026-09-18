@@ -340,7 +340,9 @@ export function TrackMap({ currentLap, cars, mapRef, onReset }) {
   const [mapState, setMapState] = useState(EMPTY_MAP);
 
   const live = useRef({});
-  live.current = { cars, currentLap };
+  // Same reason as useTrackMap: the dot loop reads this every frame, so an
+  // effect is soon enough, and assigning during render is not permitted.
+  useEffect(() => { live.current = { cars, currentLap }; });
 
   useEffect(() => {
     const buildSVG = () => {
@@ -483,7 +485,7 @@ export function TrackMap({ currentLap, cars, mapRef, onReset }) {
 // ── LiveDashboard ───────────────────────────────────────────────────────────
 
 export default function LiveDashboard({
-  data, label, compound, pendingConfirmation, onCompoundChange, onPitEntry,
+  data, label, compound, pendingConfirmation, onCompoundChange,
   drivers, currentDriverId, pendingDriver, onDriverChange,
   tyreLaps = null, tyreLife = null,
 }) {

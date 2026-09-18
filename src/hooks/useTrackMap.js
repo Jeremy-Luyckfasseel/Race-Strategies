@@ -19,7 +19,7 @@ export function saveTrackMap(m) {
       pitLane: m.pitLane,
       bounds:  m.bounds,
     }));
-  } catch {}
+  } catch { /* storage full or blocked — the map just is not saved */ }
 }
 
 // Split any segment that contains a point-to-point gap larger than JUMP_SQ.
@@ -53,7 +53,7 @@ function loadTrackMap(m) {
     if (s.pitLane)       m.pitLane = s.pitLane;
     if (s.bounds)        m.bounds  = s.bounds;
     m.dirty = true;
-  } catch {}
+  } catch { /* unreadable saved map — start a fresh one */ }
 }
 
 /**
@@ -66,10 +66,15 @@ function loadTrackMap(m) {
  */
 export function useTrackMap(liveData, onPitEntry) {
   const liveRef       = useRef({});
-  liveRef.current     = liveData ?? {};
-
   const onPitEntryRef = useRef(onPitEntry);
-  onPitEntryRef.current = onPitEntry;
+
+  // Kept current from an effect rather than assigned during render. The
+  // recording loop below reads these every animation frame, so being one
+  // render behind is invisible; writing them mid-render is not allowed.
+  useEffect(() => {
+    liveRef.current = liveData ?? {};
+    onPitEntryRef.current = onPitEntry;
+  });
 
   const mapRef = useRef({
     segs:      [[]],

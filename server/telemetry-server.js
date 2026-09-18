@@ -96,7 +96,7 @@ async function scanForPS5s() {
       }
     }
     setTimeout(async () => {
-      try { scanSock.close(); } catch {}
+      try { scanSock.close(); } catch { /* already closed */ }
       const ips = [...seenPS5s];
       const results = await Promise.all(ips.map(async ip => {
         try {
@@ -121,7 +121,7 @@ async function resolveHost(input) {
     console.log(`  Resolved "${input}" → ${address} (OS DNS)`);
     resolvedCache.set(input, address);
     return address;
-  } catch {}
+  } catch { /* fall through to the cache below */ }
   // Fall back to the last successfully resolved IP for this hostname
   if (resolvedCache.has(input)) {
     const cached = resolvedCache.get(input);
@@ -358,7 +358,7 @@ wss.on('connection', ws => {
         console.log(`Scan complete — found: ${found.map(r => r.hostname ? `${r.hostname} (${r.ip})` : r.ip).join(', ') || 'none'}`);
         ws.send(JSON.stringify({ type: 'scanResult', results: found }));
       }
-    } catch {}
+    } catch { /* control frame we do not handle */ }
   });
 
   ws.on('close', () => console.log('Browser disconnected'));

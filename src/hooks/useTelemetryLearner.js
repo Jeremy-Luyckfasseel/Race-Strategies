@@ -74,6 +74,12 @@ export function useTelemetryLearner({ activeIp, data, inputs, confirmedCompoundI
     const lap = Number(data.currentLap);
     if (Number.isFinite(lap) && lap !== lastLapRef.current) {
       lastLapRef.current = lap;
+      // This is the pattern the rule exists to protect: state synchronised
+      // from an external system. `data` changes ~20x/sec, but this only fires
+      // when the LAP number changes — roughly once every two minutes — so it
+      // cannot cascade. Doing it "properly" would mean moving the learner
+      // behind useSyncExternalStore, a far bigger change than it is worth.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setEstimates(learner.getEstimates());
     }
   }, [learner, data]);
