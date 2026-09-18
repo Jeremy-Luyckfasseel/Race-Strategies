@@ -205,7 +205,11 @@ export default function App() {
     else detector.stopDetecting(ip);
     setTeamCompounds(prev => {
       const next = { ...prev, [ip]: compound };
-      if (persist && compound !== null) localStorage.setItem("gt7-team-compounds", JSON.stringify(next));
+      // Clearing has to be written too. Persisting only non-null values meant a
+      // pit stop cleared the compound on screen but left the old one on disk,
+      // so reloading the page brought back the tyre the car was on BEFORE the
+      // stop — worse than showing nothing, because it reads as confirmed.
+      if (persist) localStorage.setItem("gt7-team-compounds", JSON.stringify(next));
       return next;
     });
   }, [detector]);
