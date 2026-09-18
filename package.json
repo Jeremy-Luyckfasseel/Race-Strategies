@@ -17,7 +17,7 @@
     "validate": "node scripts/compare-session.js",
     "electron:build": "npm run build && electron .",
     "pack": "npm run build && electron-builder --dir",
-    "dist": "npm run build && electron-builder --win",
+    "dist": "npm run build && node scripts/build-installer.js",
     "test:ui": "node --import ./tests/helpers/register-jsx.mjs tests/test_ui_leaderboard.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_trackmap.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_drivers.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_app_e2e.js && node --import ./tests/helpers/register-jsx.mjs tests/test_ui_reconnect.js",
     "diag:tyres": "node scripts/diag-tyres.js"
   },
@@ -51,15 +51,18 @@
       "dist/**",
       "electron/**",
       "server/**",
+      "src/logic/**",
       "package.json"
     ],
     "asar": true,
     "asarUnpack": [
       "server/**",
+      "src/logic/**",
       "node_modules/ws/**"
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,

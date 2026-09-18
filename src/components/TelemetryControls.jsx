@@ -64,7 +64,15 @@ export default function TelemetryControls({
                 )}
               </div>
               {!telem.connected && (
-                <p className="tc-hint">Lancez d'abord <code>node server/telemetry-server.js</code></p>
+                <p className="tc-hint">
+                  En attente du relais — il démarre avec l&apos;application.
+                </p>
+              )}
+              {telem.connected && telem.relayAddresses?.length > 0 && (
+                <p className="tc-hint">
+                  Un autre PC peut suivre cette course : qu&apos;il saisisse{' '}
+                  <code>{telem.relayAddresses[0]}</code> comme serveur.
+                </p>
               )}
             </div>
 

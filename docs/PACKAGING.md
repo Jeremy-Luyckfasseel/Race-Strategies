@@ -125,3 +125,61 @@ cause of a "stopped working" report.
 - The Windows installer build has **not** been produced/smoke-tested in this
   environment; run `npm run dist` on Windows 11 to verify, then update this note.
 - macOS packaging (a `mac` target + notarization) is a later task.
+
+---
+
+## Building the Windows installer (verified 2026-09-18)
+
+```bash
+npm run dist          # → release/Race Strategies Setup <version>.exe  (~82 MB)
+```
+
+That is the whole procedure. The installer bundles the UI **and** the relay, so
+the person running it needs no Node, no npm, and no second terminal —
+`electron/main.cjs` forks `server/telemetry-server.js` inside the app using
+`ELECTRON_RUN_AS_NODE`.
+
+### Why `npm run dist` goes through a script
+
+`scripts/build-installer.js` sets `CSC_IDENTITY_AUTO_DISCOVERY=false` before
+invoking electron-builder. Without it, electron-builder hunts for a signing
+certificate, which makes it download a code-signing toolchain containing macOS
+symlinks — and extracting those on Windows needs a privilege a normal account
+does not have, so the build dies with a 7-Zip error about `libcrypto.dylib`.
+An npm script cannot set an env var portably (cmd.exe rejects `VAR=x cmd`),
+hence the wrapper. It also translates that failure into a readable message.
+
+### The executable is unbranded, on purpose
+
+`build.win.signAndEditExecutable` is `false`. Editing the .exe (its icon,
+product name and version resource) is the step that pulls in the toolchain
+above, so leaving it on means the build only works with **Windows Developer
+Mode** enabled.
+
+To get a branded executable:
+
+1. Settings → System → For developers → **Developer Mode = On**
+2. Remove `"signAndEditExecutable": false` from `build.win` in `package.json`
+3. `npm run dist`
+
+Worth doing before handing the installer to anyone outside the team. Not worth
+blocking a test build on.
+
+### Still unsigned
+
+There is no code-signing certificate, so Windows SmartScreen will warn on first
+run ("Windows protected your PC" → More info → Run anyway). That is
+`BACKLOG.md` item 0.5, which is a question about user behaviour rather than a
+build problem.
+
+### Two teams, two PCs
+
+Install on both. Each machine keeps its own `localStorage`, so each team marks
+its own ★ and nothing is shared between them.
+
+Whether both PCs can run their own relay against the same PS5s is untested — if
+GT7 only streams to one listener, the second PC should point at the first one's
+relay instead: its Serveur field takes the address the first PC displays under
+its connection panel. The second PC's own relay sits idle in that case and does
+no harm, because a relay only sends heartbeats to consoles a browser has asked
+it to track.

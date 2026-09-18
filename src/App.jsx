@@ -176,7 +176,16 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem("gt7-ps5-ips") || '[""]'); }
     catch { return [""]; }
   });
-  const [telemUrl, setTelemUrl] = useState("ws://localhost:20777");
+  // Remembered per machine. At a two-team event the second PC points at the
+  // first PC's relay, and that has to survive closing the app.
+  const [telemUrl, setTelemUrlState] = useState(() => {
+    try { return localStorage.getItem("gt7-relay-url") || "ws://localhost:20777"; }
+    catch { return "ws://localhost:20777"; }
+  });
+  const setTelemUrl = useCallback((url) => {
+    setTelemUrlState(url);
+    try { localStorage.setItem("gt7-relay-url", url); } catch { /* ignore */ }
+  }, []);
 
   const [teamLabels, setTeamLabels] = useState(() => {
     try { return JSON.parse(localStorage.getItem("gt7-team-labels") || "{}"); }
