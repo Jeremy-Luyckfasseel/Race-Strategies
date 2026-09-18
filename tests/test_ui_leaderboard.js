@@ -160,6 +160,41 @@ section('my team — how it looks once set');
   v.unmount();
 }
 
+section('the name is actually legible, not squeezed to nothing');
+{
+  // Regression: the ★ and ✎ once squeezed .lb-tname to width 0 in the narrow
+  // telemetry column, so every row showed a colour stripe and no name at all.
+  // jsdom does no real layout, so this checks the structural causes rather
+  // than pixels: the name must be present, carry its text, and not be the
+  // element that gets dropped when space is tight.
+  const v = mount({
+    teamLabels: {
+      [IPS[0]]: 'Night Shift Racing',
+      [IPS[1]]: 'Écurie Bleu Nuit',
+      [IPS[2]]: 'T',
+    },
+  });
+  const names = $$(v.container, '.lb-tname').map((n) => n.textContent);
+  assert('a long team name is rendered in full, not truncated in the DOM',
+    names[0] === 'Night Shift Racing', JSON.stringify(names));
+  assert('accents and spaces survive', names[1] === 'Écurie Bleu Nuit', names[1]);
+  assert('a one-character name still renders', names[2] === 'T');
+
+  // Every row must keep a name element even with star, badge and BOX pill.
+  const mine = mount({
+    myTeamIp: IPS[2],
+    teamLabels: { [IPS[2]]: 'Night Shift Racing' },
+  });
+  const crowded = $$(mine.container, '.lb-row')[2];
+  assert('the busiest row (★ + MOI + BOX) still carries its name',
+    textOf($(crowded, '.lb-tname')) === 'Night Shift Racing',
+    textOf($(crowded, '.lb-tname')));
+  assert('and the badges that crowd it are all present',
+    $(crowded, '.lb-mine-pill') !== null && $(crowded, '.lb-box-pill') !== null);
+  mine.unmount();
+  v.unmount();
+}
+
 section('colours match what the map will paint');
 {
   const v = mount();

@@ -5,7 +5,10 @@
  * and the whole app see what they would see at an event — useful for demoing or
  * exercising the UI with no PS5 in the room.
  *
- *   node scripts/fake-field.mjs [cars] [seconds]
+ *   node scripts/fake-field.mjs [cars] [seconds] [spread]
+ *
+ * spread is the fraction of a lap the field is strung out over (default 0.06).
+ * Raise it to around 0.35 for a screenshot where the dots do not all overlap.
  *
  * Ctrl-C to stop early.
  */
@@ -115,6 +118,7 @@ function buildPacket({
 
 const CARS = Number(process.argv[2] || 10);
 const SECONDS = Number(process.argv[3] || 0);      // 0 = run until stopped
+const SPREAD  = Number(process.argv[4] || 0.06);   // fraction of a lap, front to back
 const LAP_MS = 90_000;
 const HZ = 60;
 
@@ -130,7 +134,7 @@ for (let i = 0; i < CARS; i++) {
   const s = dgram.createSocket('udp4');
   s.on('error', () => { /* heartbeat noise */ });
   await new Promise((res) => s.bind(0, ip, res));
-  socks.push({ ip, s, offset: i / CARS * 0.06 });   // strung out down the road
+  socks.push({ ip, s, offset: i / CARS * SPREAD });  // strung out down the road
 }
 
 console.log(`Feeding ${CARS} cars at ${HZ} Hz into the relay. Ctrl-C to stop.`);
