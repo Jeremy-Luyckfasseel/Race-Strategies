@@ -20,7 +20,7 @@
 
 <br>
 
-![Tests](https://img.shields.io/badge/tests-2397%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
+![Tests](https://img.shields.io/badge/tests-2403%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
 ![Engine](https://img.shields.io/badge/strategy%20engine-pure%20JS%20%C2%B7%20zero%20React-c9a227?style=flat-square)
 ![Patterns](https://img.shields.io/badge/compound%20patterns-~4%20000%20enumerated-c9a227?style=flat-square)
 
@@ -264,7 +264,7 @@ npm run dev        # → http://localhost:5173
 | `npm run dev` | Dev server at `http://localhost:5173` |
 | `npm run build` | Production build → `/dist` |
 | `npm run preview` | Preview the production build |
-| `npm test` | Full test suite — 2 397 assertions |
+| `npm test` | Full test suite — 2 403 assertions |
 | `npm run test:smoke` | Quick 1-hour race smoke test |
 | `npm run telemetry` | Start the UDP → WebSocket relay server |
 
@@ -302,7 +302,7 @@ npm run dev        # → http://localhost:5173
 The strategy engine has no React dependency and runs directly in Node:
 
 ```bash
-npm test              # 2 397 assertions across twenty-three suites
+npm test              # 2 403 assertions across twenty-three suites
 npm run test:smoke    # 1-hour race smoke test
 ```
 

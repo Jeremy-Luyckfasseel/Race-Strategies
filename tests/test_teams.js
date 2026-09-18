@@ -18,6 +18,7 @@ import {
   dropStaleTeams,
   coalescePacket,
   resolveActiveCars,
+  stableCarId,
 } from '../src/logic/teams.js';
 
 let passed = 0;
@@ -101,6 +102,33 @@ section('resolveActiveCars — inspecting a rival must not repoint my strategy')
 
   assert('no teams at all resolves to nothing',
     resolveActiveCars({}).strategyIp === null);
+}
+
+section('stableCarId — a DHCP lease change must not create a new car');
+{
+  const IP = '192.168.1.44';
+
+  // Nothing known but the address.
+  assert('falls back to the address when that is all there is',
+    stableCarId(undefined, undefined, IP) === IP);
+
+  // The scan found a name for a console the user registered by bare IP. This
+  // is the case that matters: auto-detect registers addresses, so without
+  // this the identity moves the moment DHCP hands out a different one.
+  assert('a scanned hostname is preferred over a bare address',
+    stableCarId(IP, 'PS5-642', IP) === 'PS5-642');
+
+  // Same console, new address after a lease change — same identity.
+  assert('so the same console keeps its identity on a new address',
+    stableCarId('10.0.0.9', 'PS5-642', '10.0.0.9') === 'PS5-642');
+
+  // An explicitly registered name always wins; the user said what to call it.
+  assert('an explicitly registered name is honoured',
+    stableCarId('Night Shift', 'PS5-642', IP) === 'Night Shift');
+  assert('even with no scan result', stableCarId('Night Shift', undefined, IP) === 'Night Shift');
+
+  assert('an address registered with no hostname anywhere stays the address',
+    stableCarId(IP, null, IP) === IP);
 }
 
 section('coalescePacket — a pit edge must survive the flush window');
