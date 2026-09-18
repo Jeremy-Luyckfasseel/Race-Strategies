@@ -239,7 +239,7 @@ section('4. a tyre cleared by a pit stop must not come back after a reload');
   second.unmount();
 }
 
-section('5. what a reload does NOT bring back');
+section('5. the app survives a reload with an empty race');
 {
   freshStorage();
   const first = await mountApp();
@@ -249,15 +249,51 @@ section('5. what a reload does NOT bring back');
   const second = await mountApp();
   click(tabButton(second.container, 'Stratégie'));
   await settle(30);
-  // Strategy inputs live in component state only — no localStorage key holds
-  // them. Pinned so the limitation is deliberate and visible, not a surprise
-  // discovered during a race.
-  const keys = Object.keys(globalThis.localStorage);
-  assert('there is no saved copy of the strategy inputs',
-    !keys.some((k) => /input/i.test(k)), JSON.stringify(keys));
-  assert('(car presets are the intended way to restore a setup)',
-    typeof globalThis.localStorage.getItem('gt7-presets') !== 'undefined');
+  assert('the app comes back up on the strategy tab',
+    $(second.container, '.tab-content') !== null);
   second.unmount();
+}
+
+section('6. the strategy setup survives a reload');
+{
+  freshStorage();
+  const first = await mountApp();
+
+  // Change the race length the way a person would, then let the debounced
+  // write land.
+  const duration = $(first.container, '#raceDuration');
+  assert('the race-length field is on screen', duration !== null);
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(
+      globalThis.window.HTMLInputElement.prototype, 'value').set;
+    setter.call(duration, '3.5');
+    duration.dispatchEvent(new globalThis.Event('input', { bubbles: true }));
+  });
+  await settle(600);   // past the 400 ms debounce
+
+  const saved = globalThis.localStorage.getItem('gt7-inputs');
+  assert('the setup is written to disk', saved !== null);
+  assert('carrying the value that was typed',
+    saved && JSON.parse(saved).raceDurationHours === 3.5, String(saved).slice(0, 80));
+
+  first.unmount();   // ← the reload
+
+  const second = await mountApp();
+  assert('and it is still there afterwards',
+    $(second.container, '#raceDuration')?.value === '3.5',
+    $(second.container, '#raceDuration')?.value);
+  second.unmount();
+}
+
+section('7. a corrupt saved setup falls back instead of breaking the app');
+{
+  freshStorage();
+  globalThis.localStorage.setItem('gt7-inputs', '{ this is not json');
+  const v = await mountApp();
+  assert('the app still starts', $(v.container, '#raceDuration') !== null);
+  assert('on the default race length',
+    $(v.container, '#raceDuration')?.value === '8', $(v.container, '#raceDuration')?.value);
+  v.unmount();
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
