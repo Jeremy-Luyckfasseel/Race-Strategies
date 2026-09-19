@@ -52,6 +52,9 @@ export function trackLapCrossings(prev, packets) {
       crossedAt: packet.ts,
       prevCrossedAt: rec && rec.witnessed ? rec.crossedAt : null,
       witnessed: rec != null,
+      // How long this car's last completed lap took, which is what makes a
+      // gap between crossings estimable at all. See lapProgress.
+      lapMs: Number(packet.lastLapMs) > 0 ? Number(packet.lastLapMs) : (rec ? rec.lapMs : null),
     });
   }
   return next;
@@ -105,4 +108,57 @@ export function formatInterval(interval) {
   if (!interval) return null;
   if (interval.laps) return `+${interval.laps}L`;
   return `+${interval.secs.toFixed(1)}s`;
+}
+
+
+/**
+ * How far around the lap a car is, as `lap + fraction`.
+ *
+ * GT7 gives one timing loop — the start/finish line — so a gap measured from
+ * crossings alone is exact once a lap and frozen in between. A rival closing
+ * on you shows nothing for ninety seconds, which is not a gap, it is a
+ * scoreboard.
+ *
+ * Between crossings the position is therefore interpolated from how long the
+ * car has been on this lap against how long its last one took. That is what a
+ * timing screen does with sparse loop data, and it has the same property: exact
+ * at the line, an estimate in between, and self-correcting every lap.
+ *
+ * The fraction is clamped to 1. A car having a slower lap than its last would
+ * otherwise run past the line before it reached it and appear to lap itself.
+ */
+export function lapProgress(rec, now) {
+  if (!rec || !rec.witnessed) return null;
+  if (!rec.lapMs || rec.lapMs <= 0) return null;
+  const frac = Math.min(1, Math.max(0, (now - rec.crossedAt) / rec.lapMs));
+  return rec.lap + frac;
+}
+
+/**
+ * The interval between two cars right now, rather than at their last crossings.
+ *
+ * Falls back to `lapInterval` whenever a car cannot be placed on its lap yet —
+ * the opening laps, or a car that has only just been seen — so this is strictly
+ * more information, never less.
+ *
+ * A car sitting in the pits keeps accumulating elapsed time without covering
+ * ground, so its interpolated position runs ahead of where it really is. The
+ * caller knows who is boxed (`onTrack`) and passes `behindStopped` to hold the
+ * estimate at the line instead of inventing progress it has not made.
+ */
+export function liveInterval(ahead, behind, now, behindStopped = false) {
+  if (!ahead || !behind) return null;
+  if (behindStopped) return lapInterval(ahead, behind);
+
+  const a = lapProgress(ahead, now);
+  const b = lapProgress(behind, now);
+  if (a == null || b == null) return lapInterval(ahead, behind);
+
+  const diff = a - b;
+  // The caller ranks the rows. If the car we were told is behind is in front,
+  // say nothing rather than render a negative gap.
+  if (diff < 0) return null;
+  if (diff >= 1) return { laps: Math.floor(diff) };
+
+  return { secs: (diff * ahead.lapMs) / 1000, live: true };
 }

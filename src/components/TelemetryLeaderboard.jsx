@@ -1,6 +1,7 @@
-import { useMemo, useState, Fragment } from 'react';
+import { useMemo, useState, useEffect, Fragment } from 'react';
 import { teamColor } from '../logic/teams';
-import { lapInterval, formatInterval } from '../logic/gaps';
+import { liveInterval, formatInterval } from '../logic/gaps';
+import { rivalSummary } from '../logic/rivalIntel';
 import { DEFAULT_LANG, t, compoundShort } from '../i18n/strings';
 
 const COMPOUNDS = ['H', 'M', 'S', 'IM', 'W'];
@@ -33,10 +34,21 @@ function fuelBarColor(pct) {
 
 export default function TelemetryLeaderboard({
   teams, teamOrder = [], teamLabels, teamCompounds, pendingIps, selectedIp, onSelect, onCompoundChange,
-  myTeamIp = '', onSetMyTeam, onRenameTeam, lapCrossings, lang = DEFAULT_LANG,
+  myTeamIp = '', onSetMyTeam, onRenameTeam, lapCrossings, fuelUse, lang = DEFAULT_LANG,
 }) {
   const [pickerIp, setPickerIp] = useState(null);
   const [editingIp, setEditingIp] = useState(null);
+
+  // The gap is interpolated between line crossings, so it needs a clock of its
+  // own: without one it would only move when a packet happened to arrive AND
+  // React happened to re-render. 250 ms is far finer than the 0.1 s shown and
+  // costs nothing next to the telemetry flush. Date.now() is read here rather
+  // than during render, which keeps the component pure.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(id);
+  }, []);
 
   const commitRename = (ip, value) => {
     const name = value.trim();
@@ -96,11 +108,16 @@ export default function TelemetryLeaderboard({
         // Interval to the car in front, from their last line crossings.
         // Kept as the interval object, not just its text: a car a lap down is
         // not in the same fight as one 4s behind, and should not read alike.
+        // Live rather than once-a-lap: see liveInterval. A boxed car is held at
+        // its last crossing instead of being credited with progress it is not
+        // making while stationary.
         const interval   = idx === 0
           ? null
-          : lapInterval(
+          : liveInterval(
               lapCrossings?.get(sorted[idx - 1].ip),
               lapCrossings?.get(ip),
+              now,
+              !d.onTrack,
             );
         const gap        = formatInterval(interval);
         const isBestLap  = d.bestLapMs && d.bestLapMs === overallBestMs;
@@ -110,6 +127,10 @@ export default function TelemetryLeaderboard({
         const pickerOpen = pickerIp === ip;
         const pos        = d.racePos > 0 ? d.racePos : idx + 1;
         const isMine     = ip === myTeamIp;
+        // Derived from their own fuel trace — no input from us, nothing assumed
+        // about their car. Held back until a few clean laps have been seen.
+        const intel      = rivalSummary(fuelUse?.get(ip));
+        const boxLap     = intel && intel.confident ? intel.pitLap : null;
         const isEditing  = editingIp === ip;
 
         const posClass = pos === 1 ? ' lbp-gold' : pos === 2 ? ' lbp-silver' : pos === 3 ? ' lbp-bronze' : '';
@@ -189,6 +210,9 @@ export default function TelemetryLeaderboard({
                     <span className="lb-meta-fuel">
                       {d.fuelLiters != null ? `${d.fuelLiters.toFixed(0)}L` : '—'}
                     </span>
+                    {boxLap != null && (
+                      <span className="lb-meta-box">{t('lb_box_lap', lang, { lap: boxLap })}</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -235,6 +259,18 @@ export default function TelemetryLeaderboard({
                 <span className="lb-fuel-lbl">
                   {d.fuelLiters != null ? `${d.fuelLiters.toFixed(0)}L` : '—'}
                 </span>
+                {boxLap != null && (
+                  <span
+                    className="lb-box-lap"
+                    title={t('lb_box_title', lang, {
+                      lap: boxLap,
+                      laps: intel.fuelLapsLeft.toFixed(1),
+                      burn: intel.burnPerLap.toFixed(2),
+                    })}
+                  >
+                    {t('lb_box_lap', lang, { lap: boxLap })}
+                  </span>
+                )}
               </div>
             </div>
 

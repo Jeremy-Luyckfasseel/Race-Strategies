@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { DEFAULT_LANG, t } from '../i18n/strings';
+import { rivalSummary } from '../logic/rivalIntel';
 
 const CANVAS_W = 420, CANVAS_H = 190, PAD = 16;
 
@@ -520,7 +521,7 @@ export function TrackMap({ currentLap, cars, mapRef, onReset, lang = DEFAULT_LAN
 export default function LiveDashboard({
   data, label, compound, pendingConfirmation, onCompoundChange,
   drivers, currentDriverId, pendingDriver, onDriverChange,
-  tyreLaps = null, tyreLife = null, lang = DEFAULT_LANG,
+  tyreLaps = null, tyreLife = null, fuelRecord = null, lang = DEFAULT_LANG,
 }) {
   const [showVitals, setShowVitals] = useState(false);
 
@@ -531,6 +532,9 @@ export default function LiveDashboard({
   const warnPct     = data.rpmWarning > 0 ? (data.rpmWarning / rpmMax) * 100 : 80;
   const rpmColor    = rpmPct >= warnPct ? (rpmPct >= 95 ? 'var(--danger)' : 'var(--warning)') : 'var(--success)';
   const throttlePct = Math.round(((data.throttle ?? 0) / 255) * 100);
+  // What this car's own fuel trace says about when it has to come in. Works
+  // for anyone on the LAN — it is their telemetry, not our setup.
+  const intel = rivalSummary(fuelRecord);
   const brakePct    = Math.round(((data.brake    ?? 0) / 255) * 100);
 
   return (
@@ -618,6 +622,36 @@ export default function LiveDashboard({
               </div>
               <span className="ld-bar-val">{data.fuelLiters?.toFixed(1)} L</span>
             </div>
+
+            {/* Read off their own fuel trace: how long it lasts, and therefore
+                the lap they are committed to boxing on. */}
+            <div className="ld-fuel-intel">
+              {intel && intel.confident ? (
+                <>
+                  <span className="ld-fi-laps">{t('ld_fuel_laps', lang, { n: intel.fuelLapsLeft.toFixed(1) })}</span>
+                  {intel.pitLap != null && (
+                    <span className="ld-fi-box">{t('ld_box_lap', lang, { lap: intel.pitLap })}</span>
+                  )}
+                  <span className="ld-fi-burn">
+                    {t('ld_burn', lang)} {intel.burnPerLap.toFixed(2)} L
+                  </span>
+                </>
+              ) : (
+                <span className="ld-fi-wait">{t('ld_estimating', lang)}</span>
+              )}
+            </div>
+
+            {intel && intel.lastStopFuel != null && (
+              <div className="ld-fuel-intel ld-fuel-intel--dim">
+                <span className="ld-fi-burn">{t('ld_last_stop', lang)}</span>
+                <span className="ld-fi-laps">
+                  {t('ld_took_on', lang, {
+                    n: intel.lastStopFuel.toFixed(1),
+                    laps: intel.lastStopStintLaps ?? '?',
+                  })}
+                </span>
+              </div>
+            )}
 
             <button className="ld-vitals-toggle" onClick={() => setShowVitals(v => !v)}>
               {showVitals ? t('ld_hide_engine', lang) : t('ld_show_engine', lang)}

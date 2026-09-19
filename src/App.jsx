@@ -781,6 +781,7 @@ export default function App() {
               onSetMyTeam: setMyTeam,
               onRenameTeam: updateTeamLabel,
               lapCrossings: telem.lapCrossings,
+              fuelUse: telem.fuelUse,
               lang,
             };
             return (
@@ -859,6 +860,7 @@ export default function App() {
                           tyreLife={Number(
                             inputs.compounds.find((c) => c.id === teamCompounds[displayIp])?.tireLife,
                           ) || null}
+                          fuelRecord={telem.fuelUse?.get(displayIp) ?? null}
                           lang={lang}
                         />
                       ) : (

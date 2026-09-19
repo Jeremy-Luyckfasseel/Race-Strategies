@@ -2521,6 +2521,35 @@ input[type="range"]::-moz-range-thumb {
 }
 .lb-gap-laps { color: var(--text-muted); }
 
+/* The lap a car must box on, read off its own fuel trace. Amber because it is
+   a prediction, not a measurement, and should not read like a lap time. */
+.lb-box-lap,
+.lb-meta-box {
+  font-family: var(--font-data);
+  font-size: 0.56rem;
+  color: var(--warning);
+  white-space: nowrap;
+}
+
+.lb-meta-box { margin-left: 4px; }
+
+/* Fuel intelligence under the fuel bar on the car dashboard. */
+.ld-fuel-intel {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 2px 0 0 46px;
+  font-family: var(--font-data);
+  font-size: 0.62rem;
+}
+
+.ld-fuel-intel--dim { opacity: 0.6; }
+
+.ld-fi-laps { color: var(--text-primary); }
+.ld-fi-box  { color: var(--warning); }
+.ld-fi-burn { color: var(--text-muted); letter-spacing: 0.04em; }
+.ld-fi-wait { color: var(--text-muted); font-style: italic; }
+
 .lb-gap {
   font-family: var(--font-data);
   font-size: 0.64rem;

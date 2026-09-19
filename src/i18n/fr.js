@@ -313,6 +313,14 @@ export default {
   lb_pick_tyre: 'Choisir un pneu',
   lb_tyres_changed: '● PNEUS CHANGÉS',
   lb_compound: 'COMPOSÉ',
+  lb_box_lap: 'BOX ~T{lap}',
+  lb_box_title: 'Doit passer vers le tour {lap} — {laps} tours de carburant à {burn} L/tour',
+  ld_fuel_laps: '≈{n} tours',
+  ld_box_lap: 'box ~T{lap}',
+  ld_burn: 'CONSO',
+  ld_last_stop: 'DERNIER ARRÊT',
+  ld_took_on: '+{n} L → {laps} tours',
+  ld_estimating: 'mesure en cours…',
 
   // ── LiveDashboard ──
   ld_track_map: 'CARTE CIRCUIT',

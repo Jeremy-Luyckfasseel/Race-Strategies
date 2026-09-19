@@ -42,6 +42,8 @@ export function useTelemetry() {
   const [teams, setTeams] = useState(new Map());
   const [teamOrder, setTeamOrder] = useState([]);
   const [lapCrossings, setLapCrossings] = useState(() => new Map());
+  // Per-car fuel history — burn rate, and therefore when each car must box.
+  const [fuelUse, setFuelUse] = useState(() => new Map());
   const [serverIPs, setServerIPs] = useState([]);
   const [scanning, setScanning] = useState(false);
   const [scanResults, setScanResults] = useState([]);
@@ -55,6 +57,7 @@ export function useTelemetry() {
   const teamsRef = useRef(new Map());
   const orderRef = useRef([]);
   const crossingsRef = useRef(new Map());
+  const fuelRef = useRef(new Map());
 
   const wsRef = useRef(null);
   const connectRef = useRef(null); // latest doConnect, for the reconnect timer
@@ -164,6 +167,7 @@ export function useTelemetry() {
         teams: teamsRef.current,
         order: orderRef.current,
         crossings: crossingsRef.current,
+        fuel: fuelRef.current,
       };
       const after = applyFlush(before, pending, Date.now());
       pending.clear();
@@ -173,6 +177,10 @@ export function useTelemetry() {
       if (after.crossings !== before.crossings) {
         crossingsRef.current = after.crossings;
         setLapCrossings(after.crossings);
+      }
+      if (after.fuel !== before.fuel) {
+        fuelRef.current = after.fuel;
+        setFuelUse(after.fuel);
       }
       if (after.order !== before.order) {
         orderRef.current = after.order;
@@ -225,5 +233,5 @@ export function useTelemetry() {
     []
   );
 
-  return { connected, reconnecting, teams, teamOrder, lapCrossings, relayAddresses, serverIPs, connect, disconnect, sendIPs, scan, scanning, scanResults };
+  return { connected, reconnecting, teams, teamOrder, lapCrossings, fuelUse, relayAddresses, serverIPs, connect, disconnect, sendIPs, scan, scanning, scanResults };
 }

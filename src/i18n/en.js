@@ -319,6 +319,14 @@ export default {
   lb_pick_tyre: 'Pick a tyre',
   lb_tyres_changed: '● TYRES CHANGED',
   lb_compound: 'COMPOUND',
+  lb_box_lap: 'BOX ~L{lap}',
+  lb_box_title: 'Must box around lap {lap} — {laps} laps of fuel left at {burn} L/lap',
+  ld_fuel_laps: '≈{n} laps',
+  ld_box_lap: 'box ~L{lap}',
+  ld_burn: 'BURN',
+  ld_last_stop: 'LAST STOP',
+  ld_took_on: '+{n} L → {laps} laps',
+  ld_estimating: 'measuring…',
 
   // ── LiveDashboard ──
   ld_track_map: 'TRACK MAP',

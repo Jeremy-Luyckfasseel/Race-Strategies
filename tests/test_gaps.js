@@ -8,7 +8,9 @@
  * Run with: node tests/test_gaps.js
  */
 
-import { trackLapCrossings, lapInterval, formatInterval } from '../src/logic/gaps.js';
+import {
+  trackLapCrossings, lapInterval, formatInterval, lapProgress, liveInterval,
+} from '../src/logic/gaps.js';
 
 let passed = 0;
 let failed = 0;
@@ -205,6 +207,64 @@ section('a ten-car field strung out down the road');
   assert('none of them collapses to zero', intervals.every((s) => s > 0.4));
   assert('so the field spans about five seconds end to end',
     Math.abs(intervals.reduce((a, b) => a + b, 0) - expected * (CARS - 1)) < 0.2);
+}
+
+section('lapProgress — where a car is around the lap, between crossings');
+{
+  const pkt = (lap, ts, lastLapMs) => new Map([['x', { currentLap: lap, ts, lastLapMs }]]);
+  let c = trackLapCrossings(new Map(), pkt(4, 0, 90_000));
+  c = trackLapCrossings(c, pkt(5, 90_000, 90_000));
+  const rec = c.get('x');
+
+  assert('at the line it is exactly the lap', lapProgress(rec, 90_000) === 5);
+  assert('a third of a lap later it is a third in',
+    Math.abs(lapProgress(rec, 90_000 + 30_000) - 5.3333) < 0.001,
+    String(lapProgress(rec, 90_000 + 30_000)));
+  assert('it never runs past the line on a slower lap',
+    lapProgress(rec, 90_000 + 200_000) === 6,
+    String(lapProgress(rec, 90_000 + 200_000)));
+
+  const unseen = trackLapCrossings(new Map(), pkt(5, 0, 90_000)).get('x');
+  assert('a car only just sighted cannot be placed', lapProgress(unseen, 1000) === null);
+
+  let noTime = trackLapCrossings(new Map(), pkt(4, 0, 0));
+  noTime = trackLapCrossings(noTime, pkt(5, 90_000, 0));
+  assert('nor can one with no lap time yet', lapProgress(noTime.get('x'), 95_000) === null);
+}
+
+section('liveInterval — the gap moves between crossings, not once a lap');
+{
+  const feed = (lap, ts) => new Map([['x', { currentLap: lap, ts, lastLapMs: 90_000 }]]);
+  const build = (offset) => {
+    let c = trackLapCrossings(new Map(), feed(4, offset));
+    c = trackLapCrossings(c, feed(5, offset + 90_000));
+    return c.get('x');
+  };
+  // Leader crossed into lap 5 at t=90s; a car 3 s back crossed at t=93s.
+  const ahead = build(0);
+  const behind = build(3_000);
+
+  const atCrossing = liveInterval(ahead, behind, 93_000);
+  assert('three seconds at the moment both have crossed',
+    Math.abs(atCrossing.secs - 3) < 0.01, JSON.stringify(atCrossing));
+  assert('and it is flagged as a live estimate', atCrossing.live === true);
+
+  const later = liveInterval(ahead, behind, 120_000);
+  assert('it still reads three seconds half a lap later, not a frozen number',
+    Math.abs(later.secs - 3) < 0.01, JSON.stringify(later));
+
+  assert('a negative ranking says nothing rather than a negative gap',
+    liveInterval(behind, ahead, 120_000) === null);
+
+  // A car in the pits stops covering ground; do not invent progress for it.
+  const boxed = liveInterval(ahead, behind, 200_000, true);
+  assert('a boxed car falls back to the crossing-based interval',
+    boxed !== null && boxed.live !== true, JSON.stringify(boxed));
+
+  // Without a witnessed lap it must degrade to the old behaviour, not to null.
+  const fresh = trackLapCrossings(new Map(), feed(5, 0)).get('x');
+  assert('an unplaceable car falls back instead of vanishing',
+    liveInterval(ahead, fresh, 95_000) === lapInterval(ahead, fresh));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
