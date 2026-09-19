@@ -15,6 +15,20 @@ const INITIAL_SHOW = 6;
  * English (logs, tests); `sequenceIds` is the same sequence as ids, so the
  * display name is looked up here rather than baked in upstream.
  */
+/**
+ * How far this plan is off the best one. Laps first (a lap is worth more than
+ * any amount of seconds), otherwise the time. The sign comes from the number,
+ * never from a hardcoded "+": a rounded-to-zero deficit used to print "+-0s".
+ */
+function deltaLabel(lapDelta, timeDeltaSecs, lang) {
+  if (lapDelta !== 0) {
+    const unit = Math.abs(lapDelta) === 1 ? "rs_unit_lap" : "rs_unit_laps";
+    return `${lapDelta > 0 ? "+" : "\u2212"}${Math.abs(lapDelta)} ${t(unit, lang)}`;
+  }
+  const secs = Math.abs(timeDeltaSecs) < 0.05 ? 0 : timeDeltaSecs;
+  return `${secs > 0 ? "+" : secs < 0 ? "\u2212" : ""}${Math.abs(secs).toFixed(1)}s`;
+}
+
 const planLabel = (entry, lang) =>
   entry.sequenceIds ? compoundSequence(entry.sequenceIds, lang) : entry.label;
 
@@ -148,11 +162,7 @@ export default function ResultsSummary({ ranked, best, selectedIndex, onSelect, 
                     <div>
                       {isBest
                         ? <span className="best-badge">{t("rs_best", lang)}</span>
-                        : <span className="delta-badge">
-                            {lapDelta !== 0
-                              ? `${lapDelta > 0 ? "+" : ""}${lapDelta} ${t("rs_unit_laps", lang)}`
-                              : `+${timeDeltaSecs.toFixed(0)}s`}
-                          </span>}
+                        : <span className="delta-badge">{deltaLabel(lapDelta, timeDeltaSecs, lang)}</span>}
                     </div>
 
                     <div className="comparison-compound">

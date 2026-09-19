@@ -29,7 +29,7 @@ function CompoundChip({ id, lang }) {
   return <span className={`now-compound compound-${id}`}>{compoundName(id, lang) || id}</span>;
 }
 
-export default function NowView({ data, strategy, planLabel, litersPerLap, tireLife, frozen, onToggleFreeze, label, lang }) {
+export default function NowView({ data, strategy, planLabel, litersPerLap, tireLife, frozen, onToggleFreeze, label, needsTeam, onGoToTelemetry, lang }) {
   const hasData = !!data && Number.isFinite(Number(data.currentLap));
   const currentLap = hasData ? Number(data.currentLap) : strategy?.stints?.[0]?.startLap ?? null;
 
@@ -56,6 +56,21 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
         </button>
       </div>
 
+      {/* Said last, in the smallest type, under a number that looks live: the
+          countdown is the plan's, not the car's. It belongs at the top — and
+          it has to say which of the two problems this is, because "waiting for
+          telemetry" under a full field of streaming cars is simply wrong. */}
+      {!hasData && (
+        <div className="now-waiting">
+          <span>{t(needsTeam ? 'now_no_team' : 'now_waiting', lang)}</span>
+          {needsTeam && onGoToTelemetry && (
+            <button className="btn-secondary now-waiting-action" onClick={onGoToTelemetry}>
+              {t('dt_go_telemetry', lang, { tab: t('app_tab_telemetry', lang) })}
+            </button>
+          )}
+        </div>
+      )}
+
       {!strategy ? (
         <div className="now-empty">{t('now_no_plan', lang)}</div>
       ) : (
@@ -64,7 +79,10 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
           <div className="now-plan">
             {cs && <span className="now-stint-label">{t('now_stint', lang, { n: cs.stint.stintNum })}</span>}
             {cs && <CompoundChip id={cs.stint.compound} lang={lang} />}
-            {planLabel && <span className="now-plan-seq">{planLabel}</span>}
+            {/* On a one-compound plan the sequence just repeats the chip. */}
+            {planLabel && planLabel !== compoundName(cs?.stint?.compound, lang) && (
+              <span className="now-plan-seq">{planLabel}</span>
+            )}
           </div>
 
           {/* Big stint countdown */}
@@ -103,7 +121,6 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
             )}
           </div>
 
-          {!hasData && <div className="now-waiting">{t('now_waiting', lang)}</div>}
         </>
       )}
     </div>

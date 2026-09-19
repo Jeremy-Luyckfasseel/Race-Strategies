@@ -33,3 +33,6 @@ sync-data/
 *.njsproj
 *.sln
 *.sw?
+
+# Cygwin/MSYS crash dumps from the bundled bash
+*.stackdump

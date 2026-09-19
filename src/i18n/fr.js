@@ -41,6 +41,7 @@ export default {
   // ── Now view ──
   now_tab: 'Course',
   now_waiting: 'En attente de télémétrie',
+  now_no_team: "Des voitures émettent, mais aucune n'est marquée comme la vôtre",
   now_no_plan: 'Aucune stratégie — configurez et calculez',
   now_stint: 'Relais {n}',
   now_laps_left: 'Tours restants au relais',
@@ -216,6 +217,7 @@ export default {
   rs_kpi_pit_time: 'Temps aux Stands',
   rs_kpi_fuel_laps: 'Tours Carburant',
   rs_kpi_tyre_laps: 'Tours Pneus',
+  rs_unit_lap: 'tour',
   rs_unit_laps: 'tours',
   rs_unit_stops: 'arrêts',
   rs_unit_min: 'min',
@@ -234,7 +236,7 @@ export default {
   tl_tyres_changed: 'Pneus changés',
   tl_pit_time: 'Temps pit : {n} s',
   tl_window: 'Fenêtre : pit avant T{lap}',
-  tl_hint: 'Tirets = arrêts pit · Zone hachurée = fenêtre pit · Contour rouge = alerte',
+  tl_hint: 'Repères = arrêts pit · Zone hachurée = fenêtre pit · Contour rouge = alerte',
 
   // ── StintTable ──
   st_title: 'Plan de Relais',
@@ -257,6 +259,7 @@ export default {
   dt_title: 'Journal des Relais',
   dt_reset: 'Réinitialiser',
   dt_no_team: 'Marquez votre équipe avec ★ dans le classement (onglet Télémétrie) pour suivre vos relais ici.',
+  dt_go_telemetry: 'Ouvrir {tab}',
   dt_empty: "Aucun relais enregistré pour l'instant.",
   dt_live: ' (en cours)',
   dt_duration: 'Durée',

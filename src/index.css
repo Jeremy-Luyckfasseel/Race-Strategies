@@ -656,6 +656,12 @@ input[type="range"]::-moz-range-thumb {
 .calculate-btn {
   margin: 14px 16px 4px;
   width: calc(100% - 32px);
+  /* Sticks to the bottom of the scrolling sidebar: during a race this gets
+     pressed constantly and used to sit below every collapsed section. */
+  position: sticky;
+  bottom: 8px;
+  z-index: 2;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
 }
 
 .btn-secondary {
@@ -702,7 +708,11 @@ input[type="range"]::-moz-range-thumb {
 /* ── Compound Input Table ── */
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
+/* Fixed layout keeps the six columns inside the rail: the lap-time inputs
+   were sizing themselves off their content and pushing the mandatory toggle
+   4px past the edge, which turned the whole panel into a scroller. */
 .compound-table {
+  table-layout: fixed;
   width: 100%;
   border-collapse: collapse;
   font-size: 0.8rem;
@@ -1375,14 +1385,17 @@ input[type="range"]::-moz-range-thumb {
 
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* One row of six. At three columns each cell was ~400px with the number
+     hugging the left of it, so two thirds of the strip was empty and it cost
+     two rows of height. */
+  grid-template-columns: repeat(6, 1fr);
   border: 1px solid var(--rule-mid);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
 
 .kpi-card {
-  padding: 20px 18px 18px;
+  padding: 16px 14px 14px;
   border-right: 1px solid var(--rule-mid);
   border-bottom: 1px solid var(--rule-mid);
   background: var(--bg-card);
@@ -1390,12 +1403,12 @@ input[type="range"]::-moz-range-thumb {
   transition: background var(--t-fast);
 }
 
-.kpi-card:nth-child(3n)        { border-right: none; }
-.kpi-card:nth-last-child(-n+3) { border-bottom: none; }
+.kpi-card:nth-child(6n)      { border-right: none; }
+.kpi-card                    { border-bottom: none; }
 
 .kpi-value {
   font-family: var(--font-data);
-  font-size: 2rem;
+  font-size: 1.7rem;
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1;
@@ -1691,8 +1704,132 @@ input[type="range"]::-moz-range-thumb {
   font-size: 0.74rem;
 }
 
-.recharts-surface { overflow: visible; }
-.recharts-text { font-family: var(--font-data) !important; }
+.tl-wrap {
+  position: relative;
+  padding: 4px 0 2px;
+}
+
+/* The race bar. Segments are absolutely placed by lap percentage, so the
+   whole thing is fluid without measuring anything. */
+.tl-track {
+  position: relative;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+}
+
+.tl-window {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 255, 255, 0.05) 0 3px,
+    transparent 3px 7px
+  );
+  border-right: 1px dashed rgba(255, 255, 255, 0.18);
+}
+
+.tl-seg {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+  opacity: 0.85;
+  cursor: default;
+  transition: opacity var(--t-fast), transform var(--t-fast);
+}
+
+.tl-seg + .tl-seg { border-left: 1px solid var(--bg-base); }
+
+.tl-seg:hover,
+.tl-seg.tl-seg-open { opacity: 1; }
+
+.tl-seg:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 1px;
+}
+
+.tl-seg-warn {
+  opacity: 0.45;
+  box-shadow: inset 0 0 0 1.5px var(--danger);
+}
+
+.tl-seg-label {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 0 4px;
+  font-family: var(--font-data);
+  font-size: 0.62rem;
+  color: var(--bg-base);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.tl-seg-num { font-weight: 700; }
+.tl-seg-laps { opacity: 0.75; }
+
+/* Pit stops on their own line, so a marker never covers a stint. */
+.tl-pits {
+  position: relative;
+  height: 15px;
+  margin-top: 3px;
+}
+
+.tl-pit {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.tl-pit-tick {
+  width: 1px;
+  height: 5px;
+  background: var(--warning);
+}
+
+.tl-pit-lap {
+  font-family: var(--font-data);
+  font-size: 0.56rem;
+  color: var(--warning);
+  line-height: 1.2;
+}
+
+.tl-ruler {
+  position: relative;
+  height: 14px;
+  margin-top: 2px;
+  border-top: 1px solid var(--rule);
+}
+
+.tl-tick {
+  position: absolute;
+  top: 2px;
+  transform: translateX(-50%);
+  font-family: var(--font-data);
+  font-size: 0.56rem;
+  color: var(--text-muted);
+}
+
+.tl-tick:first-child { transform: none; }
+.tl-tick:last-child { transform: translateX(-100%); }
+
+.tl-tooltip-anchor {
+  position: absolute;
+  bottom: calc(100% - 6px);
+  z-index: 5;
+  pointer-events: none;
+}
+
+.tl-tooltip { white-space: nowrap; }
 
 /* ============================================================
    Stint Table
@@ -1804,6 +1941,14 @@ input[type="range"]::-moz-range-thumb {
 /* ============================================================
    Responsive
    ============================================================ */
+
+@media (max-width: 1200px) {
+  .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+  .kpi-card                    { border-bottom: 1px solid var(--rule-mid); }
+  .kpi-card:nth-child(6n)      { border-right: 1px solid var(--rule-mid); }
+  .kpi-card:nth-child(3n)        { border-right: none; }
+  .kpi-card:nth-last-child(-n+3) { border-bottom: none; }
+}
 
 @media (max-width: 960px) {
   :root { --sidebar-width: 360px; }
@@ -2327,6 +2472,8 @@ input[type="range"]::-moz-range-thumb {
   letter-spacing: 0.13em;
   color: var(--text-muted);
 }
+.lb-gap-laps { color: var(--text-muted); }
+
 .lb-gap {
   font-family: var(--font-data);
   font-size: 0.64rem;
@@ -3012,6 +3159,8 @@ input[type="range"]::-moz-range-thumb {
 /* 0.44rem measured 7.04px in the running app — too small to read. */
 .telem-3col-lb .lb-hcol  { font-size: 0.58rem; padding: 4px 6px; }
 .telem-3col-lb .lbc      { padding: 6px 6px; }
+/* The tyre button sat flush against (and 1px over) the panel border. */
+.telem-3col-lb .lbc-tyre { padding-right: 8px; }
 
 /* In this narrow column the ★ and ✎ were squeezing the team name to literally
    zero width — every row showed a colour and nothing else. The pencil goes
@@ -3306,7 +3455,9 @@ input[type="range"]::-moz-range-thumb {
   color: var(--text-primary);
 }
 .now-box-lap { font-weight: 700; }
-.now-fuel { color: var(--accent); }
+/* The lap number is the instruction; the litres are a detail. Red here put a
+   routine number in the same colour the UI uses for trouble. */
+.now-fuel { color: var(--text-primary); }
 .now-tyres { font-size: 1rem; color: var(--text-secondary); }
 .now-run-to-flag { color: var(--text-secondary); }
 
@@ -3344,10 +3495,35 @@ input[type="range"]::-moz-range-thumb {
 
 .now-empty,
 .now-waiting {
-  text-align: center;
-  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--rule-bright);
+  border-left: 3px solid var(--warning);
+  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
   font-family: var(--font-display);
-  padding: 20px;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.now-waiting-action {
+  margin-left: auto;
+  padding: 3px 10px;
+  font-size: 0.68rem;
+}
+
+/* Without a car feeding it, every number below is the plan's projection. */
+.now-waiting::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warning);
+  flex-shrink: 0;
 }
 
 /* Advanced / LAN event — multi-team leaderboard toggle (Phase 2, Task 2.2).
@@ -3370,7 +3546,14 @@ input[type="range"]::-moz-range-thumb {
   transition: color var(--t-fast), border-color var(--t-fast);
 }
 .advanced-lan-toggle:hover { color: var(--text-primary); border-color: var(--rule-bright, var(--text-muted)); }
-.advanced-lan-toggle.is-open { color: var(--accent); border-color: var(--accent); }
+/* Open state used to paint the whole bar in the accent, which in this palette
+   is also the danger colour — a full-width red-bordered strip reads as an
+   error, not as an expanded section. The accent now marks the left edge. */
+.advanced-lan-toggle.is-open {
+  color: var(--text-primary);
+  border-color: var(--rule-bright);
+  border-left: 3px solid var(--accent);
+}
 
 /* ---------------------------------------------------------------------------
    First-run onboarding overlay (Phase 3, Task 3.3)
@@ -3747,3 +3930,14 @@ input[type="range"]::-moz-range-thumb {
 }
 .tg-sync-input:focus { outline: none; border-color: var(--accent); }
 .tg-sync-input::placeholder { color: var(--text-muted); }
+
+/* Empty state with something to do about it. */
+.empty-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 16px 20px;
+}
+
+.empty-action .empty-text { margin: 0; }

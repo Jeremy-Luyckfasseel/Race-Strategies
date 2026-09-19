@@ -619,6 +619,8 @@ export default function App() {
                 frozen={planFrozen}
                 onToggleFreeze={toggleFreeze}
                 label={strategyIp ? getTeamLabel(strategyIp) : null}
+                needsTeam={!strategyIp && telem.teams.size > 0}
+                onGoToTelemetry={() => setActiveTab("telemetry")}
                 lang={lang}
               />
             </div>
@@ -676,6 +678,7 @@ export default function App() {
                 minDriverTimeSecs={inputs.minDriverTimeSecs}
                 activeIp={strategyIp}
                 onReset={stintLog.resetAll}
+                onGoToTelemetry={() => setActiveTab("telemetry")}
                 lang={lang}
               />
             </div>

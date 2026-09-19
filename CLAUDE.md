@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 GT7 (Gran Turismo 7) Endurance Race Strategy Calculator — a React + Vite web app that enumerates all valid pit/tire compound combinations and finds optimal race strategies. Accounts for fuel weight degradation, tire wear curves (per-compound, piecewise), variable pit stop times, multi-driver minimum time requirements, and live PS5 telemetry for mid-race recalculation.
 
-**Tech stack:** React 19, Vite 7, Recharts 3.7, WebSocket (`ws` 8.18), Node.js UDP relay
+**Tech stack:** React 19, Vite 7, WebSocket (`ws` 8.18), Node.js UDP relay. No charting library — the one chart is hand-drawn (see `StrategyTimeline.jsx`).
 
 ## Commands
 
@@ -45,7 +45,7 @@ App.jsx  (state: inputs, selectedIndex, telemSelectedIp, activeTab, teamLabels, 
   ├── useCompoundDetector   → watches pitExit flag; prompts user to confirm tire compound
   ├── [Strategy tab]
   │     ├── ResultsSummary  → KPI strip, driver summary, top-6 strategy comparison cards
-  │     ├── StrategyTimeline → Recharts horizontal bar chart (stints + pit windows)
+  │     ├── StrategyTimeline → the race as one bar: stint segments, pit marks, windows
   │     └── StintTable      → lap-by-lap stint detail for selected strategy
   └── [Télémétrie tab]
         ├── TelemetryControls   → server URL field, PS5 IP list, network scan button
@@ -122,7 +122,7 @@ The `no-unused-vars` rule ignores variables whose names start with an uppercase 
 | `src/App.jsx` | Root component; owns all state; two-tab UI (Strategy / Télémétrie); wires telemetry→strategy autofill |
 | `src/components/InputPanel.jsx` | Full sidebar form: car presets, race settings, pit timings, fuel, tire compounds, mid-race mode, drivers, live telemetry |
 | `src/components/ResultsSummary.jsx` | KPI cards + driver summary chips + strategy comparison grid (top-6, expandable) |
-| `src/components/StrategyTimeline.jsx` | Recharts horizontal bar chart with pit markers, pit-window shading, compound colors |
+| `src/components/StrategyTimeline.jsx` | The race as one horizontal bar — a segment per stint sized by its share of the laps, pit marks, pit-window shading, compound colours. Plain CSS percentages: no chart library, no measurement, so `tests/test_ui_timeline.js` can assert on it. It replaced a Recharts chart that rendered **no bars at all** under Recharts 3 (every rectangle came back `width: 0`) while its axes and tooltip still worked — which is why that test exists |
 | `src/components/StintTable.jsx` | Stint detail table; highlights warning rows in red |
 | `src/components/LiveDashboard.jsx` | Single-team telemetry widget: gear/speed, RPM/throttle/brake bars, fuel bar, **tyre temperature per corner** (the radius-derived "wear %" was removed — it never moved on real hardware; see `npm run diag:tyres`), modelled tyre life in laps-on-set vs. configured `tireLife`, driver + compound pickers, SVG track map (GPS recorded at 60Hz RAF) with pit lane detection and multi-car dots |
 | `src/components/TelemetryControls.jsx` | Collapsible panel: server URL + connect/disconnect, PS5 IP list management, network scan button and results |

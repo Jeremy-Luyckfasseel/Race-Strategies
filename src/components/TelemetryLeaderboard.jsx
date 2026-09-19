@@ -86,12 +86,15 @@ export default function TelemetryLeaderboard({
         const color      = teamColor(teamOrder.indexOf(ip));
         const isSelected = ip === selectedIp;
         // Interval to the car in front, from their last line crossings.
-        const gap        = idx === 0
+        // Kept as the interval object, not just its text: a car a lap down is
+        // not in the same fight as one 4s behind, and should not read alike.
+        const interval   = idx === 0
           ? null
-          : formatInterval(lapInterval(
+          : lapInterval(
               lapCrossings?.get(sorted[idx - 1].ip),
               lapCrossings?.get(ip),
-            ));
+            );
+        const gap        = formatInterval(interval);
         const isBestLap  = d.bestLapMs && d.bestLapMs === overallBestMs;
         const fuelPct    = Math.min(100, (d.fuelRatio ?? 0) * 100);
         const compound   = teamCompounds?.[ip] ?? null;
@@ -187,7 +190,7 @@ export default function TelemetryLeaderboard({
                 {idx === 0
                   ? <span className="lb-leader">{t('lb_leader', lang)}</span>
                   : gap
-                    ? <span className="lb-gap">{gap}</span>
+                    ? <span className={`lb-gap${interval?.laps ? " lb-gap-laps" : ""}`}>{gap}</span>
                     : <span className="lb-null">—</span>
                 }
               </div>

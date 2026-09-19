@@ -387,7 +387,7 @@ npm run test:smoke    # 1-hour race smoke test
  ┃ ┣ 📂 components/
  ┃ ┃ ┣ 📄 InputPanel.jsx          sidebar form — car presets, compounds, drivers, telemetry
  ┃ ┃ ┣ 📄 ResultsSummary.jsx      KPI strip + top-6 strategy comparison cards
- ┃ ┃ ┣ 📄 StrategyTimeline.jsx    Recharts bar chart with pit-window bands
+ ┃ ┃ ┣ 📄 StrategyTimeline.jsx    The race as one bar — stints, pit marks, windows
  ┃ ┃ ┣ 📄 StintTable.jsx          lap-by-lap stint detail table
  ┃ ┃ ┣ 📄 LiveDashboard.jsx       ⭐ single-team widget — speed/gear, RPM/pedals, tyre temps/wear, GPS track map
  ┃ ┃ ┣ 📄 TelemetryControls.jsx   connection panel — server URL, PS5 IPs, LAN scan
@@ -429,7 +429,6 @@ State lives exclusively in `App.jsx` — no Redux, no Context. The app is split 
 
 ![React](https://img.shields.io/badge/React_19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
 ![Vite](https://img.shields.io/badge/Vite_7-646CFF?style=for-the-badge&logo=vite&logoColor=white)
-![Recharts](https://img.shields.io/badge/Recharts_3.7-22b04b?style=for-the-badge&logo=chartdotjs&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript_ES2022-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
 ![ws](https://img.shields.io/badge/ws_8.18-010101?style=for-the-badge&logo=socket.io&logoColor=white)

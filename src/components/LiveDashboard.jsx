@@ -232,6 +232,13 @@ function CarDots({ live, map }) {
         // a rival is sitting in the pit lane is exactly what a pit wall wants.
         const active = cars.filter(c => c.posX != null);
 
+        // Where a label has already been drawn this frame. A second tag within
+        // LABEL_MIN_PX of one of these is unreadable on top of it, so it is
+        // dropped for the frame — my own car always keeps its own.
+        // ponytail: O(n^2) over the field; fine to ~30 cars, revisit past that.
+        const placed = [];
+        const LABEL_MIN_PX = 13;
+
         // Cull smoothed entries for cars no longer active
         const activeIds = new Set(active.map(c => c.id));
         for (const id of smoothed.keys()) if (!activeIds.has(id)) smoothed.delete(id);
@@ -321,6 +328,13 @@ function CarDots({ live, map }) {
             const fresh = mkDot(c.isOwn, color, c.label);
             while (fresh.firstChild) child.appendChild(fresh.firstChild);
           }
+
+          const crowded = placed.some(
+            (p) => Math.abs(p.x - scx) < LABEL_MIN_PX && Math.abs(p.y - scy) < LABEL_MIN_PX,
+          );
+          placed.push({ x: scx, y: scy });
+          const tag = child.lastChild;
+          if (tag) tag.setAttribute('opacity', crowded && !c.isOwn ? '0' : '1');
 
           // Pit state flips often, so dim in place rather than rebuilding.
           child.setAttribute('opacity', c.onTrack ? '1' : '0.35');
@@ -470,8 +484,13 @@ export function TrackMap({ currentLap, cars, mapRef, onReset, lang = DEFAULT_LAN
             </g>
           )}
           <CarDots live={live} map={mapRef} />
+          {/* With cars already on screen the prompt moves out of the middle —
+              it used to sit underneath the dots, with both unreadable. */}
           {empty && (
-            <text x={CANVAS_W / 2} y={CANVAS_H / 2} textAnchor="middle" dominantBaseline="middle"
+            <text
+              x={CANVAS_W / 2}
+              y={cars?.length ? CANVAS_H * 0.12 : CANVAS_H / 2}
+              textAnchor="middle" dominantBaseline="middle"
               fill="rgba(255,255,255,0.15)" fontSize="13" fontWeight="600"
               fontFamily="Barlow Condensed, sans-serif">
               {t('ld_drive_a_lap', lang)}

@@ -47,6 +47,7 @@ export default {
   // ── Now view ──
   now_tab: 'Race',
   now_waiting: 'Waiting for telemetry',
+  now_no_team: 'Cars are streaming, but none is marked as yours',
   now_no_plan: 'No strategy yet — set up inputs and calculate',
   now_stint: 'Stint {n}',
   now_laps_left: 'Laps left in stint',
@@ -222,6 +223,7 @@ export default {
   rs_kpi_pit_time: 'Time in Pits',
   rs_kpi_fuel_laps: 'Fuel Laps',
   rs_kpi_tyre_laps: 'Tyre Laps',
+  rs_unit_lap: 'lap',
   rs_unit_laps: 'laps',
   rs_unit_stops: 'stops',
   rs_unit_min: 'min',
@@ -240,7 +242,7 @@ export default {
   tl_tyres_changed: 'Tyres changed',
   tl_pit_time: 'Pit time: {n} s',
   tl_window: 'Window: box before L{lap}',
-  tl_hint: 'Dashes = pit stops · Hatched area = pit window · Red outline = warning',
+  tl_hint: 'Ticks = pit stops · Hatched = pit window · Red outline = warning',
 
   // ── StintTable ──
   st_title: 'Stint Plan',
@@ -263,6 +265,7 @@ export default {
   dt_title: 'Stint Log',
   dt_reset: 'Reset',
   dt_no_team: 'Mark your team with ★ in the leaderboard (Telemetry tab) to follow your stints here.',
+  dt_go_telemetry: 'Open {tab}',
   dt_empty: 'No stint recorded yet.',
   dt_live: ' (running)',
   dt_duration: 'Duration',

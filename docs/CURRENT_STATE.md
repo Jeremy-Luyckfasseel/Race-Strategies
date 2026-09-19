@@ -79,7 +79,7 @@ selected) still runs alongside. Manual inputs remain the source of truth.
 |------|------|
 | `InputPanel.jsx` | The whole sidebar form. Collapsible sections: car presets (localStorage), race, pit timing, fuel, fuel-weight penalty, compound table (per-compound life + 3 lap times + mandatory flag), mid-race mode, drivers (per-driver per-compound lap-time overrides). Also renders the mid-race "auto-fill from PS5" team picker. |
 | `ResultsSummary.jsx` | KPI strip + driver summary chips + top-6 strategy comparison cards. |
-| `StrategyTimeline.jsx` | Recharts horizontal bar chart of stints + pit windows. |
+| `StrategyTimeline.jsx` | The race as one horizontal bar: a segment per stint, pit marks, pit windows. Hand-drawn with CSS percentages after the Recharts version was found rendering no bars at all under Recharts 3; the dependency went with it (bundle 695 kB → 340 kB). Covered by `tests/test_ui_timeline.js`. |
 | `StintTable.jsx` | Lap-by-lap stint detail; red rows for warnings. |
 | `LiveDashboard.jsx` | Single-team widget: gear/speed, RPM/throttle/brake/fuel bars, per-corner tire temp + wear, compound picker, and the SVG `TrackMap` (exported named). |
 | `TelemetryControls.jsx` | Server URL + connect/disconnect, PS5 IP list editor, LAN scan button + results. Team naming lives in the leaderboard, not here — the auto-scan still seeds a label from a resolved hostname. |

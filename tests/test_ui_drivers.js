@@ -60,6 +60,24 @@ section('no team marked yet');
     /★/.test(v.container.textContent) && /Télémétrie/.test(v.container.textContent),
     v.container.textContent.slice(0, 140));
   assert('no stint table is drawn', $(v.container, '.stint-table') === null);
+  assert('and offers no Reset, because there is nothing to reset',
+    !$$(v.container, 'button').some((b) => /Réinitialiser|Reset/.test(b.textContent)));
+  v.unmount();
+}
+
+section('the empty state can take you there');
+{
+  let went = 0;
+  const v = render(React.createElement(DriversTab, {
+    logs: new Map(), drivers: DRIVERS, minDriverTimeSecs: 3600,
+    activeIp: null, onReset: () => {}, onGoToTelemetry: () => { went += 1; },
+  }));
+  const btn = $$(v.container, 'button').find((b) => /Télémétrie/.test(b.textContent));
+  assert('a button goes to the telemetry tab', !!btn, v.container.textContent.slice(0, 120));
+  if (btn) {
+    click(btn);
+    assert('and clicking it asks the app to switch', went === 1);
+  }
   v.unmount();
 }
 

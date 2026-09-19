@@ -21,7 +21,7 @@ function formatDuration(secs) {
   return m > 0 ? `${m}m${String(s).padStart(2, '0')}s` : `${s}s`;
 }
 
-export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp, onReset, lang = DEFAULT_LANG }) {
+export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp, onReset, onGoToTelemetry, lang = DEFAULT_LANG }) {
   // Ticks once a second so the in-progress stint's elapsed time counts toward
   // its driver's total (and the "min not met" flag) instead of freezing at
   // zero for the whole stint. Date.now() is only ever read inside this effect,
@@ -78,11 +78,22 @@ export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp,
       <div className="card">
         <div className="card-header">
           <span className="card-title">{t('dt_title', lang)}</span>
-          <button className="btn-header-ghost" onClick={onReset}>{t('dt_reset', lang)}</button>
+          {stints.length > 0 && (
+            <button className="btn-header-ghost" onClick={onReset}>{t('dt_reset', lang)}</button>
+          )}
         </div>
 
         {!activeIp ? (
-          <p className="empty-text">{t('dt_no_team', lang)}</p>
+          <div className="empty-action">
+            <p className="empty-text">{t('dt_no_team', lang)}</p>
+            {onGoToTelemetry && (
+              <button className="btn-secondary" onClick={onGoToTelemetry}>
+                {/* Named off the tab's own key so the button and the tab can
+                    never drift apart, in any language. */}
+                {t('dt_go_telemetry', lang, { tab: t('app_tab_telemetry', lang) })}
+              </button>
+            )}
+          </div>
         ) : stints.length === 0 ? (
           <p className="empty-text">{t('dt_empty', lang)}</p>
         ) : (
