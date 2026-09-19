@@ -215,6 +215,37 @@ body {
   color: var(--text-secondary);
 }
 
+/* Language switch — one segmented control, same visual weight as the
+   header ghost buttons so it reads as a setting, not an action. */
+.lang-switch {
+  display: inline-flex;
+  border: 1px solid var(--rule-bright);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.lang-btn {
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  padding: 5px 9px;
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+
+.lang-btn + .lang-btn { border-left: 1px solid var(--rule-bright); }
+
+.lang-btn:hover { color: var(--text-secondary); }
+
+.lang-btn.lang-active {
+  background: var(--accent);
+  color: #fff;
+}
+
 /* ── Main Grid ── */
 .app-main {
   display: grid;
@@ -3021,6 +3052,7 @@ input[type="range"]::-moz-range-thumb {
   .app-header,
   .app-footer,
   .btn-header-ghost,
+  .lang-switch,
   .show-more-btn,
   .strategy-comparison,
   .recalc-badge { display: none !important; }

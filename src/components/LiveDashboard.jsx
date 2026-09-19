@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { DEFAULT_LANG, t } from '../i18n/strings';
 
 const CANVAS_W = 420, CANVAS_H = 190, PAD = 16;
 
@@ -55,7 +56,7 @@ function tyreLifeColor(used) {
  * the stint began, which is exact, rather than a radius reading that never
  * moved.
  */
-function TyreAge({ laps, life }) {
+function TyreAge({ laps, life, lang }) {
   if (laps == null) return null;
   const known = life > 0;
   const used = known ? laps / life : null;
@@ -63,13 +64,13 @@ function TyreAge({ laps, life }) {
   return (
     <div className="tw-age">
       <span className="ld-section-label">
-        VIE PNEUS <span className="ld-dim">estimée</span>
+        {t('ld_tyre_life', lang)} <span className="ld-dim">{t('ld_estimated', lang)}</span>
       </span>
       <div className="tw-age-body">
         <span className="tw-age-val" style={{ color: colour }}>
           {laps}
           {known && <span className="ld-dim"> / {life}</span>}
-          <span className="tw-age-unit"> tours</span>
+          <span className="tw-age-unit">{t('ld_laps', lang)}</span>
         </span>
         {known && (
           <div className="tw-age-track">
@@ -336,7 +337,7 @@ function CarDots({ live, map }) {
 }
 
 // ── TrackMap — render-only; recording lives in useTrackMap (App level) ────────
-export function TrackMap({ currentLap, cars, mapRef, onReset }) {
+export function TrackMap({ currentLap, cars, mapRef, onReset, lang = DEFAULT_LANG }) {
   const [mapState, setMapState] = useState(EMPTY_MAP);
 
   const live = useRef({});
@@ -441,14 +442,14 @@ export function TrackMap({ currentLap, cars, mapRef, onReset }) {
     <div className="track-map">
       <div className="track-map-header">
         <span className="ld-section-label">
-          CARTE CIRCUIT
+          {t('ld_track_map', lang)}
           <span className="ld-dim">
-            {ptCount < 2 ? ' — conduisez pour tracer' : ` ${ptCount} pts`}
+            {ptCount < 2 ? t('ld_drive_to_trace', lang) : t('ld_pts', lang, { n: ptCount })}
           </span>
           {hasPit && <span className="ld-dim" style={{ marginLeft: 6 }}>· PIT ✓</span>}
         </span>
         {ptCount > 0 && (
-          <button className="track-map-reset" onClick={handleReset}>Réinit.</button>
+          <button className="track-map-reset" onClick={handleReset}>{t('ld_reset', lang)}</button>
         )}
       </div>
       <div className="track-map-svg-wrap">
@@ -465,7 +466,7 @@ export function TrackMap({ currentLap, cars, mapRef, onReset }) {
             <g>
               <circle cx={pitBox.x} cy={pitBox.y} r="9" fill="rgba(255,200,0,0.12)" stroke="rgba(255,200,0,0.55)" strokeWidth="1.5" />
               <text x={pitBox.x} y={pitBox.y} textAnchor="middle" dominantBaseline="middle"
-                fill="rgba(255,200,0,0.85)" fontSize="8" fontWeight="700" fontFamily="Barlow Condensed, sans-serif">PIT</text>
+                fill="rgba(255,200,0,0.85)" fontSize="8" fontWeight="700" fontFamily="Barlow Condensed, sans-serif">{t('ld_pit_marker', lang)}</text>
             </g>
           )}
           <CarDots live={live} map={mapRef} />
@@ -473,7 +474,7 @@ export function TrackMap({ currentLap, cars, mapRef, onReset }) {
             <text x={CANVAS_W / 2} y={CANVAS_H / 2} textAnchor="middle" dominantBaseline="middle"
               fill="rgba(255,255,255,0.15)" fontSize="13" fontWeight="600"
               fontFamily="Barlow Condensed, sans-serif">
-              CONDUISEZ UN TOUR POUR TRACER LE CIRCUIT
+              {t('ld_drive_a_lap', lang)}
             </text>
           )}
         </svg>
@@ -487,7 +488,7 @@ export function TrackMap({ currentLap, cars, mapRef, onReset }) {
 export default function LiveDashboard({
   data, label, compound, pendingConfirmation, onCompoundChange,
   drivers, currentDriverId, pendingDriver, onDriverChange,
-  tyreLaps = null, tyreLife = null,
+  tyreLaps = null, tyreLife = null, lang = DEFAULT_LANG,
 }) {
   const [showVitals, setShowVitals] = useState(false);
 
@@ -509,7 +510,7 @@ export default function LiveDashboard({
           <div className="ld-header-meta">
             {data.currentLap != null && (
               <span className="ld-meta-chip">
-                <span className="ld-meta-k">TOUR</span>
+                <span className="ld-meta-k">{t('ld_lap', lang)}</span>
                 <span className="ld-meta-v">
                   {data.currentLap}
                   {data.totalLaps > 0 && <span className="ld-dim">/{data.totalLaps}</span>}
@@ -518,16 +519,16 @@ export default function LiveDashboard({
             )}
             {data.racePos > 0 && (
               <span className="ld-meta-chip">
-                <span className="ld-meta-k">POS</span>
+                <span className="ld-meta-k">{t('ld_pos', lang)}</span>
                 <span className="ld-meta-v">
                   P{data.racePos}
                   {data.totalCars > 0 && <span className="ld-dim">/{data.totalCars}</span>}
                 </span>
               </span>
             )}
-            {data.paused && <span className="ld-badge ld-badge-paused">PAUSE</span>}
+            {data.paused && <span className="ld-badge ld-badge-paused">{t('ld_paused', lang)}</span>}
             <span className={`ld-badge ${data.onTrack ? 'ld-badge-track' : 'ld-badge-pit'}`}>
-              {data.onTrack ? 'EN PISTE' : 'STAND'}
+              {data.onTrack ? t('ld_on_track', lang) : t('ld_in_pit', lang)}
             </span>
           </div>
         </div>
@@ -562,14 +563,14 @@ export default function LiveDashboard({
             {(data.throttle != null || data.brake != null) && (
               <div className="ld-pedals">
                 <div className="ld-bar-row">
-                  <span className="ld-bar-lbl">GAZ</span>
+                  <span className="ld-bar-lbl">{t('ld_throttle', lang)}</span>
                   <div className="ld-bar-track">
                     <div className="ld-bar-fill ld-gas" style={{ width: `${throttlePct}%` }} />
                   </div>
                   <span className="ld-bar-val">{throttlePct}%</span>
                 </div>
                 <div className="ld-bar-row">
-                  <span className="ld-bar-lbl">FRN</span>
+                  <span className="ld-bar-lbl">{t('ld_brake', lang)}</span>
                   <div className="ld-bar-track">
                     <div className="ld-bar-fill ld-brk" style={{ width: `${brakePct}%` }} />
                   </div>
@@ -579,7 +580,7 @@ export default function LiveDashboard({
             )}
 
             <div className="ld-bar-row ld-fuel-row">
-              <span className="ld-bar-lbl">CARBU.</span>
+              <span className="ld-bar-lbl">{t('ld_fuel', lang)}</span>
               <div className="ld-bar-track">
                 <div className="ld-fuel-fill" style={{ width: `${Math.min(100, (data.fuelRatio ?? 0) * 100)}%` }} />
               </div>
@@ -587,13 +588,13 @@ export default function LiveDashboard({
             </div>
 
             <button className="ld-vitals-toggle" onClick={() => setShowVitals(v => !v)}>
-              {showVitals ? '▲ Masquer données moteur' : '▼ Données moteur'}
+              {showVitals ? t('ld_hide_engine', lang) : t('ld_show_engine', lang)}
             </button>
             {showVitals && (
               <div className="ld-vitals-chips">
                 {data.waterTemp != null && data.waterTemp !== 0 && (
                   <div className="ld-chip">
-                    <span className="ld-chip-k">EAU</span>
+                    <span className="ld-chip-k">{t('ld_water', lang)}</span>
                     <span className="ld-chip-v"
                       style={{ color: data.waterTemp > 105 ? 'var(--danger)' : 'var(--text-primary)' }}>
                       {data.waterTemp}°C
@@ -602,7 +603,7 @@ export default function LiveDashboard({
                 )}
                 {data.oilTemp != null && data.oilTemp !== 0 && (
                   <div className="ld-chip">
-                    <span className="ld-chip-k">HUILE</span>
+                    <span className="ld-chip-k">{t('ld_oil', lang)}</span>
                     <span className="ld-chip-v"
                       style={{ color: data.oilTemp > 135 ? 'var(--danger)' : 'var(--text-primary)' }}>
                       {data.oilTemp}°C
@@ -611,7 +612,7 @@ export default function LiveDashboard({
                 )}
                 {data.boost != null && data.boost !== -1 && (
                   <div className="ld-chip">
-                    <span className="ld-chip-k">TURBO</span>
+                    <span className="ld-chip-k">{t('ld_boost', lang)}</span>
                     <span className="ld-chip-v">
                       {data.boost >= 0 ? '+' : ''}{data.boost?.toFixed(1)} bar
                     </span>
@@ -624,11 +625,11 @@ export default function LiveDashboard({
           <div className="ld-col">
             <div className="ld-times">
               <div className="ld-time-row">
-                <span className="ld-time-lbl">DERNIER TOUR</span>
+                <span className="ld-time-lbl">{t('ld_last_lap', lang)}</span>
                 <span className="ld-time-val ld-mono">{formatMs(data.lastLapMs)}</span>
               </div>
               <div className="ld-time-row">
-                <span className="ld-time-lbl">MEILLEUR TOUR</span>
+                <span className="ld-time-lbl">{t('ld_best_lap', lang)}</span>
                 <span className="ld-time-val ld-mono ld-gold">{formatMs(data.bestLapMs)}</span>
               </div>
             </div>
@@ -638,15 +639,15 @@ export default function LiveDashboard({
                 {(pendingConfirmation || pendingDriver) && (
                   <div className="ld-confirm-banner">
                     {pendingConfirmation && pendingDriver
-                      ? 'ARRÊT TERMINÉ — CONFIRMEZ PNEU ET PILOTE ↓'
+                      ? t('ld_confirm_both', lang)
                       : pendingDriver
-                      ? 'NOUVEAU RELAIS — QUI CONDUIT ↓'
-                      : 'PNEUS CHANGÉS — CONFIRMEZ LE COMPOSÉ ↓'}
+                      ? t('ld_confirm_driver', lang)
+                      : t('ld_confirm_tyre', lang)}
                   </div>
                 )}
                 {drivers && drivers.length > 0 && (
                   <div className="ld-tire-section-header">
-                    <span className="ld-section-label">PILOTE</span>
+                    <span className="ld-section-label">{t('ld_driver', lang)}</span>
                     <div className={`ld-driver-picker${pendingDriver ? ' ld-compound-picker--pending' : ''}`}>
                       {drivers.map((d) => (
                         <button
@@ -661,7 +662,7 @@ export default function LiveDashboard({
                   </div>
                 )}
                 <div className="ld-tire-section-header">
-                  <span className="ld-section-label">PNEUS</span>
+                  <span className="ld-section-label">{t('ld_tyres', lang)}</span>
                   <div className={`ld-compound-picker${pendingConfirmation ? ' ld-compound-picker--pending' : !compound ? ' ld-compound-picker--alert' : ''}`}>
                     {COMPOUNDS.map(id => (
                       <button
@@ -674,7 +675,7 @@ export default function LiveDashboard({
                     ))}
                   </div>
                 </div>
-                <TyreAge laps={tyreLaps} life={tyreLife} />
+                <TyreAge laps={tyreLaps} life={tyreLife} lang={lang} />
 
                 <div className="tw-grid">
                   <div className="tw-cell tw-fl">

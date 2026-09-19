@@ -207,7 +207,19 @@ map is `docs/CURRENT_STATE.md`; the task checklist is `docs/BACKLOG.md`.
 - **`src/logic/` stays pure JS** with zero React dependency, runnable under plain
   `node`. The engine is portable and node-testable by design.
 - **One feature per git branch.** Each phase / feature gets its own branch.
-- **English is primary; wire i18n as a strings file** so French + Dutch are added
-  later without a rewrite (the app currently has hardcoded French strings).
+- **English is primary; all user-facing strings go through `src/i18n/`**
+  (`strings.js` + `en.js`/`fr.js`). `en` is the source of truth and the fallback
+  for a missing key; `DEFAULT_LANG` is `'fr'` so an unconfigured machine (and the
+  UI tests) see French. `lang` is threaded as a plain prop from `App.jsx` — no
+  context, no module global — so a new component takes `lang = DEFAULT_LANG` and
+  calls `t(key, lang, vars)`. Never hardcode a visible string; adding Dutch is
+  `nl.js` plus one entry in `LANGS`. `tests/test_ui_i18n.js` fails if the tables
+  drift apart.
+  `src/logic/` stays presentation-free: it keeps its English `label`/`warning`
+  text (logs and the other suites assert on it) and additionally emits what the
+  UI renders — `warningCode` on a stint, `sequenceIds` on a strategy, `labelKey`
+  on a recommendation. Compound display names come from `compoundName()` /
+  `compoundShort()` / `compoundSequence()` in the i18n layer, never from the
+  engine's `TIRE_COMPOUNDS[].name`.
 - **Product name is a placeholder.** `Race-Strategies` is the repo name only — do
   not hardcode a brand string anywhere it's hard to swap later.

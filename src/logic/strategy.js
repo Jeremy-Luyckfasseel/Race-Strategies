@@ -490,11 +490,17 @@ function simulateStrategy(p) {
     // Warning check
     let fuelNeededLiters = lapsInStint * effectiveLitersPerLap;
     
+    // `warning` stays English: it is what logs and the test-suite assert on.
+    // `warningCode` is what the UI renders, through the i18n layer -- keeping
+    // this module free of presentation while still being translatable.
     let warning = null;
+    let warningCode = null;
     if (fuelNeededLiters > tankSize) {
       warning = 'Fuel required exceeds tank capacity';
+      warningCode = 'warn_fuel_exceeds_tank';
     } else if (fuelNeededLiters > currentFuelLiters + 0.001) {
       warning = 'Not enough fuel for stint';
+      warningCode = 'warn_not_enough_fuel';
     }
 
     currentFuelLiters -= fuelNeededLiters;
@@ -630,6 +636,7 @@ function simulateStrategy(p) {
       compoundName: stintCompoundName,
       pitStopTimeSecs,
       warning,
+      warningCode,
       pitWindowLatestLap: isLast ? null : pitWindowLatestLap,
       driverId: stintDriverId,
       driverName: stintDriverName,
@@ -683,7 +690,13 @@ function labelStrategy(strategy) {
     }
     if (!compoundIds.includes(st.compound)) compoundIds.push(st.compound);
   }
-  return { label: finalSequence.map((f) => f.name).join(' → '), compoundIds };
+  // `label` stays English (logs, tests); `sequenceIds` is the same run-length
+  // sequence as ids, which the UI turns into a translated label.
+  return {
+    label: finalSequence.map((f) => f.name).join(' → '),
+    sequenceIds: finalSequence.map((f) => f.id),
+    compoundIds,
+  };
 }
 
 /**
@@ -893,10 +906,11 @@ export function findBestStrategies(params) {
       }
     }
 
-    const { label, compoundIds } = labelStrategy(strategy);
+    const { label, sequenceIds, compoundIds } = labelStrategy(strategy);
 
     return {
       label,
+      sequenceIds,
       compoundIds,
       strategy,
       _simParams: baseSimParams,
@@ -986,6 +1000,8 @@ export function findBestStrategies(params) {
     }
   }
 
-  return uniqueStrats.map((s) => ({ label: s.label, compoundIds: s.compoundIds, strategy: s.strategy }));
+  return uniqueStrats.map((s) => ({
+    label: s.label, sequenceIds: s.sequenceIds, compoundIds: s.compoundIds, strategy: s.strategy,
+  }));
 }
 

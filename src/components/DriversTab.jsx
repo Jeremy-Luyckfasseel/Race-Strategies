@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { DEFAULT_LANG, t, compoundName } from '../i18n/strings';
 
 function formatMs(ms) {
   if (ms == null || !Number.isFinite(ms)) return '—';
@@ -20,7 +21,7 @@ function formatDuration(secs) {
   return m > 0 ? `${m}m${String(s).padStart(2, '0')}s` : `${s}s`;
 }
 
-export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp, onReset }) {
+export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp, onReset, lang = DEFAULT_LANG }) {
   // Ticks once a second so the in-progress stint's elapsed time counts toward
   // its driver's total (and the "min not met" flag) instead of freezing at
   // zero for the whole stint. Date.now() is only ever read inside this effect,
@@ -59,7 +60,7 @@ export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp,
   return (
     <div className="results-summary">
       {multiDriver && (
-        <div className="driver-summary" aria-label="Driver time summary">
+        <div className="driver-summary" aria-label={t('aria_driver_times', lang)}>
           {drivers.map((d) => {
             const total = driverTotals.get(d.id) || 0;
             const metMinimum = !(minDriverTimeSecs > 0) || total >= minDriverTimeSecs;
@@ -67,7 +68,7 @@ export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp,
               <div key={d.id} className={`driver-chip${metMinimum ? '' : ' driver-chip-warn'}`}>
                 <span className="driver-chip-name">{d.name}</span>
                 <span className="driver-chip-time">{formatDriveTime(total)}</span>
-                {!metMinimum && <span className="driver-chip-flag">min non atteint</span>}
+                {!metMinimum && <span className="driver-chip-flag">{t('rs_min_not_met', lang)}</span>}
               </div>
             );
           })}
@@ -76,40 +77,44 @@ export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp,
 
       <div className="card">
         <div className="card-header">
-          <span className="card-title">Journal des Relais</span>
-          <button className="btn-header-ghost" onClick={onReset}>Réinitialiser</button>
+          <span className="card-title">{t('dt_title', lang)}</span>
+          <button className="btn-header-ghost" onClick={onReset}>{t('dt_reset', lang)}</button>
         </div>
 
         {!activeIp ? (
-          <p className="empty-text">
-            Marquez votre équipe avec ★ dans le classement (onglet Télémétrie)
-            pour suivre vos relais ici.
-          </p>
+          <p className="empty-text">{t('dt_no_team', lang)}</p>
         ) : stints.length === 0 ? (
-          <p className="empty-text">Aucun relais enregistré pour l'instant.</p>
+          <p className="empty-text">{t('dt_empty', lang)}</p>
         ) : (
           <div className="table-scroll">
-            <table className="stint-table" aria-label="Driver stint log">
+            <table className="stint-table" aria-label={t('aria_stint_log', lang)}>
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>Pilote</th>
-                  <th>Composé</th>
-                  <th>Tours</th>
-                  <th>Durée</th>
-                  <th>Tour Moy.</th>
-                  <th>Meilleur</th>
-                  <th>Pire</th>
+                  <th>{t('st_driver', lang)}</th>
+                  <th>{t('st_compound', lang)}</th>
+                  <th>{t('st_laps', lang)}</th>
+                  <th>{t('dt_duration', lang)}</th>
+                  <th>{t('st_avg_lap', lang)}</th>
+                  <th>{t('dt_best', lang)}</th>
+                  <th>{t('dt_worst', lang)}</th>
                 </tr>
               </thead>
               <tbody>
                 {stints.map((st, i) => (
                   <tr key={i}>
-                    <td className="stint-num">{i + 1}{st.live && ' (en cours)'}</td>
+                    <td className="stint-num">{i + 1}{st.live && t('dt_live', lang)}</td>
                     <td className="driver-cell">{driverName(st.driverId)}</td>
                     <td>
                       {st.compound
-                        ? <span className={`compound-tag compound-${st.compound}`}>{st.compound}</span>
+                        ? (
+                          <span
+                            className={`compound-tag compound-${st.compound}`}
+                            title={compoundName(st.compound, lang)}
+                          >
+                            {st.compound}
+                          </span>
+                        )
                         : '—'}
                     </td>
                     <td>{st.startLap}{st.endLap ? `–${st.endLap}` : '+'}</td>

@@ -20,13 +20,13 @@ import {
   fuelExhaustionLap,
   pitNowTrigger,
 } from '../logic/raceState';
-import { t } from '../i18n/strings';
+import { t, compoundName } from '../i18n/strings';
 
 const round1 = (x) => Math.round(x * 10) / 10;
 
-function CompoundChip({ id, name }) {
+function CompoundChip({ id, lang }) {
   if (!id) return null;
-  return <span className={`now-compound compound-${id}`}>{name || id}</span>;
+  return <span className={`now-compound compound-${id}`}>{compoundName(id, lang) || id}</span>;
 }
 
 export default function NowView({ data, strategy, planLabel, litersPerLap, tireLife, frozen, onToggleFreeze, label, lang }) {
@@ -63,7 +63,7 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
           {/* Current plan headline */}
           <div className="now-plan">
             {cs && <span className="now-stint-label">{t('now_stint', lang, { n: cs.stint.stintNum })}</span>}
-            {cs && <CompoundChip id={cs.stint.compound} name={cs.stint.compoundName} />}
+            {cs && <CompoundChip id={cs.stint.compound} lang={lang} />}
             {planLabel && <span className="now-plan-seq">{planLabel}</span>}
           </div>
 
@@ -83,7 +83,7 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
                   <span className="now-fuel">{t('now_add_fuel', lang, { n: round1(na.fuelToAddLiters) })}</span>
                 )}
                 <span className="now-tyres">{na.tiresChanged ? t('now_change_tyres', lang) : t('now_keep_tyres', lang)}</span>
-                {na.nextCompound && <CompoundChip id={na.nextCompound} name={na.nextCompoundName} />}
+                {na.nextCompound && <CompoundChip id={na.nextCompound} lang={lang} />}
               </div>
             ) : (
               <div className="now-action-body now-run-to-flag">{t('now_run_to_flag', lang)}</div>
