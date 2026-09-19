@@ -1,30 +1,32 @@
 import { formatLapTime } from "../logic/strategy";
+import { DEFAULT_LANG, t, compoundName } from "../i18n/strings";
 
-export default function StintTable({ stints }) {
+export default function StintTable({ stints, lang = DEFAULT_LANG }) {
   if (!stints || stints.length === 0) return null;
 
   const multiDriver = new Set(stints.map((s) => s.driverId).filter(Boolean)).size > 1;
+  const warningOf = (s) => (s.warningCode ? t(s.warningCode, lang) : s.warning);
 
   return (
     <div className="card">
       <div className="card-header">
-        <span className="card-title">Plan de Relais</span>
+        <span className="card-title">{t("st_title", lang)}</span>
       </div>
       <div className="table-scroll">
-        <table className="stint-table" aria-label="Lap-by-stint breakdown">
+        <table className="stint-table" aria-label={t("aria_stint_breakdown", lang)}>
           <thead>
             <tr>
               <th>#</th>
-              {multiDriver && <th>Pilote</th>}
-              <th>Début</th>
-              <th>Fin</th>
-              <th>Tours</th>
-              <th>Tour Pit</th>
-              <th>Carbu. Ajouté</th>
-              <th>Pneus</th>
-              <th>Composé</th>
-              <th>Tour Moy.</th>
-              <th>Pit (s)</th>
+              {multiDriver && <th>{t("st_driver", lang)}</th>}
+              <th>{t("st_start", lang)}</th>
+              <th>{t("st_end", lang)}</th>
+              <th>{t("st_laps", lang)}</th>
+              <th>{t("st_pit_lap", lang)}</th>
+              <th>{t("st_fuel_added", lang)}</th>
+              <th>{t("st_tyres", lang)}</th>
+              <th>{t("st_compound", lang)}</th>
+              <th>{t("st_avg_lap", lang)}</th>
+              <th>{t("st_pit_secs", lang)}</th>
             </tr>
           </thead>
           <tbody>
@@ -34,7 +36,7 @@ export default function StintTable({ stints }) {
                 <tr
                   key={stint.stintNum}
                   className={stint.warning ? "row-warning" : ""}
-                  title={stint.warning || undefined}
+                  title={warningOf(stint) || undefined}
                 >
                   <td className="stint-num">{stint.stintNum}</td>
                   {multiDriver && <td className="driver-cell">{stint.driverName}</td>}
@@ -43,7 +45,7 @@ export default function StintTable({ stints }) {
                   <td>{stint.lapsInStint}</td>
                   <td>
                     {isLast
-                      ? <span className="finish-label">Arrivée</span>
+                      ? <span className="finish-label">{t("st_finish", lang)}</span>
                       : stint.pitLap}
                   </td>
                   <td>
@@ -56,12 +58,15 @@ export default function StintTable({ stints }) {
                   <td>
                     {isLast ? "—" : (
                       <span className={`tire-badge ${stint.tiresChanged ? "changed" : "not-changed"}`}>
-                        {stint.tiresChanged ? "Oui" : "Non"}
+                        {stint.tiresChanged ? t("st_yes", lang) : t("st_no", lang)}
                       </span>
                     )}
                   </td>
                   <td>
-                    <span className={`compound-tag compound-${stint.compound}`}>
+                    <span
+                      className={`compound-tag compound-${stint.compound}`}
+                      title={compoundName(stint.compound, lang)}
+                    >
                       {stint.compound}
                     </span>
                   </td>
@@ -79,7 +84,7 @@ export default function StintTable({ stints }) {
       </div>
       {stints.some((s) => s.warning) && (
         <p className="field-note" style={{ marginTop: 10, textAlign: "right" }}>
-          Les lignes en rouge indiquent des alertes carburant ou pneus — survolez pour les détails.
+          {t("st_note", lang)}
         </p>
       )}
     </div>

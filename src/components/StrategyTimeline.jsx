@@ -2,6 +2,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, ReferenceLine, ReferenceArea,
 } from "recharts";
+import { DEFAULT_LANG, t, compoundName } from "../i18n/strings";
 
 const COMPOUND_COLORS = {
   H:  "#4A9EDE",
@@ -17,21 +18,23 @@ function getColor(id) {
   return COMPOUND_COLORS[id] || DEFAULT_COLOR;
 }
 
-function CustomTooltip({ active, payload }) {
+function CustomTooltip({ active, payload, lang = DEFAULT_LANG }) {
   if (!active || !payload?.length) return null;
   const s = payload[0]?.payload;
   if (!s) return null;
   return (
     <div className="timeline-tooltip">
-      <div className="tt-title">Relais {s.stintNum} — {s.compoundName}</div>
-      <div>Tours {s.startLap}–{s.endLap}&nbsp;({s.lapsInStint} tours)</div>
-      {s.fuelToAddLiters > 0 && <div>Carbu. ajouté : +{s.fuelToAddLiters.toFixed(1)} L</div>}
-      {s.tiresChanged && <div>Pneus changés</div>}
-      {s.pitStopTimeSecs > 0 && <div>Temps pit : {s.pitStopTimeSecs.toFixed(1)} s</div>}
+      <div className="tt-title">{t("tl_stint", lang, { n: s.stintNum })} — {compoundName(s.compound, lang) || s.compoundName}</div>
+      <div>{t("tl_laps_range", lang, { from: s.startLap, to: s.endLap, n: s.lapsInStint })}</div>
+      {s.fuelToAddLiters > 0 && <div>{t("tl_fuel_added", lang, { n: s.fuelToAddLiters.toFixed(1) })}</div>}
+      {s.tiresChanged && <div>{t("tl_tyres_changed", lang)}</div>}
+      {s.pitStopTimeSecs > 0 && <div>{t("tl_pit_time", lang, { n: s.pitStopTimeSecs.toFixed(1) })}</div>}
       {s.pitWindowLatestLap && s.pitWindowLatestLap > s.endLap && (
-        <div>Fenêtre : pit avant T{s.pitWindowLatestLap}</div>
+        <div>{t("tl_window", lang, { lap: s.pitWindowLatestLap })}</div>
       )}
-      {s.warning && <div className="tt-warning">{s.warning}</div>}
+      {s.warning && (
+        <div className="tt-warning">{s.warningCode ? t(s.warningCode, lang) : s.warning}</div>
+      )}
     </div>
   );
 }
@@ -48,7 +51,7 @@ function filterPitLabels(pitLaps) {
   return result;
 }
 
-export default function StrategyTimeline({ stints, totalLaps }) {
+export default function StrategyTimeline({ stints, totalLaps, lang = DEFAULT_LANG }) {
   if (!stints || stints.length === 0) return null;
 
   const data = stints.map((s) => ({
@@ -68,7 +71,7 @@ export default function StrategyTimeline({ stints, totalLaps }) {
   return (
     <div className="card">
       <div className="card-header">
-        <span className="card-title">Chronologie Stratégie</span>
+        <span className="card-title">{t("tl_title", lang)}</span>
         <div className="timeline-legend">
           {Object.entries(COMPOUND_COLORS)
             .filter(([id]) => usedCompounds.has(id))
@@ -106,7 +109,7 @@ export default function StrategyTimeline({ stints, totalLaps }) {
             axisLine={false}
             tickLine={false}
           />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.025)" }} />
+          <Tooltip content={<CustomTooltip lang={lang} />} cursor={{ fill: "rgba(255,255,255,0.025)" }} />
 
           {/* Invisible offset bar to position each stint */}
           <Bar dataKey="offset" stackId="a" fill="transparent" />
@@ -155,9 +158,7 @@ export default function StrategyTimeline({ stints, totalLaps }) {
         </BarChart>
       </ResponsiveContainer>
 
-      <p className="timeline-hint">
-        Tirets = arrêts pit · Zone hachurée = fenêtre pit · Contour rouge = alerte
-      </p>
+      <p className="timeline-hint">{t("tl_hint", lang)}</p>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useMemo, useState, Fragment } from 'react';
 import { teamColor } from '../logic/teams';
 import { lapInterval, formatInterval } from '../logic/gaps';
+import { DEFAULT_LANG, t, compoundShort } from '../i18n/strings';
 
 const COMPOUNDS = ['H', 'M', 'S', 'IM', 'W'];
 const COMPOUND_COLOR = { H: '#5EAED8', M: '#F08420', S: '#E4002B', IM: '#22CC6E', W: '#14BBCE' };
@@ -11,7 +12,6 @@ const COMPOUND_BG    = {
   IM: 'rgba(34,204,110,0.14)',
   W:  'rgba(20,187,206,0.14)',
 };
-const COMPOUND_LABEL = { H: 'HARD', M: 'MEDIUM', S: 'SOFT', IM: 'INTER', W: 'WET' };
 
 function formatMs(ms) {
   if (!ms || ms <= 0) return '—';
@@ -33,7 +33,7 @@ function fuelBarColor(pct) {
 
 export default function TelemetryLeaderboard({
   teams, teamOrder = [], teamLabels, teamCompounds, pendingIps, selectedIp, onSelect, onCompoundChange,
-  myTeamIp = '', onSetMyTeam, onRenameTeam, lapCrossings,
+  myTeamIp = '', onSetMyTeam, onRenameTeam, lapCrossings, lang = DEFAULT_LANG,
 }) {
   const [pickerIp, setPickerIp] = useState(null);
   const [editingIp, setEditingIp] = useState(null);
@@ -70,12 +70,12 @@ export default function TelemetryLeaderboard({
       {/* ── Header ── */}
       <div className="lb-header">
         <div className="lb-hcol lb-hcol-pos">#</div>
-        <div className="lb-hcol lb-hcol-team">ÉQUIPE</div>
-        <div className="lb-hcol lb-hcol-gap">ÉCART</div>
-        <div className="lb-hcol lb-hcol-last">DERNIER</div>
-        <div className="lb-hcol lb-hcol-best">MEILLEUR</div>
-        <div className="lb-hcol lb-hcol-tyre">PNEU</div>
-        <div className="lb-hcol lb-hcol-fuel">CARBU</div>
+        <div className="lb-hcol lb-hcol-team">{t('lb_team', lang)}</div>
+        <div className="lb-hcol lb-hcol-gap">{t('lb_gap', lang)}</div>
+        <div className="lb-hcol lb-hcol-last">{t('lb_last', lang)}</div>
+        <div className="lb-hcol lb-hcol-best">{t('lb_best', lang)}</div>
+        <div className="lb-hcol lb-hcol-tyre">{t('lb_tyre', lang)}</div>
+        <div className="lb-hcol lb-hcol-fuel">{t('lb_fuel', lang)}</div>
       </div>
 
       {/* ── Rows ── */}
@@ -123,7 +123,7 @@ export default function TelemetryLeaderboard({
                     <button
                       className={`lb-mine-btn${isMine ? ' is-mine' : ''}`}
                       onClick={(e) => { e.stopPropagation(); onSetMyTeam?.(ip); }}
-                      title={isMine ? 'Mon équipe — cliquer pour retirer' : 'Définir comme mon équipe'}
+                      title={isMine ? t('lb_mine_unset', lang) : t('lb_mine_set', lang)}
                       aria-pressed={isMine}
                     >
                       {isMine ? '★' : '☆'}
@@ -155,14 +155,14 @@ export default function TelemetryLeaderboard({
                         <button
                           className="lb-rename-btn"
                           onClick={(e) => { e.stopPropagation(); setEditingIp(ip); }}
-                          title="Renommer l'équipe"
+                          title={t('lb_rename', lang)}
                         >
                           ✎
                         </button>
                       </>
                     )}
-                    {isMine && <span className="lb-mine-pill">MOI</span>}
-                    {!d.onTrack && <span className="lb-box-pill">BOX</span>}
+                    {isMine && <span className="lb-mine-pill">{t('lb_me', lang)}</span>}
+                    {!d.onTrack && <span className="lb-box-pill">{t('lb_box', lang)}</span>}
                   </div>
                   {/* Narrow column only: the DERNIER / MEILLEUR / CARBU columns
                       do not fit there, so the two numbers worth having follow
@@ -185,7 +185,7 @@ export default function TelemetryLeaderboard({
               {/* Gap */}
               <div className="lbc lbc-gap">
                 {idx === 0
-                  ? <span className="lb-leader">LEADER</span>
+                  ? <span className="lb-leader">{t('lb_leader', lang)}</span>
                   : gap
                     ? <span className="lb-gap">{gap}</span>
                     : <span className="lb-null">—</span>
@@ -207,7 +207,7 @@ export default function TelemetryLeaderboard({
                   className={`lb-tyre${compound ? ' lb-tyre-set' : ''}${pending ? ' lb-tyre-pending' : ''}${pickerOpen ? ' lb-tyre-open' : ''}`}
                   style={compound ? { '--cc': COMPOUND_COLOR[compound], '--ccbg': COMPOUND_BG[compound] } : {}}
                   onClick={() => setPickerIp(p => p === ip ? null : ip)}
-                  title={compound ? COMPOUND_LABEL[compound] : 'Choisir un pneu'}
+                  title={compound ? compoundShort(compound, lang) : t('lb_pick_tyre', lang)}
                 >
                   {compound ?? '?'}
                 </button>
@@ -235,7 +235,7 @@ export default function TelemetryLeaderboard({
                 onClick={e => e.stopPropagation()}
               >
                 <span className="lb-picker-label">
-                  {pending ? '● PNEUS CHANGÉS' : 'COMPOSÉ'}
+                  {pending ? t('lb_tyres_changed', lang) : t('lb_compound', lang)}
                 </span>
                 <div className="lb-picker-grid">
                   {COMPOUNDS.map(id => (
@@ -249,7 +249,7 @@ export default function TelemetryLeaderboard({
                       }}
                     >
                       <span className="lb-cp-letter">{id}</span>
-                      <span className="lb-cp-name">{COMPOUND_LABEL[id]}</span>
+                      <span className="lb-cp-name">{compoundShort(id, lang)}</span>
                     </button>
                   ))}
                 </div>

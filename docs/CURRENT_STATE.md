@@ -21,9 +21,17 @@ Four tabs: **Course** (the live single-team "Now" view — default landing),
 the multi-team leaderboard, which now reveals itself automatically once a
 second car appears), and **Pilotes** (per-driver drive-time totals + the
 per-stint log — duration, tyre, avg/best/worst lap — built from pit-exit/entry
-events; see `stintLog.js`/`useStintLog.js` below). UI strings are mostly
-French; a lightweight English-primary i18n layer (`src/i18n/strings.js`) was
-seeded for the Now view.
+events; see `stintLog.js`/`useStintLog.js` below). **Every user-facing string now
+goes through the i18n layer** (`src/i18n/strings.js` + `en.js`/`fr.js`): English is
+the source of truth and the fallback for any missing key, French is the default a
+machine with nothing stored gets, and a FR/EN switch in the header flips the whole
+tree and persists under `gt7-lang`. `lang` is a plain prop threaded from `App.jsx`
+— no context, no module global. Adding Dutch is `nl.js` plus one entry in `LANGS`.
+That includes what comes out of the pure engine: `src/logic/` keeps its English
+`label`/`warning` for logs and tests and additionally emits `warningCode`,
+`sequenceIds` and `labelKey` for the UI to translate, so tyre names, stint
+warnings and learner recommendations all follow the switch. Guarded by
+`tests/test_ui_i18n.js`, which also fails if the two tables drift apart.
 
 **The telemetry→engine learning path now exists (Phase 1).** A pure learner
 (`src/logic/telemetryLearner.js`) derives fuel burn, the fuel-weight penalty, and

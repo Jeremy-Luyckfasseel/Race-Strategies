@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
+import { DEFAULT_LANG, t } from '../i18n/strings';
 
 export default function TelemetryControls({
   telem,
   ps5IPs, onSavePS5IPs,
   telemUrl, setTelemUrl,
   teamLabels, onTeamLabelChange,
+  lang = DEFAULT_LANG,
 }) {
   const [open, setOpen] = useState(true);
   const addIP    = () => onSavePS5IPs([...ps5IPs, '']);
@@ -29,11 +31,11 @@ export default function TelemetryControls({
     <div className="tc-panel">
       <div className="tc-collapse-bar">
         <span className="tc-collapse-title">
-          CONNEXIONS
-          {telem.connected && <span className="tc-live-badge">● EN DIRECT</span>}
+          {t('tc_connections', lang)}
+          {telem.connected && <span className="tc-live-badge">{t('tc_live', lang)}</span>}
         </span>
         <button className="tc-collapse-btn" onClick={() => setOpen(o => !o)}>
-          {open ? '▲ Masquer' : '▼ Afficher'}
+          {open ? t('tc_hide', lang) : t('tc_show', lang)}
         </button>
       </div>
       {open && (
@@ -42,7 +44,7 @@ export default function TelemetryControls({
 
             {/* ── Connection ── */}
             <div className="tc-group">
-              <span className="tc-label">SERVEUR</span>
+              <span className="tc-label">{t('tc_server', lang)}</span>
               <div className="tc-input-row">
                 <input
                   className="tc-url-input"
@@ -53,32 +55,30 @@ export default function TelemetryControls({
                   spellCheck={false}
                 />
                 {telem.connected ? (
-                  <button className="btn-secondary tc-btn" onClick={telem.disconnect}>Déconnecter</button>
+                  <button className="btn-secondary tc-btn" onClick={telem.disconnect}>{t('tc_disconnect', lang)}</button>
                 ) : (
                   <button
                     className="btn-secondary tc-btn"
                     onClick={() => telem.connect(telemUrl, ps5IPs.map(ip => ip.trim()).filter(Boolean))}
                   >
-                    Connecter
+                    {t('tc_connect', lang)}
                   </button>
                 )}
               </div>
               {!telem.connected && (
-                <p className="tc-hint">
-                  En attente du relais — il démarre avec l&apos;application.
-                </p>
+                <p className="tc-hint">{t('tc_waiting_relay', lang)}</p>
               )}
               {telem.connected && telem.relayAddresses?.length > 0 && (
                 <p className="tc-hint">
-                  Un autre PC peut suivre cette course : qu&apos;il saisisse{' '}
-                  <code>{telem.relayAddresses[0]}</code> comme serveur.
+                  {t('tc_other_pc_1', lang)}{' '}
+                  <code>{telem.relayAddresses[0]}</code> {t('tc_other_pc_2', lang)}
                 </p>
               )}
             </div>
 
             {/* ── PS5 IPs ── */}
             <div className="tc-group">
-              <span className="tc-label">PS5 IPs</span>
+              <span className="tc-label">{t('tc_ps5_ips', lang)}</span>
               <div className="tc-ip-list">
                 {ps5IPs.map((ip, idx) => (
                   <div key={idx} className="tc-ip-row">
@@ -91,27 +91,27 @@ export default function TelemetryControls({
                       spellCheck={false}
                     />
                     {ps5IPs.length > 1 && (
-                      <button className="tc-ip-remove" onClick={() => removeIP(idx)} title="Supprimer">×</button>
+                      <button className="tc-ip-remove" onClick={() => removeIP(idx)} title={t('tc_remove', lang)}>×</button>
                     )}
                   </div>
                 ))}
-                <button className="btn-ghost tc-add-btn" onClick={addIP}>+ Ajouter PS5</button>
+                <button className="btn-ghost tc-add-btn" onClick={addIP}>{t('tc_add_ps5', lang)}</button>
               </div>
             </div>
 
             {/* ── Scan ── */}
             <div className="tc-group">
-              <span className="tc-label">DÉTECTION</span>
+              <span className="tc-label">{t('tc_detection', lang)}</span>
               <button
                 className="btn-secondary tc-btn tc-scan-btn"
                 onClick={telem.connected ? telem.scan : undefined}
                 disabled={!telem.connected || telem.scanning}
-                title={!telem.connected ? 'Connectez le serveur d\'abord' : 'Scanner le réseau local pour les PS5'}
+                title={!telem.connected ? t('tc_connect_first', lang) : t('tc_scan_title', lang)}
               >
-                {telem.scanning ? 'Scan en cours…' : '⟳ Scanner Réseau'}
+                {telem.scanning ? t('tc_scanning', lang) : t('tc_scan', lang)}
               </button>
               {!telem.connected && (
-                <p className="tc-hint">Connectez le serveur d&apos;abord</p>
+                <p className="tc-hint">{t('tc_connect_first', lang)}</p>
               )}
             </div>
 
@@ -121,7 +121,7 @@ export default function TelemetryControls({
           {telem.scanResults?.length > 0 && (
             <div className="tc-scan-results">
               <span className="tc-scan-label">
-                {telem.scanResults.length} PS5{telem.scanResults.length > 1 ? 's' : ''} trouvée{telem.scanResults.length > 1 ? 's' : ''} — ajoutées automatiquement
+                {t(telem.scanResults.length > 1 ? 'tc_scan_found_many' : 'tc_scan_found', lang, { n: telem.scanResults.length })}
               </span>
               {telem.scanResults.map(({ ip, hostname }) => (
                 <span key={ip} className="tc-scan-result-tag">

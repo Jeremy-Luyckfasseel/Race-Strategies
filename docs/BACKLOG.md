@@ -182,10 +182,11 @@ These exist in the current code. Verify before extending; never re-implement.
 
 ## Cross-cutting
 
-- [ ] **i18n scaffold** — wire a lightweight i18n strings layer (English primary) so
-  French + Dutch become strings files, not a rewrite. The app currently has hardcoded
-  French strings; migrate them as the scaffold lands. _Schedule alongside Phase 2 UI
-  work. Accept: all user-facing strings flow through the i18n layer; English default._
+- [x] **i18n scaffold** — every user-facing string flows through `src/i18n/`
+  (`strings.js` + `en.js`/`fr.js`), English is the source of truth and the fallback,
+  and a FR/EN switch in the header flips the whole app and persists the choice.
+  Dutch is `nl.js` plus one entry in `LANGS`. Default stays French for existing
+  users. Covered by `tests/test_ui_i18n.js`.
 - [ ] **Product name** — `Race-Strategies` is a placeholder. Keep the brand in one
   swappable constant; final name chosen right before the landing page goes live
   (shortlist: Undercut / Boxbox / Stint(wise) / Pitwall / Pitboard; check

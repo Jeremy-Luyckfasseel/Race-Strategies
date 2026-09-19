@@ -26,7 +26,7 @@ import {
   INPUTS_KEY, buildSnapshot, validateSnapshot, applySnapshot, clearRace,
   loadInputs, snapshotFilename,
 } from "./logic/racePersistence";
-import { DEFAULT_LANG, t } from "./i18n/strings";
+import { LANGS, LANG_KEY, loadLang, t, compoundSequence } from "./i18n/strings";
 
 const DEFAULT_INPUTS = {
   raceDurationHours: 8,
@@ -44,7 +44,7 @@ const DEFAULT_INPUTS = {
   tireChangeSecs: 27,
   fuelRateLitersPerSec: 4.0,
   fuelWeightPenaltyPerLiter: 0.03,
-  drivers: [{ id: "d1", name: "Driver 1", compounds: {} }],
+  drivers: [{ id: "d1", name: "Driver 1", compounds: {} }], // localised by defaultInputs()
   minDriverTimeSecs: 7200,
   mandatoryStops: 1,
   midRaceMode: false,
@@ -53,6 +53,17 @@ const DEFAULT_INPUTS = {
   currentCompoundId: "",
   currentTireAgeLaps: "",
 };
+
+/**
+ * The defaults, with the one field a human reads localised. Everything else in
+ * DEFAULT_INPUTS is a number or a compound id, so only the driver name moves.
+ */
+function defaultInputs(lang) {
+  return {
+    ...DEFAULT_INPUTS,
+    drivers: [{ id: "d1", name: t("driver_n", lang, { n: 1 }), compounds: {} }],
+  };
+}
 
 function CheckeredFlag() {
   const squares = Array.from({ length: 16 });
@@ -153,11 +164,22 @@ function CircuitSVG() {
 }
 
 export default function App() {
+  // UI language. Every component takes it as a prop rather than reading a
+  // module global, so a switch re-renders the whole tree the normal way. It is
+  // declared first because the default inputs below are seeded from it.
+  const [lang, setLangState] = useState(() => loadLang((k) => localStorage.getItem(k)));
+  const setLang = useCallback((next) => {
+    setLangState(next);
+    try { localStorage.setItem(LANG_KEY, next); } catch { /* ignore */ }
+  }, []);
+  useEffect(() => { document.documentElement.lang = lang; }, [lang]);
+
   // Restored silently, the way team names and tyres already are. An 8-hour
   // race should not be lost to an accidental refresh.
   const [inputs, setInputs] = useState(() => {
-    try { return loadInputs(localStorage.getItem(INPUTS_KEY), DEFAULT_INPUTS); }
-    catch { return DEFAULT_INPUTS; }
+    const fallback = defaultInputs(lang);
+    try { return loadInputs(localStorage.getItem(INPUTS_KEY), fallback); }
+    catch { return fallback; }
   });
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [telemSelectedIp, setTelemSelectedIp] = useState("");
@@ -349,13 +371,10 @@ export default function App() {
 
   /** Start a new race: clear this race's data, keep the circuit and presets. */
   const startNewRace = useCallback(() => {
-    if (!window.confirm(
-      "Effacer cette course ?\n\nPilotes, stratégie, noms d'équipe, pneus et journal "
-      + 'des relais seront remis à zéro. La carte du circuit et vos préréglages sont conservés.',
-    )) return;
+    if (!window.confirm(t("app_new_race_confirm", lang))) return;
     try { clearRace((k) => localStorage.removeItem(k)); } catch { /* ignore */ }
     window.location.reload();
-  }, []);
+  }, [lang]);
 
   /** Download everything needed to rebuild this session elsewhere. */
   const exportRace = useCallback(() => {
@@ -377,19 +396,17 @@ export default function App() {
     reader.onload = () => {
       let snap;
       try { snap = JSON.parse(String(reader.result)); }
-      catch { window.alert('Fichier illisible.'); return; }
+      catch { window.alert(t("app_import_unreadable", lang)); return; }
 
       const check = validateSnapshot(snap);
-      if (!check.ok) { window.alert(`Import impossible : ${check.reason}.`); return; }
-      if (!window.confirm(
-        'Restaurer cette sauvegarde ?\n\nElle remplacera la course en cours.',
-      )) return;
+      if (!check.ok) { window.alert(t("app_import_failed", lang, { reason: check.reason })); return; }
+      if (!window.confirm(t("app_import_confirm", lang))) return;
 
       applySnapshot(snap, (k, v) => localStorage.setItem(k, v));
       window.location.reload();
     };
     reader.readAsText(file);
-  }, []);
+  }, [lang]);
 
   // Once a second car shows up this is a multi-car event, so reveal the
   // leaderboard rather than leaving the whole field hidden behind a toggle.
@@ -482,32 +499,32 @@ export default function App() {
           onApplyCarPreset={applyCarPreset}
           onRescan={() => telem.scan()}
           onComplete={completeOnboarding}
-          lang={DEFAULT_LANG}
+          lang={lang}
         />
       )}
       <header className="app-header">
         <CheckeredFlag />
         <div className="header-titles">
-          <h1 className="header-title">GT7 Stratégie Course</h1>
-          <p className="header-subtitle">Calculateur Arrêt Pit</p>
+          <h1 className="header-title">{t("app_title", lang)}</h1>
+          <p className="header-subtitle">{t("app_subtitle", lang)}</p>
         </div>
         <div className="header-actions">
           {telem && (
             <div className={`telem-badge${telem.connected ? " live" : ""}`}>
               <span className={`telem-dot${telem.connected ? " live" : ""}`} />
-              {telem.connected ? "Télémétrie En Direct" : "Télémétrie Hors Ligne"}
+              {telem.connected ? t("app_telem_live", lang) : t("app_telem_offline", lang)}
             </div>
           )}
           {best && (
             <button className="btn-header-ghost" onClick={() => window.print()}>
-              Imprimer
+              {t("app_print", lang)}
             </button>
           )}
-          <button className="btn-header-ghost" onClick={exportRace} title="Télécharger une sauvegarde de la course">
-            Sauvegarder
+          <button className="btn-header-ghost" onClick={exportRace} title={t("app_save_title", lang)}>
+            {t("app_save", lang)}
           </button>
-          <label className="btn-header-ghost" title="Restaurer une sauvegarde">
-            Restaurer
+          <label className="btn-header-ghost" title={t("app_restore_title", lang)}>
+            {t("app_restore", lang)}
             <input
               type="file"
               accept="application/json,.json"
@@ -515,15 +532,27 @@ export default function App() {
               onChange={(e) => { importRace(e.target.files?.[0]); e.target.value = ''; }}
             />
           </label>
-          <button className="btn-header-ghost" onClick={startNewRace} title="Effacer la course en cours">
-            Nouvelle course
+          <button className="btn-header-ghost" onClick={startNewRace} title={t("app_new_race_title", lang)}>
+            {t("app_new_race", lang)}
           </button>
+          <div className="lang-switch" role="group" aria-label={t("app_lang_title", lang)}>
+            {LANGS.map((l) => (
+              <button
+                key={l.id}
+                className={`lang-btn${lang === l.id ? " lang-active" : ""}`}
+                onClick={() => setLang(l.id)}
+                aria-pressed={lang === l.id}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
       <main className={`app-main${activeTab === 'telemetry' ? ' app-main--telemetry' : ''}`}>
         <aside className="sidebar">
-          <TeamPanel onBuild={applySessions} lang={DEFAULT_LANG} />
+          <TeamPanel onBuild={applySessions} lang={lang} />
           <InputPanel
             inputs={inputs}
             onChange={handleChange}
@@ -532,6 +561,7 @@ export default function App() {
             telemSelectedIp={telemSelectedIp}
             onTelemSelect={setTelemSelectedIp}
             teamLabels={teamLabels}
+            lang={lang}
           />
         </aside>
 
@@ -541,7 +571,7 @@ export default function App() {
               className={`tab-btn${activeTab === "now" ? " tab-active" : ""}`}
               onClick={() => setActiveTab("now")}
             >
-              {t("now_tab", DEFAULT_LANG)}
+              {t("now_tab", lang)}
               {telem.connected && telem.teams.size > 0 && (
                 <span className="tab-live-dot" />
               )}
@@ -550,13 +580,13 @@ export default function App() {
               className={`tab-btn${activeTab === "strategy" ? " tab-active" : ""}`}
               onClick={() => setActiveTab("strategy")}
             >
-              Stratégie
+              {t("app_tab_strategy", lang)}
             </button>
             <button
               className={`tab-btn${activeTab === "telemetry" ? " tab-active" : ""}`}
               onClick={() => setActiveTab("telemetry")}
             >
-              Télémétrie
+              {t("app_tab_telemetry", lang)}
               {telem.connected && telem.teams.size > 0 && (
                 <span className="tab-live-dot" />
               )}
@@ -565,7 +595,7 @@ export default function App() {
               className={`tab-btn${activeTab === "drivers" ? " tab-active" : ""}`}
               onClick={() => setActiveTab("drivers")}
             >
-              Pilotes
+              {t("app_tab_drivers", lang)}
               {stintLog.pendingDriverIps.size > 0 && (
                 <span className="tab-live-dot" />
               )}
@@ -578,17 +608,18 @@ export default function App() {
                 recommendations={learner.recommendations}
                 onAccept={acceptRecommendation}
                 onIgnore={learner.ignore}
+                lang={lang}
               />
               <NowView
                 data={strategyIp ? telem.teams.get(strategyIp) : null}
                 strategy={nowBest?.strategy ?? null}
-                planLabel={nowBest?.label ?? null}
+                planLabel={nowBest?.sequenceIds ? compoundSequence(nowBest.sequenceIds, lang) : (nowBest?.label ?? null)}
                 litersPerLap={nowLitersPerLap}
                 tireLife={nowTireLife}
                 frozen={planFrozen}
                 onToggleFreeze={toggleFreeze}
                 label={strategyIp ? getTeamLabel(strategyIp) : null}
-                lang={DEFAULT_LANG}
+                lang={lang}
               />
             </div>
           )}
@@ -599,9 +630,10 @@ export default function App() {
                 recommendations={learner.recommendations}
                 onAccept={acceptRecommendation}
                 onIgnore={learner.ignore}
+                lang={lang}
               />
               {calculating && best && (
-                <div className="recalc-badge">Recalculating&hellip;</div>
+                <div className="recalc-badge">{t("app_recalculating", lang)}</div>
               )}
               {!best ? (
                 <div className="empty-state">
@@ -609,10 +641,10 @@ export default function App() {
                     <CircuitSVG />
                   </div>
                   <div className="empty-text-block">
-                    <p className="empty-title">Aucune Donnée</p>
+                    <p className="empty-title">{t("app_empty_title", lang)}</p>
                     <p className="empty-text">
-                      Configurez vos paramètres dans le panneau et appuyez sur{" "}
-                      <strong>Calculer la Stratégie</strong> pour énumérer toutes les séquences valides.
+                      {t("app_empty_before_cta", lang)}{" "}
+                      <strong>{t("ip_calculate", lang)}</strong> {t("app_empty_after_cta", lang)}
                     </p>
                   </div>
                 </div>
@@ -623,12 +655,14 @@ export default function App() {
                     best={best}
                     selectedIndex={selectedIndex}
                     onSelect={setSelectedIndex}
+                    lang={lang}
                   />
                   <StrategyTimeline
                     stints={selectedStrategy.strategy.stints}
                     totalLaps={selectedStrategy.strategy.totalLaps}
+                    lang={lang}
                   />
-                  <StintTable stints={selectedStrategy.strategy.stints} />
+                  <StintTable stints={selectedStrategy.strategy.stints} lang={lang} />
                 </>
               )}
             </div>
@@ -642,6 +676,7 @@ export default function App() {
                 minDriverTimeSecs={inputs.minDriverTimeSecs}
                 activeIp={strategyIp}
                 onReset={stintLog.resetAll}
+                lang={lang}
               />
             </div>
           )}
@@ -675,6 +710,7 @@ export default function App() {
               onSetMyTeam: setMyTeam,
               onRenameTeam: updateTeamLabel,
               lapCrossings: telem.lapCrossings,
+              lang,
             };
             return (
               <div className="tab-content tab-content--telemetry">
@@ -686,6 +722,7 @@ export default function App() {
                   setTelemUrl={setTelemUrl}
                   teamLabels={teamLabels}
                   onTeamLabelChange={updateTeamLabel}
+                  lang={lang}
                 />
                 {telem.teams.size > 0 && (
                   <button
@@ -693,20 +730,20 @@ export default function App() {
                     onClick={() => setShowAdvancedLb((v) => !v)}
                   >
                     {showAdvancedLb
-                      ? "Masquer le classement multi-équipes"
-                      : `Afficher le classement multi-équipes${telem.teams.size > 1 ? ` (${telem.teams.size})` : ""}`}
+                      ? t("app_lb_hide", lang)
+                      : `${t("app_lb_show", lang)}${telem.teams.size > 1 ? ` (${telem.teams.size})` : ""}`}
                   </button>
                 )}
                 {telem.teams.size === 0 ? (
                   <div className="empty-state">
                     <div className="empty-text-block">
                       <p className="empty-title">
-                        {telem.connected ? "En attente de données PS5" : "Télémétrie Hors Ligne"}
+                        {telem.connected ? t("app_waiting_ps5", lang) : t("app_telem_offline", lang)}
                       </p>
                       <p className="empty-text">
                         {telem.connected
-                          ? "Ajoutez une IP PS5 ci-dessus et commencez à rouler dans GT7."
-                          : "Connectez-vous au serveur relais, puis ajoutez les IPs PS5."}
+                          ? t("app_waiting_ps5_text", lang)
+                          : t("app_offline_text", lang)}
                       </p>
                     </div>
                   </div>
@@ -723,6 +760,7 @@ export default function App() {
                         cars={cars}
                         mapRef={mapRef}
                         onReset={resetMap}
+                        lang={lang}
                       />
                     </div>
                     <div className="telem-3col-data">
@@ -750,10 +788,11 @@ export default function App() {
                           tyreLife={Number(
                             inputs.compounds.find((c) => c.id === teamCompounds[displayIp])?.tireLife,
                           ) || null}
+                          lang={lang}
                         />
                       ) : (
                         <div className="telem-no-sel">
-                          <p>Sélectionnez une équipe dans le tableau</p>
+                          <p>{t("app_no_selection", lang)}</p>
                         </div>
                       )}
                     </div>
@@ -766,7 +805,7 @@ export default function App() {
       </main>
 
       <footer className="app-footer">
-        Calculateur Stratégie GT7 &middot; Estimations uniquement &mdash; vérifier avec les données du jeu
+        {t("app_footer", lang)}
       </footer>
     </div>
   );

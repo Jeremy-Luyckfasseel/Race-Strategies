@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { CAR_PRESETS, isValidLapTimeStr as isValidLapTime } from "../logic/strategy";
+import { DEFAULT_LANG, t, compoundName } from "../i18n/strings";
 
 
 const BUILT_IN_PRESETS = CAR_PRESETS;
@@ -34,7 +35,7 @@ function Section({ label, sectionKey, openSections, toggle, children }) {
   );
 }
 
-export default function InputPanel({ inputs, onChange, onCalculate, telem, telemSelectedIp, onTelemSelect, teamLabels = {} }) {
+export default function InputPanel({ inputs, onChange, onCalculate, telem, telemSelectedIp, onTelemSelect, teamLabels = {}, lang = DEFAULT_LANG }) {
   const [openSections, setOpenSections] = useState(DEFAULT_OPEN);
   const [savedPresets, setSavedPresets] = useState(() => {
     try { return JSON.parse(localStorage.getItem("gt7-presets") || "[]"); }
@@ -108,7 +109,7 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
       ],
       pitBaseSecs: 25, tireChangeSecs: 27, fuelRateLitersPerSec: 4.0,
       fuelWeightPenaltyPerLiter: 0.03,
-      drivers: [{ id: "d1", name: "Driver 1", compounds: {} }],
+      drivers: [{ id: "d1", name: t("driver_n", lang, { n: 1 }), compounds: {} }],
       minDriverTimeSecs: 7200, mandatoryStops: 1,
       midRaceMode: false, currentLap: "", currentFuel: "", currentCompoundId: "", currentTireAgeLaps: "",
     }));
@@ -119,7 +120,7 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
       ...prev,
       drivers: [
         ...(prev.drivers || []),
-        { id: `d${Date.now()}`, name: `Driver ${(prev.drivers || []).length + 1}`, compounds: {} },
+        { id: `d${Date.now()}`, name: t("driver_n", lang, { n: (prev.drivers || []).length + 1 }), compounds: {} },
       ],
     }));
   };
@@ -160,21 +161,21 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
     <div className="input-panel">
 
       {/* ── Car Presets ── */}
-      <Section label="Préréglages Voiture" sectionKey="presets" openSections={openSections} toggle={toggle}>
+      <Section label={t("ip_presets", lang)} sectionKey="presets" openSections={openSections} toggle={toggle}>
         <div className="preset-list">
           {allPresets.map((preset) => (
             <button
               key={preset.id}
               className="preset-btn"
               onClick={() => loadPreset(preset)}
-              title={`Tank: ${preset.tankSize}L · Laps/Tank: ${preset.lapsPerFullTank}`}
+              title={t("ip_preset_title", lang, { tank: preset.tankSize, laps: preset.lapsPerFullTank })}
             >
               {preset.name}
               {!BUILT_IN_PRESETS.find((p) => p.id === preset.id) && (
                 <span
                   className="preset-delete"
                   onClick={(e) => { e.stopPropagation(); deletePreset(preset.id); }}
-                  title="Delete"
+                  title={t("ip_preset_delete", lang)}
                   role="button"
                   tabIndex={-1}
                 >×</span>
@@ -185,22 +186,22 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
         <div className="save-preset-row">
           <input
             type="text"
-            placeholder="Sauvegarder comme préréglage…"
+            placeholder={t("ip_preset_save_ph", lang)}
             value={presetName}
             onChange={(e) => setPresetName(e.target.value)}
             className="preset-name-input"
             onKeyDown={(e) => e.key === "Enter" && savePreset()}
           />
-          <button className="btn-secondary" onClick={savePreset}>Sauvegarder</button>
+          <button className="btn-secondary" onClick={savePreset}>{t("ip_preset_save", lang)}</button>
         </div>
       </Section>
 
       {/* ── Race Settings ── */}
-      <Section label="Paramètres Course" sectionKey="race" openSections={openSections} toggle={toggle}>
+      <Section label={t("ip_race", lang)} sectionKey="race" openSections={openSections} toggle={toggle}>
         <div className="field-group">
           <label htmlFor="raceDuration">
-            {inputs.midRaceMode ? "Temps Restant (heures)" : "Durée de Course (heures)"}
-            {inputs.midRaceMode && <span className="hint"> — temps restant</span>}
+            {inputs.midRaceMode ? t("ip_time_left", lang) : t("ip_race_duration", lang)}
+            {inputs.midRaceMode && <span className="hint">{t("ip_time_left_hint", lang)}</span>}
           </label>
           <input
             id="raceDuration"
@@ -210,7 +211,7 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
           />
         </div>
         <div className="field-group">
-          <label htmlFor="mandatoryStops">Arrêts Obligatoires</label>
+          <label htmlFor="mandatoryStops">{t("ip_mandatory_stops", lang)}</label>
           <input
             id="mandatoryStops"
             type="number" min="0" max="20" step="1"
@@ -221,11 +222,11 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
       </Section>
 
       {/* ── Pit Stop Timing ── */}
-      <Section label="Timing Arrêt Pit" sectionKey="pit" openSections={openSections} toggle={toggle}>
+      <Section label={t("ip_pit", lang)} sectionKey="pit" openSections={openSections} toggle={toggle}>
         <div className="field-group">
           <label htmlFor="pitBaseSecs">
-            Temps Base Pit (sec)
-            <span className="hint"> — entrée + sortie</span>
+            {t("ip_pit_base", lang)}
+            <span className="hint">{t("ip_pit_base_hint", lang)}</span>
           </label>
           <input
             id="pitBaseSecs"
@@ -236,8 +237,8 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
         </div>
         <div className="field-group">
           <label htmlFor="tireChangeSecs">
-            Temps Changement Pneus (sec)
-            <span className="hint"> — ajouté si changement</span>
+            {t("ip_tire_change", lang)}
+            <span className="hint">{t("ip_tire_change_hint", lang)}</span>
           </label>
           <input
             id="tireChangeSecs"
@@ -247,7 +248,7 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
           />
         </div>
         <div className="field-group">
-          <label htmlFor="fuelRateLitersPerSec">Débit Carburant (L/sec)</label>
+          <label htmlFor="fuelRateLitersPerSec">{t("ip_fuel_rate", lang)}</label>
           <input
             id="fuelRateLitersPerSec"
             type="number" min="1" max="20" step="0.5"
@@ -258,9 +259,9 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
       </Section>
 
       {/* ── Fuel Settings ── */}
-      <Section label="Carburant" sectionKey="fuel" openSections={openSections} toggle={toggle}>
+      <Section label={t("ip_fuel", lang)} sectionKey="fuel" openSections={openSections} toggle={toggle}>
         <div className="field-group">
-          <label htmlFor="tankSize">Taille Réservoir (L)</label>
+          <label htmlFor="tankSize">{t("ip_tank_size", lang)}</label>
           <input
             id="tankSize"
             type="number" min="10" max="200" step="1"
@@ -269,7 +270,7 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
           />
         </div>
         <div className="field-group">
-          <label htmlFor="lapsPerFullTank">Tours par Plein</label>
+          <label htmlFor="lapsPerFullTank">{t("ip_laps_per_tank", lang)}</label>
           <input
             id="lapsPerFullTank"
             type="number" min="1" max="100" step="1"
@@ -279,8 +280,8 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
         </div>
         <div className="field-group">
           <label htmlFor="fuelMap">
-            Carte Carburant
-            <span className="hint"> — économie ↔ riche</span>
+            {t("ip_fuel_map", lang)}
+            <span className="hint">{t("ip_fuel_map_hint", lang)}</span>
           </label>
           <div className="slider-row">
             <input
@@ -295,11 +296,11 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
       </Section>
 
       {/* ── Fuel Weight ── */}
-      <Section label="Pénalité Poids Carburant" sectionKey="fuelWeight" openSections={openSections} toggle={toggle}>
+      <Section label={t("ip_fuel_weight", lang)} sectionKey="fuelWeight" openSections={openSections} toggle={toggle}>
         <div className="field-group">
           <label htmlFor="fuelWeightPenaltyPerLiter">
-            Pénalité (sec/L)
-            <span className="hint"> — 0.02–0.05 typique</span>
+            {t("ip_penalty", lang)}
+            <span className="hint">{t("ip_penalty_hint", lang)}</span>
           </label>
           <input
             id="fuelWeightPenaltyPerLiter"
@@ -308,25 +309,21 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
             onChange={handleNum("fuelWeightPenaltyPerLiter")}
           />
         </div>
-        <p className="field-note">
-          Mesure : deux tours au même âge pneu — plein vs. quasi-vide. Divisez la
-          différence de temps par la taille du réservoir. Ex. 1.5s ÷ 50L = 0.03 s/L.
-          Mettez 0 pour encoder l'effet carburant directement dans les temps au tour.
-        </p>
+        <p className="field-note">{t("ip_penalty_note", lang)}</p>
       </Section>
 
       {/* ── Tire Compounds ── */}
-      <Section label="Composés Pneus" sectionKey="compounds" openSections={openSections} toggle={toggle}>
+      <Section label={t("ip_compounds", lang)} sectionKey="compounds" openSections={openSections} toggle={toggle}>
         <div className="table-scroll">
           <table className="compound-table">
             <thead>
               <tr>
-                <th>Composé</th>
-                <th title="Tours avant usure (0 = ignorer)">Durée</th>
-                <th title="Temps au tour en début de relais — pneus neufs, réservoir plein">t(0)</th>
-                <th title="Temps au tour à ~50% du relais">t(½)</th>
-                <th title="Temps au tour en fin de relais — pneus usés, quasi-vide">t(1)</th>
-                <th title="Composé obligatoire">★</th>
+                <th>{t("ip_compound", lang)}</th>
+                <th title={t("ip_life_title", lang)}>{t("ip_life", lang)}</th>
+                <th title={t("ip_t0_title", lang)}>t(0)</th>
+                <th title={t("ip_thalf_title", lang)}>t(½)</th>
+                <th title={t("ip_t1_title", lang)}>t(1)</th>
+                <th title={t("ip_mandatory_title", lang)}>★</th>
               </tr>
             </thead>
             <tbody>
@@ -336,7 +333,7 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
                   <tr key={comp.id}>
                     <td>
                       <span className={`compound-tag compound-${comp.id}`}>{comp.id}</span>
-                      <span className="compound-name-label">{comp.name}</span>
+                      <span className="compound-name-label">{compoundName(comp.id, lang) || comp.name}</span>
                     </td>
                     <td>
                       <input
@@ -390,17 +387,13 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
             </tbody>
           </table>
         </div>
-        <p className="field-note">
-          Entrez ce que vous observez en jeu depuis un plein réservoir :
-          t(0) = 1er tour · t(½) = ~50% usure pneu · t(1) = dernier tour avant pit.
-          Durée = 0 pour exclure un composé.
-        </p>
+        <p className="field-note">{t("ip_compounds_note", lang)}</p>
       </Section>
 
       {/* ── Mid-Race Mode ── */}
-      <Section label="Recalcul Mi-Course" sectionKey="midrace" openSections={openSections} toggle={toggle}>
+      <Section label={t("ip_midrace", lang)} sectionKey="midrace" openSections={openSections} toggle={toggle}>
         <div className="field-group toggle-row">
-          <label htmlFor="midRaceMode">Activer</label>
+          <label htmlFor="midRaceMode">{t("ip_enable", lang)}</label>
           <label className="toggle-switch">
             <input
               id="midRaceMode"
@@ -413,7 +406,7 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
         </div>
         {inputs.midRaceMode && telem?.teams?.size > 0 && (
           <div className="field-group">
-            <label>Remplissage auto depuis PS5</label>
+            <label>{t("ip_autofill", lang)}</label>
             <div className="midrace-team-list">
               {[...telem.teams.entries()].map(([ip, d], idx) => {
                 const isSelected = ip === telemSelectedIp;
@@ -425,7 +418,7 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
                   >
                     <span className={`midrace-dot${d.onTrack ? " on" : " pit"}`} />
                     T{idx + 1} · {teamLabels[ip] || ip}
-                    {isSelected && <span className="midrace-filling"> · remplissage</span>}
+                    {isSelected && <span className="midrace-filling">{t("ip_filling", lang)}</span>}
                   </button>
                 );
               })}
@@ -436,48 +429,48 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
         {inputs.midRaceMode && (
           <>
             <div className="field-group">
-              <label htmlFor="currentLap">Tour Actuel</label>
+              <label htmlFor="currentLap">{t("ip_current_lap", lang)}</label>
               <input
                 id="currentLap"
                 type="number" min="1" step="1"
-                placeholder="ex. 45"
+                placeholder={t("ip_current_lap_ph", lang)}
                 value={inputs.currentLap}
                 onChange={handleNum("currentLap")}
               />
             </div>
             <div className="field-group">
-              <label htmlFor="currentFuel">Carburant Restant (L)</label>
+              <label htmlFor="currentFuel">{t("ip_current_fuel", lang)}</label>
               <input
                 id="currentFuel"
                 type="number" min="0" step="0.5"
-                placeholder="ex. 28.5"
+                placeholder={t("ip_current_fuel_ph", lang)}
                 value={inputs.currentFuel}
                 onChange={handleNum("currentFuel")}
               />
             </div>
             <div className="field-group">
-              <label htmlFor="currentCompoundId">Composé Pneu Actuel</label>
+              <label htmlFor="currentCompoundId">{t("ip_current_compound", lang)}</label>
               <select
                 id="currentCompoundId"
                 value={inputs.currentCompoundId}
                 onChange={(e) => handleChange("currentCompoundId", e.target.value)}
                 className="compound-select"
               >
-                <option value="">— Sélectionner —</option>
+                <option value="">{t("ip_select", lang)}</option>
                 {activeCompounds.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name} ({c.id})</option>
+                  <option key={c.id} value={c.id}>{compoundName(c.id, lang) || c.name} ({c.id})</option>
                 ))}
               </select>
             </div>
             <div className="field-group">
               <label htmlFor="currentTireAgeLaps">
-                Âge Pneu (tours)
-                <span className="hint"> — tours sur jeu actuel</span>
+                {t("ip_tyre_age", lang)}
+                <span className="hint">{t("ip_tyre_age_hint", lang)}</span>
               </label>
               <input
                 id="currentTireAgeLaps"
                 type="number" min="0" step="1"
-                placeholder="ex. 8"
+                placeholder={t("ip_tyre_age_ph", lang)}
                 value={inputs.currentTireAgeLaps}
                 onChange={handleNum("currentTireAgeLaps")}
               />
@@ -487,11 +480,11 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
       </Section>
 
       {/* ── Drivers ── */}
-      <Section label="Pilotes" sectionKey="drivers" openSections={openSections} toggle={toggle}>
+      <Section label={t("ip_drivers", lang)} sectionKey="drivers" openSections={openSections} toggle={toggle}>
         <div className="field-group">
           <label htmlFor="minDriverTime">
-            Temps Minimum de Conduite (heures)
-            <span className="hint"> — par pilote</span>
+            {t("ip_min_drive_time", lang)}
+            <span className="hint">{t("ip_min_drive_time_hint", lang)}</span>
           </label>
           <input
             id="minDriverTime"
@@ -510,31 +503,31 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
                   type="text"
                   value={driver.name}
                   onChange={(e) => updateDriverName(driver.id, e.target.value)}
-                  placeholder="Nom du pilote"
-                  aria-label="Nom du pilote"
+                  placeholder={t("ip_driver_name_ph", lang)}
+                  aria-label={t("ip_driver_name_ph", lang)}
                 />
                 {(inputs.drivers || []).length > 1 && (
                   <button
                     className="driver-remove-btn"
                     onClick={() => removeDriver(driver.id)}
-                    title="Supprimer pilote"
-                    aria-label="Supprimer pilote"
+                    title={t("ip_driver_remove", lang)}
+                    aria-label={t("ip_driver_remove", lang)}
                   >×</button>
                 )}
               </div>
               {activeCompounds.length > 0 && (
                 <details className="driver-times-details">
                   <summary className="driver-times-summary">
-                    Temps au tour {Object.keys(driver.compounds || {}).length > 0 ? "(personnalisé)" : "(utilise global)"}
+                    {t("ip_lap_times", lang)} {Object.keys(driver.compounds || {}).length > 0 ? t("ip_custom", lang) : t("ip_uses_global", lang)}
                   </summary>
                   <div style={{ padding: "0 0 8px" }}>
                     <table className="driver-compound-table">
                       <thead>
                         <tr>
-                          <th>Composé</th>
-                          <th title="Tour 1, pneus neufs, réservoir plein">t(0)</th>
-                          <th title="~50% usure pneu">t(½)</th>
-                          <th title="Dernier tour avant pit">t(1)</th>
+                          <th>{t("ip_compound", lang)}</th>
+                          <th title={t("ip_t0_short_title", lang)}>t(0)</th>
+                          <th title={t("ip_thalf_short_title", lang)}>t(½)</th>
+                          <th title={t("ip_t1_short_title", lang)}>t(1)</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -563,7 +556,7 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
                         })}
                       </tbody>
                     </table>
-                    <p className="field-note">Laisser vide pour utiliser les temps globaux.</p>
+                    <p className="field-note">{t("ip_driver_times_note", lang)}</p>
                   </div>
                 </details>
               )}
@@ -571,14 +564,14 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
           ))}
         </div>
 
-        <button className="btn-secondary add-driver-btn" onClick={addDriver}>+ Ajouter Pilote</button>
+        <button className="btn-secondary add-driver-btn" onClick={addDriver}>{t("ip_add_driver", lang)}</button>
       </Section>
 
 
-      <button className="btn-cta calculate-btn" onClick={onCalculate} aria-label="Calculate race strategy">
-        Calculer la Stratégie
+      <button className="btn-cta calculate-btn" onClick={onCalculate} aria-label={t("aria_calculate", lang)}>
+        {t("ip_calculate", lang)}
       </button>
-      <button className="btn-ghost reset-btn" onClick={resetToDefaults}>Réinitialiser</button>
+      <button className="btn-ghost reset-btn" onClick={resetToDefaults}>{t("ip_reset", lang)}</button>
     </div>
   );
 }
