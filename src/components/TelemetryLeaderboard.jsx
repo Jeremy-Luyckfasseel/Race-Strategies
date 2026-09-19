@@ -65,7 +65,15 @@ export default function TelemetryLeaderboard({
   }, [teams]);
 
   return (
-    <div className="lb-wrap">
+    <div className={`lb-wrap${myTeamIp ? '' : ' lb-wrap--unclaimed'}`}>
+      {/* Everything strategy-side hangs off which car is mine, and the star
+          that sets it was invisible until you already knew it was there. */}
+      {!myTeamIp && teams.size > 0 && (
+        <div className="lb-claim-hint">
+          <span className="lb-claim-hint-star">☆</span>
+          {t('lb_claim_hint', lang)}
+        </div>
+      )}
 
       {/* ── Header ── */}
       <div className="lb-header">

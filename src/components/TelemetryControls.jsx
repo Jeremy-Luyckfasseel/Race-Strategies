@@ -77,7 +77,7 @@ export default function TelemetryControls({
             </div>
 
             {/* ── PS5 IPs ── */}
-            <div className="tc-group">
+            <div className="tc-group tc-group-ips">
               <span className="tc-label">{t('tc_ps5_ips', lang)}</span>
               <div className="tc-ip-list">
                 {ps5IPs.map((ip, idx) => (

@@ -1005,14 +1005,26 @@ input[type="range"]::-moz-range-thumb {
 }
 .tc-hint code { font-family: var(--font-data); color: var(--text-secondary); }
 
-.tc-ip-list { display: flex; flex-direction: column; gap: 4px; }
+/* One row per console stacked vertically: at a ten-car event that was a
+   column of ten inputs and a lot of dead space beside it. They wrap now. */
+.tc-ip-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+  gap: 4px 10px;
+  align-items: start;
+}
+
+.tc-group-ips { flex: 1 1 380px; }
+
+.tc-ip-list .tc-add-btn { grid-column: 1 / -1; justify-self: start; }
 
 .tc-ip-row { display: flex; gap: 4px; align-items: center; }
 
 .tc-ip-input {
   font-family: var(--font-data) !important;
   font-size: 0.74rem !important;
-  width: 160px;
+  width: 100%;
+  min-width: 0;
 }
 
 .tc-ip-remove {
@@ -2367,6 +2379,41 @@ input[type="range"]::-moz-range-thumb {
   transition: opacity var(--t-fast), color var(--t-fast);
 }
 .lb-mine-btn:hover { opacity: 1; color: #FFD700; }
+
+/* Marking a car as mine is the single most important action in the app -- the
+   drivers, the stint log and the whole plan hang off it -- and at 45% opacity
+   in the muted text colour it was, in practice, invisible. Until something is
+   claimed, every star is lit and the board says what to do with them. */
+.lb-wrap--unclaimed .lb-mine-btn {
+  opacity: 1;
+  color: var(--warning);
+  animation: lb-claim-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes lb-claim-pulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lb-wrap--unclaimed .lb-mine-btn { animation: none; opacity: 1; }
+}
+
+.lb-claim-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--rule);
+  background: rgba(255, 200, 0, 0.06);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lb-claim-hint-star { color: var(--warning); font-size: 0.8rem; }
 .lb-mine-btn.is-mine { opacity: 1; color: #FFD700; }
 
 .lb-rename-btn {
@@ -3154,13 +3201,16 @@ input[type="range"]::-moz-range-thumb {
   /* ÉCART at 46px gave the number 34px of content, which fits "+3.2s" and
      clips "+12.4s" — i.e. most of a real field. 56px holds "+119.9s", the
      widest an interval gets before the car is simply a lap down. */
-  grid-template-columns: 28px 1fr 56px 38px;
+  grid-template-columns: 28px 1fr 56px 46px;
 }
 /* 0.44rem measured 7.04px in the running app — too small to read. */
 .telem-3col-lb .lb-hcol  { font-size: 0.58rem; padding: 4px 6px; }
 .telem-3col-lb .lbc      { padding: 6px 6px; }
-/* The tyre button sat flush against (and 1px over) the panel border. */
+/* The tyre button is min-width 34px. In a 38px column with 6px of padding
+   either side it had 26px to live in, so it was clipped by 8px and the panel
+   hid the overflow. The column carries it now, and the button gives a little. */
 .telem-3col-lb .lbc-tyre { padding-right: 8px; }
+.telem-3col-lb .lb-tyre  { min-width: 30px; padding: 3px 4px; }
 
 /* In this narrow column the ★ and ✎ were squeezing the team name to literally
    zero width — every row showed a colour and nothing else. The pencil goes
@@ -3494,6 +3544,66 @@ input[type="range"]::-moz-range-thumb {
 .now-verdict--ok .now-verdict-text { color: var(--text-secondary); }
 
 .now-empty,
+/* Race clock — only present once the race has actually been started. */
+.now-start {
+  margin-left: auto;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  padding: 6px 16px;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.now-start:hover { filter: brightness(1.12); }
+
+.now-clock {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 6px 4px 12px;
+  border: 1px solid var(--rule-bright);
+  border-radius: var(--radius-sm);
+}
+
+.now-clock-block { display: flex; flex-direction: column; line-height: 1.1; }
+.now-clock-block--dim { opacity: 0.55; }
+
+.now-clock-k {
+  font-family: var(--font-display);
+  font-size: 0.52rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.now-clock-v {
+  font-family: var(--font-data);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.now-clock-v.is-over { color: var(--accent); font-size: 0.8rem; }
+
+.now-clock-clear {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.now-clock-clear:hover { color: var(--text-primary); }
+
 .now-waiting {
   display: flex;
   align-items: center;

@@ -127,9 +127,17 @@ const HZ = 60;
 // and driver pickers, the BOX flag and the Pilotes stint log can all be seen
 // without a PS5 in the room. detectPitEdges needs the car stopped for
 // PIT_MIN_STOP_MS (8 s) before it counts; a real GT7 stop is 25 s+.
-const PIT_FIRST_MS  = 120_000;
-const PIT_STAGGER_MS = 20_000;
-const PIT_LENGTH_MS  = 30_000;
+// Overridable so a pit stop can be watched without waiting two minutes for it:
+//   PIT_FIRST=15 PIT_STAGGER=10 node scripts/fake-field.mjs 10 0 0.35
+// PIT_LENGTH must stay above detectPitEdges' PIT_MIN_STOP_MS (8 s) or the stop
+// is treated as a spin and no prompt is raised.
+const envSecs = (name, fallbackMs) => {
+  const v = Number(process.env[name]);
+  return Number.isFinite(v) && v > 0 ? v * 1000 : fallbackMs;
+};
+const PIT_FIRST_MS   = envSecs('PIT_FIRST', 120_000);
+const PIT_STAGGER_MS = envSecs('PIT_STAGGER', 20_000);
+const PIT_LENGTH_MS  = envSecs('PIT_LENGTH', 30_000);
 
 // A rounded rectangle standing in for a circuit, in metres.
 function trackPoint(t) {
@@ -166,6 +174,8 @@ for (let i = 0; i < CARS; i++) {
 }
 
 console.log(`Feeding ${CARS} cars at ${HZ} Hz into the relay. Ctrl-C to stop.`);
+console.log(`First car boxes at ${(PIT_FIRST_MS / 1000).toFixed(0)}s, then every `
+  + `${(PIT_STAGGER_MS / 1000).toFixed(0)}s; each stop lasts ${(PIT_LENGTH_MS / 1000).toFixed(0)}s.`);
 const started = Date.now();
 let sent = 0;
 

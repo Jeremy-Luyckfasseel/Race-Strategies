@@ -129,8 +129,49 @@ section('a three-car field over two laps');
   c = trackLapCrossings(c, new Map([['mid', pkt(6, 120_400)]]));
   assert('the closed gap shows at the next crossing',
     formatInterval(lapInterval(c.get('lead'), c.get('mid'))) === '+0.4s');
-  assert('a car still on the old lap reads as a lap down',
-    formatInterval(lapInterval(c.get('lead'), c.get('back'))) === '+1L');
+  // This assertion used to expect '+1L', which was the bug rather than the
+  // rule: `back` crossed the line 9 s after `lead` on lap 5 and is nine
+  // seconds behind, not a lap down. Reading the counter alone, every close
+  // fight flipped to "+1L" the instant the car in front started a new lap and
+  // flipped back when the car behind followed it — once per lap, all race.
+  assert('a car still on the old lap reads as the seconds it actually is',
+    formatInterval(lapInterval(c.get('lead'), c.get('back'))) === '+9.0s',
+    String(formatInterval(lapInterval(c.get('lead'), c.get('back')))));
+}
+
+section('lapInterval — telling "not crossed yet" apart from "a lap down"');
+{
+  // Both cases show lapDiff === 1. What separates them is how long ago the
+  // leader's previous crossing was, measured against its own lap time.
+  const pkt = (lap, ts) => new Map([['x', { currentLap: lap, ts }]]);
+
+  // 100 s laps. The leader is on lap 10, having crossed at 1000 s and 900 s.
+  let lead = trackLapCrossings(new Map(), pkt(8, 800_000));
+  lead = trackLapCrossings(lead, pkt(9, 900_000));
+  lead = trackLapCrossings(lead, pkt(10, 1_000_000));
+  const ahead = lead.get('x');
+
+  // A car three seconds back has not reached the line yet: still on lap 9.
+  let close = trackLapCrossings(new Map(), pkt(8, 803_000));
+  close = trackLapCrossings(close, pkt(9, 903_000));
+  assert('three seconds back reads as three seconds, not a lap',
+    formatInterval(lapInterval(ahead, close.get('x'))) === '+3.0s',
+    String(formatInterval(lapInterval(ahead, close.get('x')))));
+
+  // A car genuinely a lap down starts its lap 9 AFTER the leader has already
+  // started its lap 10 — that is what being lapped is. The measured interval
+  // then exceeds the leader's own lap time, which is the discriminator.
+  let lapped = trackLapCrossings(new Map(), pkt(8, 905_000));
+  lapped = trackLapCrossings(lapped, pkt(9, 1_005_000));
+  assert('a car a full lap back still reads as a lap down',
+    formatInterval(lapInterval(ahead, lapped.get('x'))) === '+1L',
+    String(formatInterval(lapInterval(ahead, lapped.get('x')))));
+
+  // Two laps or more never needs the crossing times.
+  let miles = trackLapCrossings(new Map(), pkt(7, 700_000));
+  miles = trackLapCrossings(miles, pkt(8, 800_000));
+  assert('two laps down is reported straight from the counter',
+    formatInterval(lapInterval(ahead, miles.get('x'))) === '+2L');
 }
 
 section('a ten-car field strung out down the road');

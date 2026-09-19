@@ -21,6 +21,7 @@ import {
   pitNowTrigger,
 } from '../logic/raceState';
 import { t, compoundName } from '../i18n/strings';
+import { formatClock } from '../logic/raceClock';
 
 const round1 = (x) => Math.round(x * 10) / 10;
 
@@ -29,7 +30,7 @@ function CompoundChip({ id, lang }) {
   return <span className={`now-compound compound-${id}`}>{compoundName(id, lang) || id}</span>;
 }
 
-export default function NowView({ data, strategy, planLabel, litersPerLap, tireLife, frozen, onToggleFreeze, label, needsTeam, onGoToTelemetry, lang }) {
+export default function NowView({ data, strategy, planLabel, litersPerLap, tireLife, frozen, onToggleFreeze, label, needsTeam, onGoToTelemetry, clock, onStartRace, onClearRace, lang }) {
   const hasData = !!data && Number.isFinite(Number(data.currentLap));
   const currentLap = hasData ? Number(data.currentLap) : strategy?.stints?.[0]?.startLap ?? null;
 
@@ -51,6 +52,28 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
     <div className="now-view">
       <div className="now-header">
         <span className="now-car">{label || '—'}</span>
+
+        {/* The lobby is open for hours before the race. Until the race is
+            started nothing here is race data, and the plan runs on the
+            configured length rather than a clock. */}
+        {clock ? (
+          <div className="now-clock" role="group" aria-label={t('now_remaining', lang)}>
+            <span className="now-clock-block">
+              <span className="now-clock-k">{t('now_remaining', lang)}</span>
+              <span className={`now-clock-v${clock.finished ? ' is-over' : ''}`}>
+                {clock.finished ? t('now_race_over', lang) : formatClock(clock.remainingSecs)}
+              </span>
+            </span>
+            <span className="now-clock-block now-clock-block--dim">
+              <span className="now-clock-k">{t('now_elapsed', lang)}</span>
+              <span className="now-clock-v">{formatClock(clock.elapsedSecs)}</span>
+            </span>
+            <button className="now-clock-clear" onClick={onClearRace} title={t('now_clear_race', lang)}>×</button>
+          </div>
+        ) : (
+          <button className="now-start" onClick={onStartRace}>{t('now_start_race', lang)}</button>
+        )}
+
         <button className={`now-freeze${frozen ? ' is-frozen' : ''}`} onClick={onToggleFreeze}>
           {frozen ? t('now_frozen', lang) : t('now_freeze', lang)}
         </button>

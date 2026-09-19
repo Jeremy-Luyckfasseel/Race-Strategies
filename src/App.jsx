@@ -11,6 +11,7 @@ import { useTrackMap } from "./hooks/useTrackMap";
 import { useTelemetryLearner } from "./hooks/useTelemetryLearner";
 import { applyRecommendation } from "./logic/recommendations";
 import { pickAutoConnectIp } from "./logic/connection";
+import { RACE_START_KEY, raceProgress, applyRaceClock } from "./logic/raceClock";
 import LiveDashboard, { TrackMap } from "./components/LiveDashboard";
 import TelemetryLeaderboard from "./components/TelemetryLeaderboard";
 import TelemetryControls from "./components/TelemetryControls";
@@ -182,6 +183,26 @@ export default function App() {
     catch { return fallback; }
   });
   const [selectedIndex, setSelectedIndex] = useState(0);
+
+  // When the race actually started. The lobby is open for hours beforehand and
+  // all of that driving is practice: until this is set, nothing is race data
+  // and the plan runs on the configured length rather than a clock.
+  const [raceStartedAt, setRaceStartedAt] = useState(() => {
+    try {
+      const v = Number(localStorage.getItem(RACE_START_KEY));
+      return Number.isFinite(v) && v > 0 ? v : null;
+    } catch { return null; }
+  });
+
+  // Ticks the clock for display. Only while a race is running, so an idle app
+  // is not re-rendering once a second for nothing.
+  const [clockNow, setClockNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!raceStartedAt) return undefined;
+    setClockNow(Date.now());
+    const id = setInterval(() => setClockNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [raceStartedAt]);
   const [telemSelectedIp, setTelemSelectedIp] = useState("");
   // Single-team is the default landing experience (Phase 2, Task 2.2). The
   // multi-team leaderboard still exists but is demoted behind an Advanced toggle.
@@ -232,7 +253,21 @@ export default function App() {
   const telem    = useTelemetry();
   const detector = useCompoundDetector(telem.teams);
   const stintLog = useStintLog(telem.teams, teamCompounds, inputs.drivers, myTeamIp || null);
-  const { result, calculating, calculate } = useStrategy(inputs);
+  // While a race is running the plan is built from what is LEFT of it, not
+  // from the configured length — which is the field you would otherwise be
+  // retyping every few minutes from the pit wall. Quantised to the minute by
+  // raceProgress, so the search runs once a minute rather than once a second.
+  const clock = useMemo(
+    () => raceProgress(raceStartedAt, inputs.raceDurationHours, clockNow),
+    [raceStartedAt, inputs.raceDurationHours, clockNow],
+  );
+  const remainingMins = clock ? clock.remainingMins : null;
+  const engineInputs = useMemo(
+    () => applyRaceClock(inputs, remainingMins != null ? { remainingMins } : null),
+    [inputs, remainingMins],
+  );
+
+  const { result, calculating, calculate } = useStrategy(engineInputs);
 
   const savePS5IPs = useCallback((ips) => {
     setPS5IPs(ips);
@@ -287,18 +322,22 @@ export default function App() {
     setSelectedIndex(0);
   }, [learner]);
 
-  // The circuit outline is a property of the track, not of any one car, so it
-  // can be traced from whoever is transmitting. Tying it to the selected car
-  // meant a multi-car event drew nothing until someone was picked by hand —
-  // and with no recorded bounds the map cannot place ANY car's dot, so the
-  // whole field stayed invisible. (Which car is *mine* is a separate question,
-  // still answered only by an explicit pick, per DECISION 4.)
-  const mapSourceIp = displayIp ?? teamKeys[0] ?? null;
+  // The circuit outline is a property of the track, not of any one car, so
+  // EVERY car traces it. Points are deduplicated into a 3 m grid, so ten cars
+  // on the same line cost nothing over one — they only add cells where their
+  // lines differ, which is how the track gets its real width. The circuit
+  // therefore appears roughly ten times faster, which is the whole value of a
+  // lobby session before the race: the map and the pit lane are already there.
+  //
+  // It also ends a surprise. This used to follow whichever car's dashboard was
+  // open, so clicking another leaderboard row silently changed who was drawing
+  // and welded the two traces into one line. (Which car is *mine* is a separate
+  // question, still answered only by an explicit pick, per DECISION 4 — and
+  // only my car's pit entry may clear my compound.)
   const { mapRef, resetMap } = useTrackMap(
-    telem.teams.get(mapSourceIp ?? ''),
-    // Only my own car entering the pits may clear my compound — never some
-    // other team's car that happens to be tracing the outline.
-    () => { if (strategyIp && mapSourceIp === strategyIp) updateTeamCompound(strategyIp, null, false); },
+    telem.teams,
+    strategyIp,
+    () => { if (strategyIp) updateTeamCompound(strategyIp, null, false); },
   );
 
   const updateTeamLabel = useCallback((ip, label) => {
@@ -370,6 +409,32 @@ export default function App() {
   }, [inputs]);
 
   /** Start a new race: clear this race's data, keep the circuit and presets. */
+  /**
+   * The lights go out. Everything that describes THIS race restarts: the stint
+   * log, the driver totals it feeds, and the tyres each car is on (nobody's
+   * practice set is the one they start on). The circuit, the team names, the
+   * roster, the setup and anything the learner picked up in practice are all
+   * kept — learning the car during the lobby session is the point of it.
+   */
+  const startRace = useCallback(() => {
+    if (!window.confirm(t("now_start_confirm", lang))) return;
+    const at = Date.now();
+    setRaceStartedAt(at);
+    setClockNow(at);
+    try { localStorage.setItem(RACE_START_KEY, String(at)); } catch { /* ignore */ }
+    stintLog.resetAll();
+    setTeamCompounds({});
+    try { localStorage.setItem("gt7-team-compounds", "{}"); } catch { /* ignore */ }
+    setSelectedIndex(0);
+    setPlanFrozen(false);
+  }, [lang, stintLog]);
+
+  const clearRaceStart = useCallback(() => {
+    if (!window.confirm(t("now_clear_confirm", lang))) return;
+    setRaceStartedAt(null);
+    try { localStorage.removeItem(RACE_START_KEY); } catch { /* ignore */ }
+  }, [lang]);
+
   const startNewRace = useCallback(() => {
     if (!window.confirm(t("app_new_race_confirm", lang))) return;
     try { clearRace((k) => localStorage.removeItem(k)); } catch { /* ignore */ }
@@ -621,6 +686,9 @@ export default function App() {
                 label={strategyIp ? getTeamLabel(strategyIp) : null}
                 needsTeam={!strategyIp && telem.teams.size > 0}
                 onGoToTelemetry={() => setActiveTab("telemetry")}
+                clock={clock}
+                onStartRace={startRace}
+                onClearRace={clearRaceStart}
                 lang={lang}
               />
             </div>

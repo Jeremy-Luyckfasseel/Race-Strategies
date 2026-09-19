@@ -232,12 +232,14 @@ function CarDots({ live, map }) {
         // a rival is sitting in the pit lane is exactly what a pit wall wants.
         const active = cars.filter(c => c.posX != null);
 
-        // Where a label has already been drawn this frame. A second tag within
-        // LABEL_MIN_PX of one of these is unreadable on top of it, so it is
-        // dropped for the frame — my own car always keeps its own.
+        // Label boxes already drawn this frame. A tag that would land on top
+        // of one is moved under its dot instead of over it, and only dropped
+        // when both positions are taken — hiding first lost tags that had a
+        // perfectly good spot free right below them.
         // ponytail: O(n^2) over the field; fine to ~30 cars, revisit past that.
         const placed = [];
-        const LABEL_MIN_PX = 13;
+        const LABEL_W = 15;   // half-width of a 2-3 character tag, px
+        const LABEL_H = 9;    // line height, px
 
         // Cull smoothed entries for cars no longer active
         const activeIds = new Set(active.map(c => c.id));
@@ -329,12 +331,23 @@ function CarDots({ live, map }) {
             while (fresh.firstChild) child.appendChild(fresh.firstChild);
           }
 
-          const crowded = placed.some(
-            (p) => Math.abs(p.x - scx) < LABEL_MIN_PX && Math.abs(p.y - scy) < LABEL_MIN_PX,
-          );
-          placed.push({ x: scx, y: scy });
           const tag = child.lastChild;
-          if (tag) tag.setAttribute('opacity', crowded && !c.isOwn ? '0' : '1');
+          if (tag) {
+            const above = c.isOwn ? -10 : -7;
+            const below = c.isOwn ? 15 : 13;
+            const free = (dy) => !placed.some(
+              (p) => Math.abs(p.x - scx) < LABEL_W && Math.abs(p.y - (scy + dy)) < LABEL_H,
+            );
+            // Mine is never dropped: it is the one tag that has to be there.
+            const dy = free(above) ? above : free(below) ? below : (c.isOwn ? above : null);
+            if (dy == null) {
+              tag.setAttribute('opacity', '0');
+            } else {
+              placed.push({ x: scx, y: scy + dy });
+              tag.setAttribute('y', String(dy));
+              tag.setAttribute('opacity', '1');
+            }
+          }
 
           // Pit state flips often, so dim in place rather than rebuilding.
           child.setAttribute('opacity', c.onTrack ? '1' : '0.35');

@@ -16,6 +16,8 @@
  * never touches a global.
  */
 
+import { RACE_START_KEY } from './raceClock.js';
+
 export const SNAPSHOT_SCHEMA = 1;
 const APP_ID = 'race-strategies';
 
@@ -31,6 +33,7 @@ export const INPUTS_KEY = 'gt7-inputs';
  */
 export const RACE_KEYS = [
   INPUTS_KEY,
+  RACE_START_KEY,
   'gt7-team-labels',
   'gt7-team-compounds',
   'gt7-my-team',

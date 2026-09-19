@@ -79,6 +79,7 @@ selected) still runs alongside. Manual inputs remain the source of truth.
 |------|------|
 | `InputPanel.jsx` | The whole sidebar form. Collapsible sections: car presets (localStorage), race, pit timing, fuel, fuel-weight penalty, compound table (per-compound life + 3 lap times + mandatory flag), mid-race mode, drivers (per-driver per-compound lap-time overrides). Also renders the mid-race "auto-fill from PS5" team picker. |
 | `ResultsSummary.jsx` | KPI strip + driver summary chips + top-6 strategy comparison cards. |
+| `raceClock.js` | The race start stamp and the clock that follows from it. Practice in the lobby is not the race: **Start race** on the Race tab stamps the moment, resets the stint log and every car's tyre, and from then on the plan is built from the time *remaining* rather than the configured length. Keeps the circuit, names, roster, setup and anything the learner picked up in practice. `tests/test_race_clock.js` + `tests/test_ui_race_clock.js`. |
 | `StrategyTimeline.jsx` | The race as one horizontal bar: a segment per stint, pit marks, pit windows. Hand-drawn with CSS percentages after the Recharts version was found rendering no bars at all under Recharts 3; the dependency went with it (bundle 695 kB → 340 kB). Covered by `tests/test_ui_timeline.js`. |
 | `StintTable.jsx` | Lap-by-lap stint detail; red rows for warnings. |
 | `LiveDashboard.jsx` | Single-team widget: gear/speed, RPM/throttle/brake/fuel bars, per-corner tire temp + wear, compound picker, and the SVG `TrackMap` (exported named). |

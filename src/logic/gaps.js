@@ -45,7 +45,14 @@ export function trackLapCrossings(prev, packets) {
     // simultaneous, so a field spread over half a minute read as dead level
     // until the next lap. Mark that first sighting provisional; only a lap
     // change we actually witnessed is a real crossing.
-    next.set(ip, { lap, crossedAt: packet.ts, witnessed: rec != null });
+    // The crossing before this one is kept because an interval across the
+    // start/finish line needs it: see lapInterval.
+    next.set(ip, {
+      lap,
+      crossedAt: packet.ts,
+      prevCrossedAt: rec && rec.witnessed ? rec.crossedAt : null,
+      witnessed: rec != null,
+    });
   }
   return next;
 }
@@ -59,9 +66,25 @@ export function trackLapCrossings(prev, packets) {
 export function lapInterval(ahead, behind) {
   if (!ahead || !behind) return null;
 
-  // A lap difference comes straight from GT7's own lap counter, so it is
-  // trustworthy immediately — no crossing needs to have been witnessed.
   const lapDiff = ahead.lap - behind.lap;
+
+  // A one-lap difference is ambiguous, and it happens to every pair on every
+  // single lap: the moment the car in front crosses the line it is on a new
+  // lap while the car three seconds behind it is still on the old one. Reading
+  // the counter alone, that close fight reports as "+1L" once a lap, which is
+  // both wrong and the flicker you see.
+  //
+  // Measuring from the leader's PREVIOUS crossing resolves it, because that is
+  // the lap both cars were on: three seconds behind gives three seconds. A car
+  // genuinely a lap down gives roughly a whole lap, so the leader's own last
+  // lap time is the discriminator — no track knowledge needed.
+  if (lapDiff === 1 && ahead.prevCrossedAt != null && behind.witnessed) {
+    const lapDurationMs = ahead.crossedAt - ahead.prevCrossedAt;
+    const secs = (behind.crossedAt - ahead.prevCrossedAt) / 1000;
+    if (secs >= 0 && secs * 1000 < lapDurationMs) return { secs };
+  }
+
+  // Beyond that the counter is trustworthy on its own.
   if (lapDiff > 0) return { laps: lapDiff };
   // The caller ranks the rows; if the car we were told is behind is actually
   // on a later lap, the ranking disagrees with the timing and we say nothing
