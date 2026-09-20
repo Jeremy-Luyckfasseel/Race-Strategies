@@ -283,6 +283,16 @@ export default function App() {
     return out;
   }, [telem.teams, carRoles]);
   const stintLog = useStintLog(racingTeams, teamCompounds, inputs.drivers, myTeamIp || null);
+  const teamKeys = useMemo(() => [...telem.teams.keys()], [telem.teams]);
+  const getTeamLabel = useCallback((ip) => teamLabels[ip] || ip, [teamLabels]);
+
+  // strategyIp = my car (owns drivers/stint log/learner/auto-fill).
+  // displayIp  = the car the dashboard is inspecting, free to follow a click.
+  const { strategyIp, displayIp } = useMemo(
+    () => resolveActiveCars({ myTeamIp, selectedIp: telemSelectedIp, teamKeys }),
+    [myTeamIp, telemSelectedIp, teamKeys],
+  );
+
   // While a race is running the plan is built from what is LEFT of it, not
   // from the configured length — which is the field you would otherwise be
   // retyping every few minutes from the pit wall. Quantised to the minute by
@@ -332,16 +342,6 @@ export default function App() {
       return next;
     });
   }, [detector]);
-
-  const teamKeys = useMemo(() => [...telem.teams.keys()], [telem.teams]);
-  const getTeamLabel = useCallback((ip) => teamLabels[ip] || ip, [teamLabels]);
-
-  // strategyIp = my car (owns drivers/stint log/learner/auto-fill).
-  // displayIp  = the car the dashboard is inspecting, free to follow a click.
-  const { strategyIp, displayIp } = useMemo(
-    () => resolveActiveCars({ myTeamIp, selectedIp: telemSelectedIp, teamKeys }),
-    [myTeamIp, telemSelectedIp, teamKeys],
-  );
 
   const setMyTeam = useCallback((ip) => {
     setMyTeamIp((prev) => {
