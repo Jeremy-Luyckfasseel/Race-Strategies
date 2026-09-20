@@ -22,7 +22,13 @@ function fmtValue(rec, v) {
  */
 function recLabel(rec, lang) {
   if (!rec.labelKey) return rec.label;
-  return t(rec.labelKey, lang, { compound: compoundName(rec.compoundId, lang) || rec.compoundId });
+  // `labelVars` carries anything the pure layer cannot localise itself — a
+  // driver's name, for the per-driver curves. The compound is always resolved
+  // here, never taken from the engine's English TIRE_COMPOUNDS[].name.
+  return t(rec.labelKey, lang, {
+    ...(rec.labelVars || {}),
+    compound: compoundName(rec.compoundId, lang) || rec.compoundId,
+  });
 }
 
 function TrustLine({ trust, lang }) {

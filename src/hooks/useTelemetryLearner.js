@@ -16,9 +16,10 @@ import { buildRecommendations, dismissSnapshot } from '../logic/recommendations'
  * @param {object}   p.data                 latest telemetry packet for that car
  * @param {object}   p.inputs               active strategy inputs (source of truth, read-only here)
  * @param {string}   p.confirmedCompoundId  compound the user confirmed for the current stint
+ * @param {string}   p.currentDriverId      driver named for the current stint (from the stint log)
  * @returns {{ estimates: object|null, recommendations: Array, ignore: (rec)=>void, clearDismiss: (rec)=>void }}
  */
-export function useTelemetryLearner({ activeIp, data, inputs, confirmedCompoundId }) {
+export function useTelemetryLearner({ activeIp, data, inputs, confirmedCompoundId, currentDriverId }) {
   const [estimates, setEstimates] = useState(null);
   const [dismissed, setDismissed] = useState({});
   const lastLapRef = useRef(null);
@@ -59,6 +60,13 @@ export function useTelemetryLearner({ activeIp, data, inputs, confirmedCompoundI
       learner.setCompound(confirmedCompoundId, compoundLife[confirmedCompoundId]?.tireLife);
     }
   }, [learner, confirmedCompoundId, compoundLife]);
+
+  // Same idea for who is driving: named by the human at the stop, never
+  // guessed. Passing null is allowed and means "these laps belong to nobody in
+  // particular" — they still count towards the car's global curves.
+  useEffect(() => {
+    if (learner) learner.setDriver(currentDriverId || null);
+  }, [learner, currentDriverId]);
 
   // Ingest each live packet from the PS5 (external system) and recompute estimates
   // once per new lap. This is the canonical "subscribe to an external source and

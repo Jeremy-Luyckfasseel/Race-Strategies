@@ -78,6 +78,24 @@ async function settle(ms = 200) {
   await act(async () => { await new Promise((r) => setTimeout(r, ms)); });
 }
 
+/**
+ * Wait for the plan rather than for the clock.
+ *
+ * A flat `settle(900)` gives useStrategy's 600 ms debounce 300 ms of headroom,
+ * and the search it then runs is a real one — 342 candidates over an eight-hour
+ * race. Run on its own it always made it; run after the rest of the suite it
+ * sometimes did not, and the failure looked exactly like the mid-race bug this
+ * file exists to catch. Polling asserts the same thing without the race.
+ */
+async function settleUntil(ready, capMs = 8000) {
+  const step = 150;
+  for (let waited = 0; waited < capMs; waited += step) {
+    await settle(step);
+    if (ready()) return true;
+  }
+  return false;
+}
+
 /** An app four hours into an eight-hour race, with my car on lap 158. */
 async function bootMidRace(over = {}) {
   localStorage.clear();
@@ -91,7 +109,8 @@ async function bootMidRace(over = {}) {
   await settle();
   const ws = sockets[index];
   await act(async () => { ws.deliver(packet(over)); });
-  await settle(900);          // past useStrategy's 600 ms debounce
+  // The Now view has a plan when it stops saying it is waiting for one.
+  await settleUntil(() => $(view.container, '.now-action-body') !== null);
   return view;
 }
 
@@ -144,11 +163,11 @@ section('before the race is started, nothing is assumed about the car');
   const v = render(React.createElement(App));
   await settle();
   await act(async () => { sockets[index].deliver(packet()); });
-  await settle(900);
 
   // No race started: the practice running around must not become the plan.
   const strategyTab = $$(v.container, '.tab-btn').find((b) => /Strategy|Strat/.test(b.textContent));
   await act(async () => { strategyTab.click(); });
+  await settleUntil(() => $(v.container, '.kpi-value') !== null);
   const laps = parseInt(textOf($(v.container, '.kpi-value')), 10);
   assert('the plan is still the full configured race',
     Number.isFinite(laps) && laps > 200, String(laps));

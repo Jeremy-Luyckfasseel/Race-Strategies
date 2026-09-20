@@ -22,6 +22,7 @@ export default {
   // ── Learner recommendation labels (recommendations.js labelKey) ──
   rec_laps_per_tank: 'Tours par plein',
   rec_fuel_weight_penalty: 'Pénalité poids carburant',
+  rec_driver_lap_times: '{driver} en {compound}',
   rec_compound_lap_times: 'Temps au tour {compound}',
 
   // ── Accessibility labels ──

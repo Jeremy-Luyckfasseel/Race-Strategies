@@ -414,6 +414,9 @@ export default function App() {
   const learner = useTelemetryLearner({
     activeIp: strategyIp,
     data: strategyIp ? telem.teams.get(strategyIp) : null,
+    // Whoever the engineer named at the last stop, so each lap is attributed
+    // and the learner can fit a curve per driver rather than one for the car.
+    currentDriverId: strategyIp ? (stintLog.logs.get(strategyIp)?.current?.driverId ?? null) : null,
     inputs,
     confirmedCompoundId: (strategyIp && teamCompounds[strategyIp]) || "",
   });

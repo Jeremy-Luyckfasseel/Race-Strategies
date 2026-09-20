@@ -28,6 +28,7 @@ export default {
   // ── Learner recommendation labels (recommendations.js labelKey) ──
   rec_laps_per_tank: 'Laps per tank',
   rec_fuel_weight_penalty: 'Fuel-weight penalty',
+  rec_driver_lap_times: '{driver} on {compound}',
   rec_compound_lap_times: '{compound} lap times',
 
   // ── Accessibility labels ──

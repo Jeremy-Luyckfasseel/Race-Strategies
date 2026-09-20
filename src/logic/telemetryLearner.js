@@ -173,6 +173,12 @@ export function createLearner(cfg = {}) {
 
   let currentCompoundId = cfg.compoundId || (cfg.compounds && Object.keys(cfg.compounds)[0]) || 'unknown';
 
+  // Who is at the wheel. Set the same way the compound is — by the human, from
+  // the picker they already use at every stop — and never guessed: GT7 says
+  // nothing about driver changes. Null until someone is named, and laps driven
+  // by nobody-in-particular are still counted globally, just not attributed.
+  let currentDriverId = cfg.driverId || null;
+
   /** Tyre life for a compound (0 if unknown). */
   function lifeOf(id) {
     return tireLifeById[id] || 0;
@@ -186,6 +192,15 @@ export function createLearner(cfg = {}) {
     if (!id) return;
     currentCompoundId = id;
     if (tireLife != null) tireLifeById[id] = Number(tireLife) || 0;
+  }
+
+  /**
+   * Set the driver for the CURRENT stint. Laps already recorded keep whoever
+   * was named at the time, so naming a driver two laps into a stint attributes
+   * the rest of it and quietly drops those two rather than back-dating a guess.
+   */
+  function setDriver(id) {
+    currentDriverId = id || null;
   }
 
   /** @type {LapRecord[]} */
@@ -273,6 +288,7 @@ export function createLearner(cfg = {}) {
     laps.push({
       lapNum: completedLap,
       compoundId: currentCompoundId,
+      driverId: currentDriverId,
       stintAge: completedLap - stintStartLap,
       lapTimeSecs,
       fuelStart,
@@ -347,27 +363,38 @@ export function createLearner(cfg = {}) {
 
   /**
    * Estimate the SINGLE global fuel-weight penalty via a joint block regression
-   * over the well-sampled compounds (DECISION 1: penalty is a car property, shared
-   * across tyres). Design columns: [fuel] then, per qualifying compound, its own
+   * over the well-sampled groups (DECISION 1: penalty is a car property, shared
+   * across tyres). Design columns: [fuel] then, per qualifying group, its own
    * piecewise degradation block [1, h1(age), h2(age)]. Solving them together
-   * isolates the fuel-weight slope from each compound's degradation — and because
+   * isolates the fuel-weight slope from each group's degradation — and because
    * different stints/compounds carry different fuel at the same tyre age, the
    * collinearity that makes a single monotone stint unidentifiable is broken
    * (DECISION 5). Returns the seed penalty + identifiable=false when nothing is
    * well-sampled enough or the system is still collinear.
+   *
+   * A group is one DRIVER on one compound, not one compound. Each block models a
+   * single degradation curve, and two drivers on the same tyre do not share one:
+   * lumping them under one block leaves a mismatch that the only free column
+   * left — fuel — absorbs. Measured on a synthetic two-driver session, that put
+   * both drivers' recovered curves about 2.5 s out. With no driver named there
+   * is one group per compound and this is exactly the old behaviour.
+   *
+   * @param {Object<string,{compoundId:string, laps:Array}>} groups
    */
-  function estimatePenalty(cleanByComp) {
-    const qualified = Object.keys(cleanByComp).filter(
-      (id) => cleanByComp[id].length >= 4 && distinctAges(cleanByComp[id]) >= 3 && lifeOf(id) > 0
-    );
+  function estimatePenalty(groups) {
+    const qualified = Object.keys(groups).filter((k) => {
+      const g = groups[k];
+      return g.laps.length >= 4 && distinctAges(g.laps) >= 3 && lifeOf(g.compoundId) > 0;
+    });
     if (qualified.length === 0) return { penalty: seedPenalty, identifiable: false };
 
     const cols = 1 + 3 * qualified.length;
     const X = [];
     const y = [];
-    qualified.forEach((id, j) => {
-      const half = lifeOf(id) / 2;
-      for (const l of cleanByComp[id]) {
+    qualified.forEach((k, j) => {
+      const g = groups[k];
+      const half = lifeOf(g.compoundId) / 2;
+      for (const l of g.laps) {
         const row = new Array(cols).fill(0);
         row[0] = l.fuelStart;
         row[1 + 3 * j] = 1;
@@ -472,35 +499,85 @@ export function createLearner(cfg = {}) {
     const cleanByComp = {};
     for (const id of compIds) cleanByComp[id] = cleanLapsFor(laps.filter((l) => l.compoundId === id));
 
-    const { penalty, identifiable } = estimatePenalty(cleanByComp);
+    // One block per driver-on-compound: see estimatePenalty. Laps with no driver
+    // named group under the compound alone, so a session where nobody was ever
+    // named behaves exactly as before.
+    const penaltyGroups = {};
+    for (const l of laps) {
+      const key = `${l.driverId ?? ''}|${l.compoundId}`;
+      (penaltyGroups[key] ||= { compoundId: l.compoundId, raw: [] }).raw.push(l);
+    }
+    for (const k of Object.keys(penaltyGroups)) {
+      penaltyGroups[k].laps = cleanLapsFor(penaltyGroups[k].raw);
+    }
+
+    const { penalty, identifiable } = estimatePenalty(penaltyGroups);
     const penaltyInRange = penalty >= LEARNER_CONFIG.fuelWeightPenaltyMin && penalty <= LEARNER_CONFIG.fuelWeightPenaltyMax;
 
-    const compounds = {};
-    for (const id of compIds) {
-      const clean = cleanByComp[id];
-      const life = lifeOf(id);
-      const sampleCount = clean.length;
-      const ageSpan = sampleCount > 0 ? Math.max(...clean.map((l) => l.stintAge)) - Math.min(...clean.map((l) => l.stintAge)) : 0;
-      const { deg, residual } = sampleCount > 0 ? fitDeg(clean, life, penalty) : { deg: null, residual: 0 };
-      const observed = deg ? buildObservedTimes(deg, penalty, fuel.litersPerLap, life) : null;
-      const enoughSpan = life > 0 && ageSpan >= LEARNER_CONFIG.minDegAgeSpanFraction * life;
-      const confident =
-        identifiable && penaltyInRange && sampleCount >= LEARNER_CONFIG.minCleanLapsForDeg && enoughSpan;
+    /**
+     * Fit one curve per compound over a set of already-cleaned laps.
+     *
+     * Factored out so the identical fit can run twice: once over the whole
+     * session, and once per driver. The penalty is passed IN rather than
+     * refitted, because it is a property of the car — how much a litre of fuel
+     * costs does not depend on who is holding the wheel (DECISION 1) — and
+     * refitting it from one driver's laps would only add noise to a number the
+     * whole session already agrees on.
+     */
+    function fitCompounds(cleanBy) {
+      const out = {};
+      for (const id of Object.keys(cleanBy)) {
+        const clean = cleanBy[id];
+        const life = lifeOf(id);
+        const sampleCount = clean.length;
+        const ageSpan = sampleCount > 0 ? Math.max(...clean.map((l) => l.stintAge)) - Math.min(...clean.map((l) => l.stintAge)) : 0;
+        const { deg, residual } = sampleCount > 0 ? fitDeg(clean, life, penalty) : { deg: null, residual: 0 };
+        const observed = deg ? buildObservedTimes(deg, penalty, fuel.litersPerLap, life) : null;
+        const enoughSpan = life > 0 && ageSpan >= LEARNER_CONFIG.minDegAgeSpanFraction * life;
+        const confident =
+          identifiable && penaltyInRange && sampleCount >= LEARNER_CONFIG.minCleanLapsForDeg && enoughSpan;
 
-      compounds[id] = {
-        tireLife: life,
-        startLapTime: observed ? observed.startLapTime : null,
-        halfLapTime: observed ? observed.halfLapTime : null,
-        endLapTime: observed ? observed.endLapTime : null,
-        // Pure (fuel-removed) degradation points, seconds — for tests + trust UI;
-        // the strings above are what the engine consumes.
-        deg,
-        sampleCount,
-        ageSpan,
-        volatility: residual,
-        confident,
-        highlyVolatile: residual > LEARNER_CONFIG.degVolatileResidualSecs,
-      };
+        out[id] = {
+          tireLife: life,
+          startLapTime: observed ? observed.startLapTime : null,
+          halfLapTime: observed ? observed.halfLapTime : null,
+          endLapTime: observed ? observed.endLapTime : null,
+          // Pure (fuel-removed) degradation points, seconds — for tests + trust
+          // UI; the strings above are what the engine consumes.
+          deg,
+          sampleCount,
+          ageSpan,
+          volatility: residual,
+          confident,
+          highlyVolatile: residual > LEARNER_CONFIG.degVolatileResidualSecs,
+        };
+      }
+      return out;
+    }
+
+    const compounds = fitCompounds(cleanByComp);
+
+    /**
+     * The same curves again, per driver.
+     *
+     * The engine already lets a driver override the global compound times, and
+     * on a long stint the difference between two drivers on the same tyre is
+     * bigger than most of what the rest of this file measures. The only thing
+     * that was missing to learn it was knowing who drove each lap.
+     *
+     * Each driver's laps are cleaned and fitted on their own, so one driver's
+     * pace can never leak into another's proposal. A driver with one stint on
+     * wets simply fails the sample gate and proposes nothing, which is the
+     * right answer rather than a confident average of somebody else.
+     */
+    const byDriver = {};
+    for (const did of new Set(laps.map((l) => l.driverId).filter(Boolean))) {
+      const mine = laps.filter((l) => l.driverId === did);
+      const cleanBy = {};
+      for (const id of new Set(mine.map((l) => l.compoundId))) {
+        cleanBy[id] = cleanLapsFor(mine.filter((l) => l.compoundId === id));
+      }
+      byDriver[did] = fitCompounds(cleanBy);
     }
 
     // Aggregate degradation trust = the current compound's (what the engineer is
@@ -515,6 +592,9 @@ export function createLearner(cfg = {}) {
 
       // --- per-compound degradation (keyed) ---
       compounds,
+
+      // --- the same, per driver: { driverId: { compoundId: {...} } } ---
+      byDriver,
 
       // --- trust payloads, per estimate (Task 1.3 propose-and-accept UI) ---
       trust: {
@@ -545,6 +625,7 @@ export function createLearner(cfg = {}) {
       // --- current stint snapshot ---
       currentStint: {
         compoundId: currentCompoundId,
+        driverId: currentDriverId,
         stintStartLap,
         lapsCompleted: laps.length,
         cleanLapCount: laps.filter((l) => l.dirtyReasons.length === 0).length,
@@ -557,6 +638,7 @@ export function createLearner(cfg = {}) {
     ingest,
     ingestAll,
     setCompound,
+    setDriver,
     getEstimates,
     // Exposed for tests / inspection.
     _laps: laps,
