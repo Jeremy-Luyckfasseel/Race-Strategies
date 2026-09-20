@@ -12,6 +12,8 @@ import { useTelemetryLearner } from "./hooks/useTelemetryLearner";
 import { applyRecommendation } from "./logic/recommendations";
 import { pickAutoConnectIp } from "./logic/connection";
 import { RACE_START_KEY, raceProgress, applyRaceClock } from "./logic/raceClock";
+import { conditionsUnavailable, crossoverSecsPerLap, tyreOnlyPitLoss } from "./logic/conditions";
+import { isSafetyCar, safetyCarDeployed, fieldSlowdown, pitLossUnderSafetyCar } from "./logic/carRoles";
 import LiveDashboard, { TrackMap } from "./components/LiveDashboard";
 import TelemetryLeaderboard from "./components/TelemetryLeaderboard";
 import TelemetryControls from "./components/TelemetryControls";
@@ -48,6 +50,7 @@ const DEFAULT_INPUTS = {
   drivers: [{ id: "d1", name: "Driver 1", compounds: {} }], // localised by defaultInputs()
   minDriverTimeSecs: 7200,
   mandatoryStops: 1,
+  conditions: "dry",
   midRaceMode: false,
   currentLap: "",
   currentFuel: "",
@@ -235,6 +238,18 @@ export default function App() {
     catch { return {}; }
   });
 
+  // Which cars are not racing. At an organised event one PS5 is the safety
+  // car: it must not take a place, sit in the gap chain, collect a stint log
+  // or have its fuel read as if it were racing.
+  const [carRoles, setCarRoles] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("gt7-car-roles") || "{}"); }
+    catch { return {}; }
+  });
+  const updateCarRoles = useCallback((next) => {
+    setCarRoles(next);
+    try { localStorage.setItem("gt7-car-roles", JSON.stringify(next)); } catch { /* ignore */ }
+  }, []);
+
   const [teamCompounds, setTeamCompounds] = useState(() => {
     try { return JSON.parse(localStorage.getItem("gt7-team-compounds") || "{}"); }
     catch { return {}; }
@@ -252,7 +267,15 @@ export default function App() {
   const autoOpenedLbRef = useRef(false);
   const telem    = useTelemetry();
   const detector = useCompoundDetector(telem.teams);
-  const stintLog = useStintLog(telem.teams, teamCompounds, inputs.drivers, myTeamIp || null);
+  // The safety car spends the race going in and out of the pit lane, which is
+  // exactly what opens and closes stints. Keep it out of the log entirely.
+  const racingTeams = useMemo(() => {
+    if (!Object.keys(carRoles).length) return telem.teams;
+    const out = new Map();
+    for (const [ip, packet] of telem.teams) if (!isSafetyCar(carRoles, ip)) out.set(ip, packet);
+    return out;
+  }, [telem.teams, carRoles]);
+  const stintLog = useStintLog(racingTeams, teamCompounds, inputs.drivers, myTeamIp || null);
   // While a race is running the plan is built from what is LEFT of it, not
   // from the configured length — which is the field you would otherwise be
   // retyping every few minutes from the pit wall. Quantised to the minute by
@@ -268,6 +291,11 @@ export default function App() {
   );
 
   const { result, calculating, calculate } = useStrategy(engineInputs);
+
+  const setConditions = useCallback((next) => {
+    setInputs((prev) => (prev.conditions === next ? prev : { ...prev, conditions: next }));
+    setSelectedIndex(0);
+  }, []);
 
   const savePS5IPs = useCallback((ips) => {
     setPS5IPs(ips);
@@ -518,6 +546,19 @@ export default function App() {
     return lpt > 0 ? tank / lpt : null;
   }, [learner.estimates, inputs.lapsPerFullTank, inputs.tankSize]);
 
+  // The safety car lives in the pit lane, so leaving it is the signal. Under
+  // it, the stop itself is no quicker — but the race you are missing is, so
+  // less of it goes by while you are stationary.
+  const scDeployedIp = useMemo(
+    () => safetyCarDeployed(telem.teams, carRoles),
+    [telem.teams, carRoles],
+  );
+  const scSlowdown = useMemo(
+    () => (scDeployedIp ? fieldSlowdown(telem.teams, carRoles) : null),
+    [scDeployedIp, telem.teams, carRoles],
+  );
+  const scPitLoss = pitLossUnderSafetyCar(tyreOnlyPitLoss(inputs), scSlowdown);
+
   const nowCompoundId = (strategyIp && teamCompounds[strategyIp]) || null;
   const nowTireLife = nowCompoundId
     ? Number(inputs.compounds.find((c) => c.id === nowCompoundId)?.tireLife) || 0
@@ -689,6 +730,22 @@ export default function App() {
                 clock={clock}
                 onStartRace={startRace}
                 onClearRace={clearRaceStart}
+                conditions={inputs.conditions ?? "dry"}
+                onConditionsChange={setConditions}
+                conditionsWarning={
+                  conditionsUnavailable(inputs.compounds, inputs.conditions ?? "dry")
+                    ? ((inputs.conditions ?? "dry") === "wet" ? "cond_no_wets" : "cond_no_dry")
+                    : null
+                }
+                scDeployed={!!scDeployedIp}
+                scPitLoss={scPitLoss}
+                scGreenPitLoss={tyreOnlyPitLoss(inputs)}
+                scSlowdown={scSlowdown}
+                crossoverSecs={crossoverSecsPerLap(
+                  tyreOnlyPitLoss(inputs),
+                  (nowBest?.strategy?.totalLaps ?? 0)
+                    - (strategyIp ? (telem.teams.get(strategyIp)?.currentLap ?? 0) : 0),
+                )}
                 lang={lang}
               />
             </div>
@@ -742,6 +799,7 @@ export default function App() {
             <div className="tab-content">
               <DriversTab
                 logs={stintLog.logs}
+                currentLap={strategyIp ? (telem.teams.get(strategyIp)?.currentLap ?? null) : null}
                 drivers={inputs.drivers}
                 minDriverTimeSecs={inputs.minDriverTimeSecs}
                 activeIp={strategyIp}
@@ -762,10 +820,15 @@ export default function App() {
                 // a 420px-wide map is an unreadable pile on the start grid. The
                 // colour plus 3 letters identifies the car; the leaderboard has
                 // the full name.
-                label: raw ? raw.trim().slice(0, 3).toUpperCase() : `T${i + 1}`,
+                label: isSafetyCar(carRoles, ip)
+                  ? 'SC'
+                  : (raw ? raw.trim().slice(0, 3).toUpperCase() : `T${i + 1}`),
                 posX: d?.posX, posZ: d?.posZ, onTrack: d?.onTrack,
                 isOwn: ip === strategyIp,
-                color: teamColor(telem.teamOrder.indexOf(ip)),
+                // The safety car is not one of the teams, so it does not take
+                // a team colour — it reads as what it is, at a glance.
+                isSafety: isSafetyCar(carRoles, ip),
+                color: isSafetyCar(carRoles, ip) ? '#FFFFFF' : teamColor(telem.teamOrder.indexOf(ip)),
               };
             });
             const lbProps = {
@@ -782,6 +845,8 @@ export default function App() {
               onRenameTeam: updateTeamLabel,
               lapCrossings: telem.lapCrossings,
               fuelUse: telem.fuelUse,
+              carRoles,
+              onRoleChange: updateCarRoles,
               lang,
             };
             return (
@@ -861,6 +926,7 @@ export default function App() {
                             inputs.compounds.find((c) => c.id === teamCompounds[displayIp])?.tireLife,
                           ) || null}
                           fuelRecord={telem.fuelUse?.get(displayIp) ?? null}
+                          stintEntry={stintLog.logs.get(displayIp) ?? null}
                           lang={lang}
                         />
                       ) : (

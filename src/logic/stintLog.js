@@ -19,6 +19,10 @@ export function openStint(entry, { driverId = null, compound = null, startLap, n
     current: {
       driverId, compound, startLap, startTime: now,
       lapMsSum: 0, lapCount: 0, bestLapMs: null, worstLapMs: null,
+      // The first and last few clean laps of the stint, which is what makes
+      // fall-off measurable. best-vs-worst cannot tell a degrading tyre from
+      // one bad lap in traffic; opening pace against closing pace can.
+      openingMs: [], closingMs: [],
     },
   };
 }
@@ -35,19 +39,41 @@ export function reopenStint(entry, { startLap, compound = null, now = Date.now()
   return openStint(closed, { driverId: null, compound, startLap, now });
 }
 
+/**
+ * Seconds the tyre gave up over the stint: closing pace minus opening pace.
+ *
+ * Null unless both ends are full and they do not overlap — on a five-lap stint
+ * the same laps would appear at both ends and the answer would be zero by
+ * construction, which is worse than no answer.
+ */
+export function stintFalloffMs(stint) {
+  const open = stint?.openingMs ?? [];
+  const close = stint?.closingMs ?? [];
+  if (open.length < FALLOFF_SAMPLE || close.length < FALLOFF_SAMPLE) return null;
+  if ((stint.lapCount ?? 0) < FALLOFF_SAMPLE * 2) return null;
+  const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  return mean(close) - mean(open);
+}
+
 export function closeStint(entry, { endLap, now = Date.now() }) {
   if (!entry.current) return entry;
   const durationSecs = (now - entry.current.startTime) / 1000;
   const avgLapMs = entry.current.lapCount > 0 ? entry.current.lapMsSum / entry.current.lapCount : null;
+  const closed = { ...entry.current, endLap, durationSecs, avgLapMs };
   return {
-    history: [...entry.history, { ...entry.current, endLap, durationSecs, avgLapMs }],
+    history: [...entry.history, { ...closed, falloffMs: stintFalloffMs(closed) }],
     current: null,
   };
 }
 
+/** How many laps at each end of a stint are averaged for the fall-off figure. */
+export const FALLOFF_SAMPLE = 3;
+
 export function recordLap(entry, lapMs) {
   if (!entry.current) return entry;
   const c = entry.current;
+  const opening = c.openingMs ?? [];
+  const closing = c.closingMs ?? [];
   return {
     history: entry.history,
     current: {
@@ -56,6 +82,8 @@ export function recordLap(entry, lapMs) {
       lapCount: c.lapCount + 1,
       bestLapMs: c.bestLapMs == null ? lapMs : Math.min(c.bestLapMs, lapMs),
       worstLapMs: c.worstLapMs == null ? lapMs : Math.max(c.worstLapMs, lapMs),
+      openingMs: opening.length < FALLOFF_SAMPLE ? [...opening, lapMs] : opening,
+      closingMs: [...closing, lapMs].slice(-FALLOFF_SAMPLE),
     },
   };
 }

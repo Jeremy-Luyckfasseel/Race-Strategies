@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect, Fragment } from 'react';
 import { teamColor } from '../logic/teams';
 import { liveInterval, formatInterval } from '../logic/gaps';
 import { rivalSummary } from '../logic/rivalIntel';
+import { splitByRole, isSafetyCar, toggleSafetyCar } from '../logic/carRoles';
 import { DEFAULT_LANG, t, compoundShort } from '../i18n/strings';
 
 const COMPOUNDS = ['H', 'M', 'S', 'IM', 'W'];
@@ -34,7 +35,8 @@ function fuelBarColor(pct) {
 
 export default function TelemetryLeaderboard({
   teams, teamOrder = [], teamLabels, teamCompounds, pendingIps, selectedIp, onSelect, onCompoundChange,
-  myTeamIp = '', onSetMyTeam, onRenameTeam, lapCrossings, fuelUse, lang = DEFAULT_LANG,
+  myTeamIp = '', onSetMyTeam, onRenameTeam, lapCrossings, fuelUse,
+  carRoles = {}, onRoleChange, lang = DEFAULT_LANG,
 }) {
   const [pickerIp, setPickerIp] = useState(null);
   const [editingIp, setEditingIp] = useState(null);
@@ -70,6 +72,14 @@ export default function TelemetryLeaderboard({
     return entries;
   }, [teams]);
 
+  // The race is the competitors. The safety car is kept and shown, but never
+  // ranked against people trying to win, and never in the gap chain — an
+  // interval measured to a car parked in the pit lane is not an interval.
+  const { competitors, safety } = useMemo(
+    () => splitByRole(sorted, carRoles),
+    [sorted, carRoles],
+  );
+
   const overallBestMs = useMemo(() => {
     let best = Infinity;
     for (const [, d] of teams) if (d.bestLapMs && d.bestLapMs < best) best = d.bestLapMs;
@@ -99,7 +109,7 @@ export default function TelemetryLeaderboard({
       </div>
 
       {/* ── Rows ── */}
-      {sorted.map(({ ip, d }, idx) => {
+      {competitors.map(({ ip, d, position }, idx) => {
         // Coloured by first-seen order, never by race position — a car that
         // gains a place must not change colour, and the track map colours the
         // same way so a dot and its row always match.
@@ -114,7 +124,7 @@ export default function TelemetryLeaderboard({
         const interval   = idx === 0
           ? null
           : liveInterval(
-              lapCrossings?.get(sorted[idx - 1].ip),
+              lapCrossings?.get(competitors[idx - 1].ip),
               lapCrossings?.get(ip),
               now,
               !d.onTrack,
@@ -125,7 +135,11 @@ export default function TelemetryLeaderboard({
         const compound   = teamCompounds?.[ip] ?? null;
         const pending    = pendingIps?.has(ip) ?? false;
         const pickerOpen = pickerIp === ip;
-        const pos        = d.racePos > 0 ? d.racePos : idx + 1;
+        // Renumbered among competitors rather than taken from GT7, which
+        // counts the safety car as an entrant. Parked in the pits it is
+        // classified last and shifts nobody; deployed mid-pack it would push
+        // every car behind it down a place.
+        const pos        = position;
         const isMine     = ip === myTeamIp;
         // Derived from their own fuel trace — no input from us, nothing assumed
         // about their car. Held back until a few clean laps have been seen.
@@ -281,6 +295,24 @@ export default function TelemetryLeaderboard({
                 style={{ '--tc': color }}
                 onClick={e => e.stopPropagation()}
               >
+                {/* The role has to be settable from here, because a car you
+                    have not marked yet still looks like any other row. */}
+                <div className="lb-role-row">
+                  <span className="lb-picker-label">{t('lb_role', lang)}</span>
+                  <button
+                    className={`lb-role-btn${!isSafetyCar(carRoles, ip) ? ' is-on' : ''}`}
+                    onClick={() => { if (isSafetyCar(carRoles, ip)) onRoleChange?.(toggleSafetyCar(carRoles, ip)); }}
+                  >
+                    {t('lb_role_competitor', lang)}
+                  </button>
+                  <button
+                    className={`lb-role-btn lb-role-sc${isSafetyCar(carRoles, ip) ? ' is-on' : ''}`}
+                    onClick={() => { if (!isSafetyCar(carRoles, ip)) onRoleChange?.(toggleSafetyCar(carRoles, ip)); }}
+                  >
+                    {t('lb_role_safety', lang)}
+                  </button>
+                </div>
+
                 <span className="lb-picker-label">
                   {pending ? t('lb_tyres_changed', lang) : t('lb_compound', lang)}
                 </span>
@@ -303,6 +335,41 @@ export default function TelemetryLeaderboard({
               </div>
             )}
           </Fragment>
+        );
+      })}
+
+      {/* Below the race, not in it. Kept visible because the moment this moves
+          is one of the most valuable things on the screen. */}
+      {safety.map(({ ip, d }) => {
+        const out = !!d.onTrack && (d.speedKmh ?? 0) >= 20;
+        return (
+          <div
+            key={ip}
+            className={`lb-row lb-row-sc${out ? ' is-deployed' : ''}`}
+            onClick={() => { setPickerIp((prev) => (prev === ip ? null : ip)); onSelect?.(ip); }}
+          >
+            <div className="lbc lbc-pos"><span className="lb-sc-badge">{t('lb_sc_badge', lang)}</span></div>
+            <div className="lbc lbc-team">
+              <div className="lb-team-inner">
+                <div className="lb-team-top">
+                  <button
+                    className="lb-role-clear"
+                    onClick={(e) => { e.stopPropagation(); onRoleChange?.(toggleSafetyCar(carRoles, ip)); }}
+                    title={t('lb_role_competitor', lang)}
+                  >
+                    ×
+                  </button>
+                  <span className="lb-tname">{teamLabels[ip] || ip}</span>
+                </div>
+              </div>
+            </div>
+            <div className="lbc lbc-gap">
+              <span className={`lb-sc-state${out ? ' is-deployed' : ''}`}>
+                {out ? t('lb_sc_deployed', lang) : t('lb_sc_in_pits', lang)}
+              </span>
+            </div>
+            <div className="lbc lbc-tyre" />
+          </div>
         );
       })}
     </div>

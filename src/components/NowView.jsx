@@ -22,6 +22,7 @@ import {
 } from '../logic/raceState';
 import { t, compoundName } from '../i18n/strings';
 import { formatClock } from '../logic/raceClock';
+import { CONDITIONS } from '../logic/conditions';
 
 const round1 = (x) => Math.round(x * 10) / 10;
 
@@ -30,7 +31,7 @@ function CompoundChip({ id, lang }) {
   return <span className={`now-compound compound-${id}`}>{compoundName(id, lang) || id}</span>;
 }
 
-export default function NowView({ data, strategy, planLabel, litersPerLap, tireLife, frozen, onToggleFreeze, label, needsTeam, onGoToTelemetry, clock, onStartRace, onClearRace, lang }) {
+export default function NowView({ data, strategy, planLabel, litersPerLap, tireLife, frozen, onToggleFreeze, label, needsTeam, onGoToTelemetry, clock, onStartRace, onClearRace, conditions = 'dry', onConditionsChange, conditionsWarning = null, crossoverSecs = null, scDeployed = false, scPitLoss = null, scGreenPitLoss = null, scSlowdown = null, lang }) {
   const hasData = !!data && Number.isFinite(Number(data.currentLap));
   const currentLap = hasData ? Number(data.currentLap) : strategy?.stints?.[0]?.startLap ?? null;
 
@@ -74,10 +75,54 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
           <button className="now-start" onClick={onStartRace}>{t('now_start_race', lang)}</button>
         )}
 
+        {/* One switch, because the call is made lap by lap when it starts
+            raining, not from a forecast typed in beforehand. */}
+        <div className="cond-switch" role="group" title={t('cond_title', lang)}>
+          {CONDITIONS.map((id) => (
+            <button
+              key={id}
+              className={`cond-btn cond-${id}${conditions === id ? ' is-on' : ''}`}
+              onClick={() => onConditionsChange?.(id)}
+              aria-pressed={conditions === id}
+            >
+              {t(`cond_${id}`, lang)}
+            </button>
+          ))}
+        </div>
+
         <button className={`now-freeze${frozen ? ' is-frozen' : ''}`} onClick={onToggleFreeze}>
           {frozen ? t('now_frozen', lang) : t('now_freeze', lang)}
         </button>
       </div>
+
+      {/* The safety car is out. Everything else on this screen matters less
+          than that, and than what it does to the cost of a stop. */}
+      {scDeployed && (
+        <div className="now-sc" role="alert">
+          <span className="now-sc-title">{t('sc_deployed', lang)}</span>
+          {scPitLoss != null && (
+            <span className="now-sc-call">
+              {t('sc_cheap_stop', lang, {
+                n: scPitLoss.toFixed(0),
+                green: Number(scGreenPitLoss).toFixed(0),
+              })}
+            </span>
+          )}
+          {scSlowdown != null && (
+            <span className="now-sc-dim">
+              {t('sc_field_slower', lang, { n: Math.round((scSlowdown - 1) * 100) })}
+            </span>
+          )}
+        </div>
+      )}
+
+      {conditionsWarning && <div className="now-cond-warn">{t(conditionsWarning, lang)}</div>}
+
+      {crossoverSecs != null && (
+        <div className="now-crossover">
+          {t('cond_crossover', lang, { n: crossoverSecs.toFixed(1) })}
+        </div>
+      )}
 
       {/* Said last, in the smallest type, under a number that looks live: the
           countdown is the plan's, not the car's. It belongs at the top — and

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { DEFAULT_LANG, t } from '../i18n/strings';
 import { rivalSummary } from '../logic/rivalIntel';
+import { currentSetOutlook } from '../logic/tyreHistory';
 
 const CANVAS_W = 420, CANVAS_H = 190, PAD = 16;
 
@@ -57,7 +58,7 @@ function tyreLifeColor(used) {
  * the stint began, which is exact, rather than a radius reading that never
  * moved.
  */
-function TyreAge({ laps, life, lang }) {
+function TyreAge({ laps, life, outlook, lang }) {
   if (laps == null) return null;
   const known = life > 0;
   const used = known ? laps / life : null;
@@ -82,6 +83,29 @@ function TyreAge({ laps, life, lang }) {
           </div>
         )}
       </div>
+
+      {/* What previous sets of this compound actually gave, read back from the
+          stint log. Silent until there is a finished set to compare against. */}
+      {outlook && (
+        <div className="tw-outlook">
+          <span className="tw-outlook-main">
+            {t('ld_typical', lang, { n: outlook.typicalLaps })}
+          </span>
+          <span className={`tw-outlook-left${outlook.beyondPrevious ? ' is-beyond' : ''}`}>
+            {outlook.beyondPrevious
+              ? t('ld_beyond', lang)
+              : t('ld_set_left', lang, { n: outlook.lapsLeft })}
+          </span>
+          {outlook.falloffMs != null && (
+            <span className="tw-outlook-dim">
+              {t('ld_falloff', lang, { n: (outlook.falloffMs / 1000).toFixed(1) })}
+            </span>
+          )}
+          <span className="tw-outlook-dim">
+            {t('ld_prev_sets', lang)} {outlook.previousLaps.join(', ')}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -521,7 +545,7 @@ export function TrackMap({ currentLap, cars, mapRef, onReset, lang = DEFAULT_LAN
 export default function LiveDashboard({
   data, label, compound, pendingConfirmation, onCompoundChange,
   drivers, currentDriverId, pendingDriver, onDriverChange,
-  tyreLaps = null, tyreLife = null, fuelRecord = null, lang = DEFAULT_LANG,
+  tyreLaps = null, tyreLife = null, fuelRecord = null, stintEntry = null, lang = DEFAULT_LANG,
 }) {
   const [showVitals, setShowVitals] = useState(false);
 
@@ -535,6 +559,7 @@ export default function LiveDashboard({
   // What this car's own fuel trace says about when it has to come in. Works
   // for anyone on the LAN — it is their telemetry, not our setup.
   const intel = rivalSummary(fuelRecord);
+  const setOutlook = currentSetOutlook(stintEntry, compound, data.currentLap);
   const brakePct    = Math.round(((data.brake    ?? 0) / 255) * 100);
 
   return (
@@ -741,7 +766,7 @@ export default function LiveDashboard({
                     ))}
                   </div>
                 </div>
-                <TyreAge laps={tyreLaps} life={tyreLife} lang={lang} />
+                <TyreAge laps={tyreLaps} life={tyreLife} outlook={setOutlook} lang={lang} />
 
                 <div className="tw-grid">
                   <div className="tw-cell tw-fl">

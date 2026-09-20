@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { findBestStrategies, isValidLapTimeStr } from '../logic/strategy';
+import { compoundsFor } from '../logic/conditions';
 
 /**
  * Run findBestStrategies with validated, coerced inputs.
@@ -24,6 +25,7 @@ function compute(inputs) {
     currentFuel,
     currentCompoundId,
     currentTireAgeLaps,
+    conditions,
   } = inputs;
 
   // Basic validation
@@ -35,8 +37,10 @@ function compute(inputs) {
     return null;
   }
 
-  // Ensure compounds array has at least one active compound
-  const activeCompounds = (compounds || []).filter(c => c.tireLife > 0);
+  // Ensure compounds array has at least one active compound. In the wet the
+  // engine may only pick wet tyres, and in the dry only slicks — see
+  // conditions.js, which falls back rather than leaving nothing to run on.
+  const activeCompounds = compoundsFor(compounds, conditions);
   if (activeCompounds.length === 0) return null;
 
   // Reject a malformed lap time rather than let parseLapTime silently fall

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { DEFAULT_LANG, t, compoundName } from '../i18n/strings';
+import { tyreHistory } from '../logic/tyreHistory';
 
 function formatMs(ms) {
   if (ms == null || !Number.isFinite(ms)) return '—';
@@ -21,7 +22,7 @@ function formatDuration(secs) {
   return m > 0 ? `${m}m${String(s).padStart(2, '0')}s` : `${s}s`;
 }
 
-export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp, onReset, onGoToTelemetry, lang = DEFAULT_LANG }) {
+export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp, onReset, onGoToTelemetry, currentLap = null, lang = DEFAULT_LANG }) {
   // Ticks once a second so the in-progress stint's elapsed time counts toward
   // its driver's total (and the "min not met" flag) instead of freezing at
   // zero for the whole stint. Date.now() is only ever read inside this effect,
@@ -55,6 +56,7 @@ export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp,
     }
   }
   const driverName = (id) => (drivers || []).find((d) => d.id === id)?.name || '—';
+  const tyres = [...tyreHistory(entry, currentLap).entries()];
   const multiDriver = (drivers || []).length > 1;
 
   return (
@@ -72,6 +74,57 @@ export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp,
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* What each compound has actually given this car, read back out of the
+          same log the table below is built from. */}
+      {activeIp && (
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">{t('dt_tyres_title', lang)}</span>
+          </div>
+          {tyres.length === 0 ? (
+            <p className="empty-text" style={{ padding: '14px 16px' }}>{t('dt_tyres_empty', lang)}</p>
+          ) : (
+            <div className="table-scroll">
+              <table className="tyre-table" aria-label={t('dt_tyres_title', lang)}>
+                <thead>
+                  <tr>
+                    <th>{t('st_compound', lang)}</th>
+                    <th>{t('dt_tyre_sets', lang)}</th>
+                    <th>{t('dt_tyre_laps', lang)}</th>
+                    <th>{t('dt_tyre_typical', lang)}</th>
+                    <th>{t('dt_tyre_best', lang)}</th>
+                    <th>{t('dt_tyre_falloff', lang)}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tyres.map(([id, rec]) => (
+                    <tr key={id}>
+                      <td>
+                        <span className={`compound-tag compound-${id}`} title={compoundName(id, lang)}>{id}</span>
+                      </td>
+                      <td>{rec.completed}</td>
+                      <td>
+                        {rec.laps.length ? rec.laps.join(', ') : '—'}
+                        {rec.liveLaps != null && (
+                          <span className="tyre-live"> +{rec.liveLaps} {t('dt_tyre_running', lang)}</span>
+                        )}
+                      </td>
+                      <td>{rec.typicalLaps ?? '—'}</td>
+                      <td className="avg-lap-cell">{formatMs(rec.bestMs)}</td>
+                      <td>
+                        {rec.falloffMs == null
+                          ? '—'
+                          : `${rec.falloffMs > 0 ? '+' : ''}${(rec.falloffMs / 1000).toFixed(1)}s`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

@@ -1857,16 +1857,19 @@ input[type="range"]::-moz-range-thumb {
   margin-bottom: 14px;
 }
 
-.stint-table {
+.stint-table,
+.tyre-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.82rem;
   min-width: 640px;
 }
 
-.stint-table thead tr { border-bottom: 1px solid var(--rule-bright); }
+.stint-table thead tr,
+.tyre-table thead tr { border-bottom: 1px solid var(--rule-bright); }
 
-.stint-table th {
+.stint-table th,
+.tyre-table th {
   padding: 6px 12px 10px;
   text-align: left;
   font-family: var(--font-display);
@@ -1878,7 +1881,8 @@ input[type="range"]::-moz-range-thumb {
   white-space: nowrap;
 }
 
-.stint-table td {
+.stint-table td,
+.tyre-table td {
   padding: 10px 12px;
   border-bottom: 1px solid var(--rule);
   color: var(--text-primary);
@@ -1886,9 +1890,12 @@ input[type="range"]::-moz-range-thumb {
   font-family: var(--font-ui);
 }
 
-.stint-table tbody tr { transition: background var(--t-fast); }
-.stint-table tbody tr:hover { background: rgba(255,255,255,0.02); }
-.stint-table tbody tr:last-child td { border-bottom: none; }
+.stint-table tbody tr,
+.tyre-table tbody tr { transition: background var(--t-fast); }
+.stint-table tbody tr:hover,
+.tyre-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+.stint-table tbody tr:last-child td,
+.tyre-table tbody tr:last-child td { border-bottom: none; }
 
 .row-warning { background: rgba(229,53,53,0.04) !important; }
 .row-warning td { color: rgba(229,53,53,0.85) !important; }
@@ -2549,6 +2556,23 @@ input[type="range"]::-moz-range-thumb {
 .ld-fi-box  { color: var(--warning); }
 .ld-fi-burn { color: var(--text-muted); letter-spacing: 0.04em; }
 .ld-fi-wait { color: var(--text-muted); font-style: italic; }
+
+/* What previous sets of this compound gave. */
+.tw-outlook {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 5px;
+  font-family: var(--font-data);
+  font-size: 0.6rem;
+}
+
+.tw-outlook-main { color: var(--text-primary); }
+.tw-outlook-left { color: var(--success); }
+.tw-outlook-left.is-beyond { color: var(--warning); }
+.tw-outlook-dim { color: var(--text-muted); }
+.tyre-live { color: var(--success); font-size: 0.9em; }
 
 .lb-gap {
   font-family: var(--font-data);
@@ -3574,6 +3598,143 @@ input[type="range"]::-moz-range-thumb {
 
 .now-empty,
 /* Race clock — only present once the race has actually been started. */
+/* ── Safety car ── */
+.lb-row-sc {
+  grid-template-columns: 40px 1fr 66px 80px 80px 50px 84px;
+  border-left: 3px solid rgba(255, 255, 255, 0.55);
+  border-top: 1px solid var(--rule-bright);
+  background: rgba(255, 255, 255, 0.03);
+  opacity: 0.75;
+}
+
+.lb-row-sc.is-deployed {
+  opacity: 1;
+  background: rgba(255, 200, 0, 0.09);
+  border-left-color: var(--warning);
+}
+
+.lb-sc-badge {
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+.lb-sc-state {
+  font-family: var(--font-display);
+  font-size: 0.56rem;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.lb-sc-state.is-deployed { color: var(--warning); font-weight: 800; }
+
+.lb-role-clear {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 5px 0 0;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.lb-role-clear:hover { color: var(--text-primary); }
+
+.lb-role-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.lb-role-btn {
+  background: transparent;
+  border: 1px solid var(--rule-bright);
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
+  padding: 3px 9px;
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.lb-role-btn.is-on { background: var(--text-secondary); color: var(--bg-base); border-color: transparent; }
+.lb-role-btn.lb-role-sc.is-on { background: var(--warning); color: var(--bg-base); }
+
+/* The banner that outranks everything else on the race screen. */
+.now-sc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 12px;
+  margin: 6px 0 0;
+  padding: 9px 14px;
+  border: 1px solid var(--warning);
+  border-left-width: 4px;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 200, 0, 0.1);
+}
+
+.now-sc-title {
+  font-family: var(--font-display);
+  font-size: 0.86rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  color: var(--warning);
+}
+
+.now-sc-call { font-family: var(--font-ui); font-size: 0.8rem; color: var(--text-primary); }
+.now-sc-dim { font-family: var(--font-data); font-size: 0.66rem; color: var(--text-muted); }
+
+/* Dry / wet switch. */
+.cond-switch {
+  display: inline-flex;
+  border: 1px solid var(--rule-bright);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.cond-btn {
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  padding: 5px 11px;
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+
+.cond-btn + .cond-btn { border-left: 1px solid var(--rule-bright); }
+.cond-btn:hover { color: var(--text-secondary); }
+.cond-dry.is-on { background: var(--text-secondary); color: var(--bg-base); }
+.cond-wet.is-on { background: var(--W, #14BBCE); color: var(--bg-base); }
+
+.now-cond-warn {
+  margin: 6px 0 0;
+  padding: 6px 12px;
+  border-left: 3px solid var(--warning);
+  background: rgba(255, 200, 0, 0.06);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.now-crossover {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-family: var(--font-data);
+  font-size: 0.68rem;
+}
+
 .now-start {
   margin-left: auto;
   background: var(--accent);
