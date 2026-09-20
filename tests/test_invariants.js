@@ -616,6 +616,46 @@ section('Bulk — no stint warnings in well-formed 4h race');
   }
 }
 
+section('A stint that exactly fills the tank is not over the tank');
+{
+  // 100 L over 22 laps is 4.545454545454546 L a lap in binary, and 22 of those
+  // is 100.00000000000001. The engine sizes a stint to exactly one tank, then
+  // compared that against the tank and told the engineer the fuel required
+  // exceeded capacity — on the very plan it had just proved was drivable, with
+  // a warning whose plain meaning is that the driver cannot finish the stint.
+  // Over by 1.4e-14 L is not a fuel problem.
+  const results = findBestStrategies({
+    raceDurationHours: 8,
+    tankSize: 100,
+    lapsPerFullTank: 22,
+    fuelMap: 1.0,
+    fuelWeightPenaltyPerLiter: 0.03,
+    mandatoryStops: 0,
+    pitBaseSecs: 25,
+    tireChangeSecs: 5,
+    fuelRateLitersPerSec: 3.0,
+    minDriverTimeSecs: 0,
+    drivers: [{ id: 'd1', name: 'Driver 1', compounds: {} }],
+    compounds: [H, M, S],
+  });
+
+  assert('the race plans', results.length > 0);
+
+  const overTank = results
+    .flatMap((r) => r.strategy.stints)
+    .filter((s) => s.warningCode === 'warn_fuel_exceeds_tank');
+  assert('no stint claims to need more than the tank holds',
+    overTank.length === 0,
+    overTank.slice(0, 3).map((s) => `${s.lapsInStint} laps`).join(', '));
+
+  // And the warning must still fire when it is real: one lap more than a tank
+  // can carry is a genuine problem, so a 40-lap tyre on a 22-lap tank must
+  // never plan a 23-lap stint without saying so.
+  const tankLaps = results[0].strategy.stints.map((s) => s.lapsInStint);
+  assert('and no stint is longer than a tank in the first place',
+    Math.max(...tankLaps) <= 22, JSON.stringify(tankLaps));
+}
+
 // ---------------------------------------------------------------------------
 // Summary
 // ---------------------------------------------------------------------------

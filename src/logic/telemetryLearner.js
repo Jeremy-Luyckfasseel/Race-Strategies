@@ -204,12 +204,15 @@ export function createLearner(cfg = {}) {
   }
 
   /** @type {LapRecord[]} */
-  const laps = [];
+  const laps = Array.isArray(cfg.restore?.laps) ? [...cfg.restore.laps] : [];
 
   // Per-frame bookkeeping for lap-boundary detection.
   let lastLapSeen = null; // previous frame's currentLap
   let lapStartFuel = null; // fuel captured at the start of the in-progress lap
-  let stintStartLap = null; // game lap number at which the current stint began
+  // Which game lap the current stint began on. Restored, because tyre age is
+  // measured from it: a learner rebuilt after a refresh with no stint origin
+  // treats the next lap as age 0 and records a worn tyre as a fresh one.
+  let stintStartLap = cfg.restore?.stintStartLap ?? null;
   let outLapCountdown = 0; // completed laps still to exclude (out-lap + first flying lap)
   // Flags accumulated across the frames of the in-progress lap.
   let sawPaused = false;
@@ -243,7 +246,12 @@ export function createLearner(cfg = {}) {
     if (lastLapSeen === null) {
       lastLapSeen = curLap;
       lapStartFuel = Number.isFinite(fuel) ? fuel : null;
-      stintStartLap = curLap;
+      // A restored learner already knows which lap the running stint began on,
+      // and that is what tyre age is measured from. Overwriting it here would
+      // call the next lap age 0 and file a twenty-lap-old set as a fresh one —
+      // worse than having lost the data, because it is wrong rather than
+      // absent. Only a genuinely new learner starts its stint here.
+      if (stintStartLap === null) stintStartLap = curLap;
       outLapCountdown = 1;
       resetInProgressFlags();
       return;
@@ -634,12 +642,25 @@ export function createLearner(cfg = {}) {
     };
   }
 
+  /**
+   * Everything needed to rebuild this learner's knowledge, for storing.
+   *
+   * An eight-hour race is eight hours of measurement, and it lived only in this
+   * closure — a refresh, a dropped wifi connection or a reloaded tab threw all
+   * of it away and started the session again from zero. Only what was MEASURED
+   * is kept; the in-progress lap is not, so a restore costs at most one lap.
+   */
+  function snapshot() {
+    return { laps, stintStartLap, compoundId: currentCompoundId, driverId: currentDriverId };
+  }
+
   return {
     ingest,
     ingestAll,
     setCompound,
     setDriver,
     getEstimates,
+    snapshot,
     // Exposed for tests / inspection.
     _laps: laps,
   };

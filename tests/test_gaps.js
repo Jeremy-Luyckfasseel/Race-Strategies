@@ -67,8 +67,23 @@ section('lapInterval — the gap the old code could not see');
 
 section('lapInterval — lapped cars');
 {
-  assert('a lap down shows laps, not seconds',
-    formatInterval(lapInterval({ lap: 14, crossedAt: 0 }, { lap: 13, crossedAt: 0 })) === '+1L');
+  // ONE lap on the counter is not evidence of being lapped. Between the car
+  // ahead crossing the line and the car three seconds behind it crossing, the
+  // counters differ by one for every pair in the field — so with nothing to
+  // measure a lap duration against, one lap means "cannot tell yet".
+  assert('one lap on the counter alone says nothing',
+    lapInterval({ lap: 14, crossedAt: 0 }, { lap: 13, crossedAt: 0 }) === null);
+
+  // With the leader's previous crossing there IS something to measure against:
+  // a 120 s lap, and the car behind began its lap before that lap started.
+  const reallyLapped = lapInterval(
+    { lap: 14, crossedAt: 220_000, prevCrossedAt: 100_000 },
+    { lap: 13, crossedAt: 95_000, witnessed: true },
+  );
+  assert('a lap down does show laps once it can be told from a gap',
+    formatInterval(reallyLapped) === '+1L', JSON.stringify(reallyLapped));
+
+  // Two or more is unambiguous whatever the timestamps say.
   assert('two laps down',
     formatInterval(lapInterval({ lap: 15, crossedAt: 0 }, { lap: 13, crossedAt: 0 })) === '+2L');
 }
@@ -101,10 +116,18 @@ section('joining mid-race — no fictitious dead heat');
   assert('so the column shows nothing rather than a false dead heat',
     formatInterval(lapInterval(c.get('lead'), c.get('mid'))) === null);
 
-  // A lap difference is straight from GT7's counter and is trustworthy at once.
+  // A ONE-lap difference is not: the car ahead has crossed and the car right
+  // behind it has not, which is the normal state of every close fight for part
+  // of every lap. Claiming "+1L" there is what put a lapped marker on the car
+  // being raced during the opening laps of a real session.
   let d = trackLapCrossings(new Map(), new Map([['a', pkt(9, 0)], ['b', pkt(8, 0)]]));
-  assert('but a lap down is reported immediately',
-    formatInterval(lapInterval(d.get('a'), d.get('b'))) === '+1L');
+  assert('one lap apart on first sighting is still not called',
+    lapInterval(d.get('a'), d.get('b')) === null);
+
+  // Two laps needs no corroboration — no close fight spans two lap counters.
+  let e = trackLapCrossings(new Map(), new Map([['a', pkt(10, 0)], ['b', pkt(8, 0)]]));
+  assert('but two laps down is reported immediately',
+    formatInterval(lapInterval(e.get('a'), e.get('b'))) === '+2L');
 }
 
 section('a three-car field over two laps');

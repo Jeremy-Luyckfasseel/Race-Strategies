@@ -106,7 +106,13 @@ The `no-unused-vars` rule ignores variables whose names start with an uppercase 
 
 `tests/`, `scripts/` and `server/` get `globals.node`, since they run under node rather than in a browser. Without that block every one of them reported `process`, `Buffer` and `console` as undefined — about sixty false errors that buried the real ones.
 
-**Lint is at zero errors and CI fails on any new one**, so keep it there. Three `react-hooks/exhaustive-deps` warnings remain and are deliberate. There is exactly one `eslint-disable` in `src/`, in `useTelemetryLearner.js`, and it carries its reasoning — if you add another, justify it in the same way or fix the code instead.
+**Lint is at zero errors and CI fails on any new one**, so keep it there. Three `react-hooks/exhaustive-deps` warnings remain and are deliberate. Three
+`eslint-disable` lines live in `src/` and each carries its reasoning on the line
+above it: two `exhaustive-deps` suppressions for deliberately mount-only or
+single-dependency effects (`App.jsx`, `TelemetryControls.jsx`). The third, in
+`useTelemetryLearner.js`, was removed — it became an unused-directive warning of
+its own once that effect gained a `try` block, and its reasoning is left there as
+a plain comment. If you add one, justify it the same way or fix the code instead.
 
 ## Key files
 

@@ -41,6 +41,9 @@ export const RACE_KEYS = [
   // Which car is the safety car. Without this a restored snapshot ranks a
   // parked car back into the standings and the gap chain.
   'gt7-car-roles',
+  // What the learner measured during this race. It describes this car in these
+  // conditions, so it belongs to the race and goes when the race does.
+  'gt7-learner',
 ];
 
 /**

@@ -184,6 +184,21 @@ function trackPoint(t) {
   return { x: 600 + Math.cos(a) * 500, z: 400 + Math.sin(a) * 320 };
 }
 
+// Where the pit box is, as a fraction of a lap. Cars used to stop dead wherever
+// they happened to be when their timer expired, which is not a thing a car can
+// do: the app learns the pit box from where the starred car stops, so a field
+// stopping at ten different points taught it nonsense. A car whose stop is due
+// now carries on to here first, like a real one.
+const PIT_AT = 0.5;
+
+/** Did this car pass the pit entry between these two lap fractions? */
+function passedPit(prevFrac, frac) {
+  if (prevFrac == null) return false;
+  return frac < prevFrac            // wrapped past the line this tick
+    ? prevFrac < PIT_AT || frac >= PIT_AT
+    : prevFrac < PIT_AT && frac >= PIT_AT;
+}
+
 // Two copies of this script feed the relay from the same ten addresses with
 // different start times, so every car's dot flips between two points on the
 // circuit sixty times a second. It looks like a rendering bug and is not one.
@@ -216,6 +231,8 @@ for (let i = 0; i < CARS; i++) {
     raceMs: 0,                   // running time, frozen while stationary
     fuel: TANK_L,
     pitUntil: 0,                 // wall-clock ms this stop ends
+    pitDue: false,               // scheduled to box; waiting to reach the pit
+    prevFrac: null,              // last tick's position around the lap
     nextStopAt: PIT_FIRST_MS + i * PIT_STAGGER_MS,
     stops: 0,
   });
@@ -261,14 +278,20 @@ const timer = setInterval(() => {
       car.raceMs += dt;
       car.fuel = Math.max(0, car.fuel - (dt / car.lapMs) * BURN_PER_LAP_L);
 
-      // Come in when the schedule says so, or when there is not a lap left.
+      // The schedule (or an empty tank) makes the stop DUE; the car still has
+      // to reach the pit entry before it can actually stop.
       const dry = car.fuel <= BURN_PER_LAP_L * 1.2;
-      if (elapsed >= car.nextStopAt || dry) {
+      if (elapsed >= car.nextStopAt || dry) car.pitDue = true;
+
+      const frac = ((((car.raceMs / car.lapMs) - car.offset) % 1) + 1) % 1;
+      if (car.pitDue && passedPit(car.prevFrac, frac)) {
+        car.pitDue = false;
         car.fuelAtStop = car.fuel;
         car.pitUntil = now + PIT_LENGTH_MS;
         car.nextStopAt = elapsed + PIT_EVERY_MS + PIT_LENGTH_MS;
         car.stops += 1;
       }
+      car.prevFrac = frac;
     }
 
     const progress = (car.raceMs / car.lapMs) - car.offset;

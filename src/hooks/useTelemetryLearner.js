@@ -1,10 +1,17 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { createLearner } from '../logic/telemetryLearner';
 import { buildRecommendations, dismissSnapshot } from '../logic/recommendations';
+import { LEARNER_KEY, restoreFor, writeFor } from '../logic/learnerStore';
 
 /**
  * Runs the pure telemetry learner against the live packet stream for the selected
  * car and surfaces PROPOSE-AND-ACCEPT recommendations (Phase 1, Task 1.3).
+ *
+ * What it measures survives a reload. An eight-hour race is eight hours of
+ * measurement and it used to live only in memory, so a refresh — or venue wifi
+ * dropping a tab — started the session again from zero, hours in. The laps are
+ * written to localStorage once per lap and restored when the same car is
+ * selected again; see logic/learnerStore.js.
  *
  * It NEVER writes into `inputs`. It holds the learner's output separately and
  * returns recommendations; only the caller's explicit Accept (applyRecommendation)
@@ -38,17 +45,27 @@ export function useTelemetryLearner({ activeIp, data, inputs, confirmedCompoundI
   // safe to call during render like a useState initialiser.
   const [car, setCar] = useState({ ip: null, learner: null });
   if (activeIp !== car.ip) {
-    setCar({
-      ip: activeIp,
-      learner: activeIp
-        ? createLearner({
-            tankSize: Number(inputs.tankSize) || 0,
-            compounds: compoundLife,
-            compoundId: confirmedCompoundId || undefined,
-          })
-        : null,
-    });
-    setEstimates(null);
+    // Pick up where this car left off, if it has been seen before. A reload
+    // mid-race must not cost the race's measurement; a car never seen restores
+    // nothing and behaves exactly as a fresh learner.
+    let restore = null;
+    try {
+      restore = restoreFor(globalThis.localStorage?.getItem(LEARNER_KEY), activeIp);
+    } catch { /* storage unavailable — carry on without history */ }
+    const fresh = activeIp
+      ? createLearner({
+          tankSize: Number(inputs.tankSize) || 0,
+          compounds: compoundLife,
+          compoundId: restore?.compoundId || confirmedCompoundId || undefined,
+          driverId: restore?.driverId || undefined,
+          restore,
+        })
+      : null;
+    setCar({ ip: activeIp, learner: fresh });
+    // Estimates come back on the next lap anyway, but a restored learner
+    // already knows enough to answer now — waiting two minutes to show what is
+    // already on disk would look exactly like the data having been lost.
+    setEstimates(fresh && restore ? fresh.getEstimates() : null);
     setDismissed({});
   }
   const learner = car.learner;
@@ -82,15 +99,29 @@ export function useTelemetryLearner({ activeIp, data, inputs, confirmedCompoundI
     const lap = Number(data.currentLap);
     if (Number.isFinite(lap) && lap !== lastLapRef.current) {
       lastLapRef.current = lap;
+      // Write before publishing, on the same once-a-lap edge — roughly every
+      // two minutes, and never in the 20 Hz path. A storage failure (quota,
+      // private window) must not take the race down with it: the learner keeps
+      // running from memory and simply has nothing to restore from later.
+      try {
+        const store = globalThis.localStorage;
+        if (store && activeIp) {
+          store.setItem(LEARNER_KEY, writeFor(store.getItem(LEARNER_KEY), activeIp, learner.snapshot()));
+        }
+      } catch { /* out of quota or no storage — keep learning in memory */ }
       // This is the pattern the rule exists to protect: state synchronised
       // from an external system. `data` changes ~20x/sec, but this only fires
       // when the LAP number changes — roughly once every two minutes — so it
       // cannot cascade. Doing it "properly" would mean moving the learner
       // behind useSyncExternalStore, a far bigger change than it is worth.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      // (This carried an eslint-disable for react-hooks/set-state-in-effect
+      // until the persist block above went in; the rule stops flagging an
+      // effect whose body contains a try statement. The reasoning stands
+      // whether or not the rule can currently see it — if a later edit brings
+      // the warning back, it is the directive that is missing, not a bug.)
       setEstimates(learner.getEstimates());
     }
-  }, [learner, data]);
+  }, [learner, data, activeIp]);
 
   const recommendations = useMemo(
     () => buildRecommendations(estimates, inputs, dismissed),

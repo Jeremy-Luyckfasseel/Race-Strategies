@@ -504,7 +504,13 @@ function simulateStrategy(p) {
     // this module free of presentation while still being translatable.
     let warning = null;
     let warningCode = null;
-    if (fuelNeededLiters > tankSize) {
+    // The same 0.001 L tolerance the next branch already uses, and for the same
+    // reason. A stint sized to exactly one tank needs exactly one tank, but
+    // `100 / 22 * 22` is 100.00000000000001 in binary — so the plan the engine
+    // had just proved was drivable was labelled undrivable, on a warning that
+    // says the driver cannot finish the stint. A tenth of a millilitre is not
+    // a fuel problem.
+    if (fuelNeededLiters > tankSize + 0.001) {
       warning = 'Fuel required exceeds tank capacity';
       warningCode = 'warn_fuel_exceeds_tank';
     } else if (fuelNeededLiters > currentFuelLiters + 0.001) {

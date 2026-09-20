@@ -81,13 +81,22 @@ export function lapInterval(ahead, behind) {
   // the lap both cars were on: three seconds behind gives three seconds. A car
   // genuinely a lap down gives roughly a whole lap, so the leader's own last
   // lap time is the discriminator — no track knowledge needed.
-  if (lapDiff === 1 && ahead.prevCrossedAt != null && behind.witnessed) {
+  if (lapDiff === 1) {
+    if (ahead.prevCrossedAt == null || !behind.witnessed) {
+      // We cannot yet tell three seconds from a whole lap, so we say nothing.
+      // Falling through to "+1L" here is what put a lapped marker on the car
+      // you are actually racing for the first laps of every race — before the
+      // leader has two crossings to measure a lap duration from, EVERY pair
+      // looks like this for the part of the lap between their line and yours.
+      return null;
+    }
     const lapDurationMs = ahead.crossedAt - ahead.prevCrossedAt;
     const secs = (behind.crossedAt - ahead.prevCrossedAt) / 1000;
     if (secs >= 0 && secs * 1000 < lapDurationMs) return { secs };
+    return { laps: 1 };
   }
 
-  // Beyond that the counter is trustworthy on its own.
+  // Beyond one lap the counter is trustworthy on its own.
   if (lapDiff > 0) return { laps: lapDiff };
   // The caller ranks the rows; if the car we were told is behind is actually
   // on a later lap, the ranking disagrees with the timing and we say nothing
