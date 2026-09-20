@@ -15,7 +15,9 @@ import { RACE_START_KEY, raceProgress, applyRaceClock } from "./logic/raceClock"
 import { conditionsUnavailable, crossoverSecsPerLap, tyreOnlyPitLoss } from "./logic/conditions";
 import { isSafetyCar, safetyCarDeployed, fieldSlowdown, pitLossUnderSafetyCar } from "./logic/carRoles";
 import { paceBefore, paceAfter, incidentLapCostMs } from "./logic/paceTrack";
-import { incidentDecision, measuredLossSecs, effectiveLossSecs } from "./logic/incident";
+import { measuredLossSecs, effectiveLossSecs } from "./logic/incident";
+import { pitNowScenarios, comparePitNow } from "./logic/pitNow";
+import { findBestStrategies } from "./logic/strategy";
 import LiveDashboard, { TrackMap } from "./components/LiveDashboard";
 import TelemetryLeaderboard from "./components/TelemetryLeaderboard";
 import TelemetryControls from "./components/TelemetryControls";
@@ -564,6 +566,20 @@ export default function App() {
   // Something went wrong. Deliberately not a "damage" flag: a spin, a penalty
   // or anything else that makes the plan wrong gets the same treatment, since
   // the questions are the same — what is it costing, and do I stop.
+  // Laps on my current set, which the pit-now comparison needs to know what
+  // staying out is actually running on.
+  const openTyreLaps = useMemo(() => {
+    if (!strategyIp) return null;
+    const open = stintLog.logs.get(strategyIp)?.current;
+    const lap = telem.teams.get(strategyIp)?.currentLap;
+    return open && lap != null ? Math.max(0, lap - open.startLap) : null;
+  }, [strategyIp, stintLog.logs, telem.teams]);
+
+  // GT7 repairs are quick — five seconds covers most of them, and it is not
+  // knowable in advance anyway, so it is a constant rather than a field nobody
+  // can fill in honestly before the car is already in the box.
+  const REPAIR_SECS = 5;
+
   const [incidentMark, setIncidentMark] = useState(null);
   const markIncident = useCallback(() => {
     const rec = strategyIp ? telem.pace?.get(strategyIp) : null;
@@ -596,8 +612,34 @@ export default function App() {
     );
 
     const strat = nowBest?.strategy ?? null;
-    const lap = (strategyIp ? telem.teams.get(strategyIp)?.currentLap : null) ?? incidentMark.lap;
+    const live = strategyIp ? telem.teams.get(strategyIp) : null;
+    const lap = live?.currentLap ?? incidentMark.lap;
     const nextStop = strat?.stints?.find((st) => st.pitLap != null && st.pitLap >= lap) ?? null;
+
+    // Both futures go through the real engine rather than through arithmetic.
+    // Costing an early stop as "a whole extra stop" is wrong whenever the plan
+    // has slack — and it usually does, because the last stint rarely ends
+    // exactly as the tyre does. Only the engine knows whether the remaining
+    // race can absorb the stop, so only the engine is asked.
+    let compare = null;
+    if (lossSecs != null && live) {
+      const sc = pitNowScenarios({
+        inputs: engineInputs,
+        currentLap: lap,
+        currentFuel: live.fuelLiters,
+        compoundId: teamCompounds[strategyIp] || null,
+        tyreAgeLaps: openTyreLaps ?? 0,
+        lossPerLapSecs: lossSecs,
+        lapsToNextStop: nextStop ? nextStop.pitLap - lap : null,
+        lapsRemaining: (strat?.totalLaps ?? 0) - lap,
+        pitLossSecs: tyreOnlyPitLoss(inputs),
+        repairSecs: REPAIR_SECS,
+      });
+      if (sc) {
+        const run = (i) => { const r = findBestStrategies(i); return r?.length ? { best: r[0] } : null; };
+        compare = comparePitNow(run(sc.pitNow), run(sc.wait));
+      }
+    }
 
     return {
       lap: incidentMark.lap,
@@ -605,15 +647,16 @@ export default function App() {
       oneOffSecs: oneOffMs != null ? oneOffMs / 1000 : null,
       lossSecs,
       nextStopLap: nextStop ? nextStop.pitLap : null,
-      decision: incidentDecision({
-        lossPerLapSecs: lossSecs,
-        lapsRemaining: (strat?.totalLaps ?? 0) - lap,
-        lapsToNextStop: nextStop ? nextStop.pitLap - lap : null,
-        pitLossSecs: tyreOnlyPitLoss(inputs),
-        repairSecs: 15,
-      }),
+      applied: Number(inputs.pacePenaltySecs) > 0,
+      compare,
     };
-  }, [incidentMark, strategyIp, telem.pace, telem.teams, nowBest, inputs]);
+  }, [incidentMark, strategyIp, telem.pace, telem.teams, nowBest, inputs, engineInputs, teamCompounds, openTyreLaps]);
+
+  /** Plan the rest of the race on the damaged pace, or stop doing so. */
+  const applyPacePenalty = useCallback((secs) => {
+    setInputs((prev) => ({ ...prev, pacePenaltySecs: Number(secs) || 0 }));
+    setSelectedIndex(0);
+  }, []);
 
   const nowCompoundId = (strategyIp && teamCompounds[strategyIp]) || null;
   const nowTireLife = nowCompoundId
@@ -991,6 +1034,7 @@ export default function App() {
                           onIncident={displayIp === strategyIp ? markIncident : undefined}
                           onClearIncident={clearIncident}
                           onIncidentLoss={setIncidentLoss}
+                          onApplyPace={displayIp === strategyIp ? applyPacePenalty : undefined}
                           lang={lang}
                         />
                       ) : (

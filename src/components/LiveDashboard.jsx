@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { DEFAULT_LANG, t } from '../i18n/strings';
 import { rivalSummary } from '../logic/rivalIntel';
 import { currentSetOutlook } from '../logic/tyreHistory';
-import { CARRY, REPAIR_AT_STOP, PIT_NOW } from '../logic/incident';
+import { PIT_NOW, WAIT } from '../logic/pitNow';
 
 const CANVAS_W = 420, CANVAS_H = 190, PAD = 16;
 
@@ -547,7 +547,7 @@ export default function LiveDashboard({
   data, label, compound, pendingConfirmation, onCompoundChange,
   drivers, currentDriverId, pendingDriver, onDriverChange,
   tyreLaps = null, tyreLife = null, fuelRecord = null, stintEntry = null,
-  incident = null, onIncident, onClearIncident, onIncidentLoss, lang = DEFAULT_LANG,
+  incident = null, onIncident, onClearIncident, onIncidentLoss, onApplyPace, lang = DEFAULT_LANG,
 }) {
   const [showVitals, setShowVitals] = useState(false);
 
@@ -712,18 +712,57 @@ export default function LiveDashboard({
                   </label>
                 </div>
 
-                {incident.decision && (
-                  <div className={`ld-inc-call ld-inc-call--${incident.decision.best}`}>
-                    {incident.decision.best === PIT_NOW && t('inc_best_pit_now', lang)}
-                    {incident.decision.best === CARRY && t('inc_best_carry', lang)}
-                    {incident.decision.best === REPAIR_AT_STOP
-                      && t('inc_best_repair_at_stop', lang, { lap: incident.nextStopLap ?? '?' })}
-                    {incident.decision.marginSecs != null && (
-                      <span className="ld-inc-margin">
-                        {t('inc_margin', lang, { n: incident.decision.marginSecs.toFixed(0) })}
-                      </span>
-                    )}
-                  </div>
+                {/* Both futures run through the real engine, so "does coming
+                    in actually cost a stop" is answered rather than assumed. */}
+                {incident.compare && (
+                  <>
+                    <div className="ld-inc-options">
+                      <div className={`ld-inc-opt${incident.compare.best === PIT_NOW ? ' is-best' : ''}`}>
+                        <span className="ld-inc-opt-k">{t('inc_box_now', lang)}</span>
+                        <span className="ld-inc-opt-v">
+                          {t('inc_laps', lang, { n: incident.compare.pitLaps })}
+                        </span>
+                      </div>
+                      <div className={`ld-inc-opt${incident.compare.best === WAIT ? ' is-best' : ''}`}>
+                        <span className="ld-inc-opt-k">
+                          {incident.nextStopLap != null
+                            ? t('inc_wait', lang, { lap: incident.nextStopLap })
+                            : t('inc_wait_flag', lang)}
+                        </span>
+                        <span className="ld-inc-opt-v">
+                          {t('inc_laps', lang, { n: incident.compare.waitLaps })}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className={`ld-inc-call ld-inc-call--${incident.compare.best ?? 'tied'}`}>
+                      {incident.compare.tied
+                        ? t('inc_tied', lang)
+                        : (incident.compare.best === PIT_NOW
+                          ? t('inc_box_now', lang)
+                          : (incident.nextStopLap != null
+                            ? t('inc_wait', lang, { lap: incident.nextStopLap })
+                            : t('inc_wait_flag', lang)))}
+                      {!incident.compare.tied && (
+                        <span className="ld-inc-margin">
+                          {incident.compare.lapsDelta !== 0
+                            ? t('inc_ahead_laps', lang, { n: Math.abs(incident.compare.lapsDelta) })
+                            : t('inc_ahead_secs', lang, { n: Math.abs(incident.compare.secsDelta).toFixed(0) })}
+                        </span>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {/* Propose, never impose: the plan only moves on a click, the
+                    same way the learner's numbers do. */}
+                {incident.lossSecs != null && onApplyPace && (
+                  <button
+                    className={`ld-inc-apply${incident.applied ? ' is-applied' : ''}`}
+                    onClick={() => onApplyPace(incident.applied ? 0 : incident.lossSecs)}
+                  >
+                    {incident.applied ? t('inc_applied', lang) : t('inc_apply', lang)}
+                  </button>
                 )}
               </div>
             )}

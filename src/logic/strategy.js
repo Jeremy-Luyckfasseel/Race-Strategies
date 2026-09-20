@@ -709,9 +709,12 @@ export function findBestStrategies(params) {
     raceDurationHours, tankSize, lapsPerFullTank, fuelMap,
     compounds, pitBaseSecs, tireChangeSecs, fuelRateLitersPerSec,
     mandatoryStops, midRaceMode, currentLap, currentFuel,
-    fuelWeightPenaltyPerLiter, drivers, minDriverTimeSecs,
+    fuelWeightPenaltyPerLiter, drivers, minDriverTimeSecs, pacePenaltySecs = 0,
   } = params;
   const penalty = Number(fuelWeightPenaltyPerLiter) || 0;
+  // Seconds added to every lap regardless of fuel or tyre: a damaged car, or
+  // one being driven to a delta. Zero for a healthy car, which is the default.
+  const pacePenalty = Math.max(0, Number(pacePenaltySecs) || 0);
 
   if (!compounds || compounds.length === 0) return [];
   const targetRaceTimeSecs = Number(raceDurationHours) * 3600;
@@ -746,9 +749,12 @@ export function findBestStrategies(params) {
       const fuelAtMid = Math.max(0, tankSize - lapsToMid * effectiveLitersPerLap);
       const fuelAtEnd = Math.max(0, tankSize - lapsToEnd * effectiveLitersPerLap);
 
-      const startFT = startSecs;
-      const halfFT  = halfSecs  + (tankSize - fuelAtMid) * penalty;
-      const endFT   = endSecs   + (tankSize - fuelAtEnd) * penalty;
+      // A car that is damaged, or being nursed, is simply slower every lap.
+      // Added after the fuel-weight correction so it is not itself corrected:
+      // it is a flat cost of the car's condition, not a function of fuel load.
+      const startFT = startSecs + pacePenalty;
+      const halfFT  = halfSecs  + (tankSize - fuelAtMid) * penalty + pacePenalty;
+      const endFT   = endSecs   + (tankSize - fuelAtEnd) * penalty + pacePenalty;
 
       return {
         id: c.id,

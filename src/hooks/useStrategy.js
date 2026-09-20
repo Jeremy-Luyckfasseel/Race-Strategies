@@ -26,6 +26,7 @@ function compute(inputs) {
     currentCompoundId,
     currentTireAgeLaps,
     conditions,
+    pacePenaltySecs,
   } = inputs;
 
   // Basic validation
@@ -70,6 +71,7 @@ function compute(inputs) {
     drivers: drivers || [],
     minDriverTimeSecs: Number(minDriverTimeSecs) || 0,
     mandatoryStops: Number(mandatoryStops) || 0,
+    pacePenaltySecs: Number(pacePenaltySecs) || 0,
     midRaceMode: !!midRaceMode,
     currentLap: midRaceMode ? Number(currentLap) || 0 : 0,
     currentFuel: midRaceMode && currentFuel !== '' && currentFuel !== null && !isNaN(currentFuel) ? Number(currentFuel) : null,
