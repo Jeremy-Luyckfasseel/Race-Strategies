@@ -20,6 +20,8 @@ import { measuredLossSecs, effectiveLossSecs } from "./logic/incident";
 import { pitNowScenarios, comparePitNow, fullServiceLoss } from "./logic/pitNow";
 import { computeStrategy } from "./hooks/useStrategy";
 import LiveDashboard, { TrackMap } from "./components/LiveDashboard";
+import Dialog from "./components/Dialog";
+import { useDialog } from "./hooks/useDialog";
 import TelemetryLeaderboard from "./components/TelemetryLeaderboard";
 import TelemetryControls from "./components/TelemetryControls";
 import LearnerRecommendations from "./components/LearnerRecommendations";
@@ -290,6 +292,9 @@ export default function App() {
     for (const [ip, packet] of telem.teams) if (!isSafetyCar(carRoles, ip)) out.set(ip, packet);
     return out;
   }, [telem.teams, carRoles]);
+  // Every confirmation the app asks goes through one card, so they all behave
+  // the same way and none of them is the browser's grey box.
+  const dialog = useDialog();
   const detector = useCompoundDetector(racingTeams);
   const stintLog = useStintLog(racingTeams, teamCompounds, inputs.drivers, myTeamIp || null);
   const teamKeys = useMemo(() => [...telem.teams.keys()], [telem.teams]);
@@ -506,8 +511,13 @@ export default function App() {
    * roster, the setup and anything the learner picked up in practice are all
    * kept — learning the car during the lobby session is the point of it.
    */
-  const startRace = useCallback(() => {
-    if (!window.confirm(t("now_start_confirm", lang))) return;
+  const startRace = useCallback(async () => {
+    if (!await dialog.ask({
+      title: t("dlg_start_title", lang),
+      body: t("now_start_confirm", lang),
+      confirmLabel: t("dlg_start_go", lang),
+      danger: true,
+    })) return;
     const at = Date.now();
     setRaceStartedAt(at);
     setClockNow(at);
@@ -521,19 +531,28 @@ export default function App() {
     try { localStorage.setItem("gt7-team-compounds", "{}"); } catch { /* ignore */ }
     setSelectedIndex(0);
     setPlanFrozen(false);
-  }, [lang, stintLog]);
+  }, [lang, stintLog, dialog]);
 
-  const clearRaceStart = useCallback(() => {
-    if (!window.confirm(t("now_clear_confirm", lang))) return;
+  const clearRaceStart = useCallback(async () => {
+    if (!await dialog.ask({
+      title: t("dlg_clear_title", lang),
+      body: t("now_clear_confirm", lang),
+      confirmLabel: t("dlg_clear_go", lang),
+    })) return;
     setRaceStartedAt(null);
     try { localStorage.removeItem(RACE_START_KEY); } catch { /* ignore */ }
-  }, [lang]);
+  }, [lang, dialog]);
 
-  const startNewRace = useCallback(() => {
-    if (!window.confirm(t("app_new_race_confirm", lang))) return;
+  const startNewRace = useCallback(async () => {
+    if (!await dialog.ask({
+      title: t("dlg_new_race_title", lang),
+      body: t("app_new_race_confirm", lang),
+      confirmLabel: t("dlg_new_race_go", lang),
+      danger: true,
+    })) return;
     try { clearRace((k) => localStorage.removeItem(k)); } catch { /* ignore */ }
     window.location.reload();
-  }, [lang]);
+  }, [lang, dialog]);
 
   /** Download everything needed to rebuild this session elsewhere. */
   const exportRace = useCallback(() => {
@@ -552,20 +571,27 @@ export default function App() {
   const importRace = useCallback((file) => {
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
+      const problem = (body) => dialog.tell({ title: t("dlg_import_problem_title", lang), body });
+
       let snap;
       try { snap = JSON.parse(String(reader.result)); }
-      catch { window.alert(t("app_import_unreadable", lang)); return; }
+      catch { problem(t("app_import_unreadable", lang)); return; }
 
       const check = validateSnapshot(snap);
-      if (!check.ok) { window.alert(t("app_import_failed", lang, { reason: check.reason })); return; }
-      if (!window.confirm(t("app_import_confirm", lang))) return;
+      if (!check.ok) { problem(t("app_import_failed", lang, { reason: check.reason })); return; }
+      if (!await dialog.ask({
+        title: t("dlg_import_title", lang),
+        body: t("app_import_confirm", lang),
+        confirmLabel: t("dlg_import_go", lang),
+        danger: true,
+      })) return;
 
       applySnapshot(snap, (k, v) => localStorage.setItem(k, v));
       window.location.reload();
     };
     reader.readAsText(file);
-  }, [lang]);
+  }, [lang, dialog]);
 
   // Once a second car shows up this is a multi-car event, so reveal the
   // leaderboard rather than leaving the whole field hidden behind a toggle.
@@ -1161,6 +1187,8 @@ export default function App() {
 
         </section>
       </main>
+
+      <Dialog dialog={dialog.dialog} onClose={dialog.close} lang={lang} />
 
       <footer className="app-footer">
         {t("app_footer", lang)}

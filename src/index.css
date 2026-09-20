@@ -4520,3 +4520,103 @@ input[type="range"]::-moz-range-thumb {
   cursor: pointer;
 }
 .clock-banner-clear:hover { color: var(--text-primary); border-color: var(--rule-bright, var(--text-muted)); }
+
+/* ---------------------------------------------------------------------------
+   Dialog — the card the app asks its questions on
+
+   Replaces window.confirm/alert, which drew a grey operating-system box with
+   the page's origin printed above it: the only thing in the app that did not
+   look like the app. It also blocked the main thread while open, and the relay
+   is pushing packets at 20 Hz behind it.
+
+   Same backdrop, card and display type as the onboarding overlay, so there is
+   one overlay language rather than two.
+   --------------------------------------------------------------------------- */
+
+.dlg-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;            /* above the onboarding overlay, never behind it */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(3, 5, 10, 0.88);
+  backdrop-filter: blur(3px);
+  padding: 24px;
+}
+
+.dlg-card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  padding: 24px 26px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* An accent edge for the ones that throw work away. */
+.dlg-card--danger { border-left: 3px solid var(--accent); }
+
+.dlg-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-primary);
+}
+
+/* The question. */
+.dlg-lead {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+/* What it costs — the paragraph that names the data about to be reset. */
+.dlg-body {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  padding: 9px 12px;
+  background: var(--bg-field);
+  border-radius: var(--radius-xs);
+}
+
+.dlg-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.dlg-btn {
+  padding: 8px 18px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--rule);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+}
+.dlg-btn:hover { color: var(--text-primary); border-color: var(--rule-bright, var(--text-muted)); }
+.dlg-btn:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; }
+
+.dlg-btn--go {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+.dlg-btn--danger {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.dlg-btn--danger:hover { color: #fff; filter: brightness(1.12); }

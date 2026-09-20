@@ -51,11 +51,23 @@ function boot() {
   return render(React.createElement(App));
 }
 
-// Confirm dialogs: answer yes unless a case says otherwise.
-let confirmAnswer = true;
-const asked = [];
-window.confirm = (msg) => { asked.push(msg); return confirmAnswer; };
-globalThis.confirm = window.confirm;
+/**
+ * Confirmations are the app's own card now, not window.confirm, so they are
+ * answered the way a person answers them: by clicking a button that is really
+ * in the DOM. That also means the assertions below exercise the real path
+ * rather than a stub that always said yes.
+ */
+const dialogCard = (root) => $(root, '.dlg-card');
+const dialogText = (root) => (dialogCard(root) ? textOf(dialogCard(root)) : null);
+
+async function answer(root, yes) {
+  const card = dialogCard(root);
+  if (!card) return false;
+  click($(card, yes ? '.dlg-btn--go' : '.dlg-btn--cancel'));
+  // The handler behind it is async (it awaits the dialog's promise).
+  await act(async () => { await Promise.resolve(); });
+  return true;
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -79,13 +91,20 @@ section('starting it');
 {
   localStorage.clear();
   localStorage.setItem('gt7-team-compounds', JSON.stringify({ '10.0.0.1': 'S' }));
-  asked.length = 0;
-  confirmAnswer = true;
 
   const v = boot();
   click(startButton(v.container));
 
-  assert('it asks first, because it resets the stint log', asked.length === 1);
+  assert('it asks first, because it resets the stint log',
+    dialogCard(v.container) !== null);
+  assert('on the app\'s own card, not the browser\'s grey box',
+    /Start the race|D\u00e9marrer la course/.test(dialogText(v.container)),
+    dialogText(v.container));
+  assert('and it says what the start will reset',
+    /stint log|relais/i.test(dialogText(v.container)), dialogText(v.container));
+
+  await answer(v.container, true);
+  assert('the card goes once it is answered', dialogCard(v.container) === null);
   const stamp = Number(localStorage.getItem(RACE_START_KEY));
   assert('the start time is stored', Number.isFinite(stamp) && stamp > 0, String(stamp));
   assert('the clock replaces the start button', $(v.container, '.now-clock') !== null);
@@ -102,12 +121,27 @@ section('starting it');
 section('declining leaves everything alone');
 {
   localStorage.clear();
-  confirmAnswer = false;
   const v = boot();
   click(startButton(v.container));
+  await answer(v.container, false);
   assert('no race was started', localStorage.getItem(RACE_START_KEY) === null);
   assert('and the button is still there', !!startButton(v.container));
-  confirmAnswer = true;
+  v.unmount();
+}
+
+section('the card can be dismissed without touching a button');
+{
+  // Escape is what anyone reaches for, and it must mean no.
+  localStorage.clear();
+  const v = boot();
+  click(startButton(v.container));
+  assert('the card is up', dialogCard(v.container) !== null);
+
+  await act(async () => {
+    window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+  });
+  assert('Escape closes it', dialogCard(v.container) === null);
+  assert('and starts nothing', localStorage.getItem(RACE_START_KEY) === null);
   v.unmount();
 }
 
@@ -116,6 +150,7 @@ section('the clock survives a reload');
   localStorage.clear();
   const first = boot();
   click(startButton(first.container));
+  await answer(first.container, true);
   const stamp = localStorage.getItem(RACE_START_KEY);
   first.unmount();
 
@@ -167,6 +202,7 @@ section('the Strategy tab says why its total is not the one you typed');
 
   click($$(v.container, '.tab-btn').find((b) => /Race|Course/.test(b.textContent)));
   click(startButton(v.container));
+  await answer(v.container, true);
   click($$(v.container, '.tab-btn').find((b) => /Strategy|Stratégie/.test(b.textContent)));
 
   const banner = $(v.container, '.clock-banner');
@@ -177,6 +213,7 @@ section('the Strategy tab says why its total is not the one you typed');
 
   // The way out is on the banner itself, not back on another tab.
   click($(v.container, '.clock-banner-clear'));
+  await answer(v.container, true);
   assert('clearing the start from here removes the banner',
     $(v.container, '.clock-banner') === null);
   assert('and the stamp with it', localStorage.getItem(RACE_START_KEY) === null);
@@ -188,9 +225,11 @@ section('clearing the start');
   localStorage.clear();
   const v = boot();
   click(startButton(v.container));
+  await answer(v.container, true);
   assert('running', $(v.container, '.now-clock') !== null);
 
   click($(v.container, '.now-clock-clear'));
+  await answer(v.container, true);
   assert('the clock is gone', $(v.container, '.now-clock') === null);
   assert('the stamp is gone', localStorage.getItem(RACE_START_KEY) === null);
   assert('and it offers to start again', !!startButton(v.container));
