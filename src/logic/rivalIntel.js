@@ -21,6 +21,9 @@ const BURN_WINDOW = 5;
 /** Litres. Below this a change is sensor noise, not fuel being used or added. */
 const NOISE_L = 0.05;
 
+/** Clean laps of fuel burn before the figure is worth showing. */
+export const CONFIDENT_LAPS = 3;
+
 /** Litres. A rise smaller than this is not a refuel. */
 const MIN_REFUEL_L = 1.0;
 
@@ -167,6 +170,19 @@ export function rivalSummary(rec) {
     pitLap: predictedPitLap(rec),
     lastStopFuel: rec.lastStop ? rec.lastStop.fuelAdded : null,
     lastStopStintLaps: stintLapsFromLastStop(rec),
-    confident: rec.burns.length >= 3,
+    confident: rec.burns.length >= CONFIDENT_LAPS,
   };
+}
+
+/**
+ * How far the burn measurement has got, for a car that has none yet.
+ *
+ * "Measuring…" with no end in sight is worse than saying nothing: there is no
+ * way to tell a figure that is two laps away from one that will never arrive
+ * because the car is not sending usable fuel. Null when nothing is coming.
+ */
+export function burnProgress(rec) {
+  if (!rec || rec.lastFuel == null) return null;
+  const have = rec.burns.length;
+  return have >= CONFIDENT_LAPS ? null : { have, need: CONFIDENT_LAPS };
 }

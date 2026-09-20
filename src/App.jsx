@@ -827,8 +827,8 @@ export default function App() {
         </div>
       </header>
 
-      <main className={`app-main${activeTab === 'telemetry' ? ' app-main--telemetry' : ''}`}>
-        <aside className="sidebar">
+      <main className={`app-main${activeTab === 'strategy' ? '' : ' app-main--full'}`}>
+        <aside className="sidebar" hidden={activeTab !== 'strategy'}>
           <TeamPanel onBuild={applySessions} lang={lang} />
           <InputPanel
             inputs={inputs}

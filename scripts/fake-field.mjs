@@ -123,6 +123,19 @@ const SPREAD  = Number(process.argv[4] || 0.06);   // fraction of a lap, front t
 const LAP_MS = 90_000;
 const HZ = 60;
 
+// Every car used to run an identical LAP_MS, so the field was frozen in place:
+// the gaps never moved and there was nothing to test the interval column with.
+// Each car now has its own pace, spread either side of the nominal lap, so the
+// order genuinely changes over a stint.
+const lapMsFor = (i) => LAP_MS * (1 + (i - CARS / 2) * 0.004);
+
+// Fuel used to be `90 - (progress % 1) * 40`, a sawtooth that jumped back up at
+// every lap line. The app reads a rise as the hose going in, so it correctly
+// refused to measure a burn rate and sat on "measuring…" forever. A real car
+// burns monotonically and only gains fuel in the pits, so this one does too.
+const TANK_L = 90;
+const BURN_PER_LAP_L = 3.4;
+
 // Each car makes one pit stop, staggered, so the pit-exit banner, the compound
 // and driver pickers, the BOX flag and the Pilotes stint log can all be seen
 // without a PS5 in the room. detectPitEdges needs the car stopped for
@@ -138,6 +151,8 @@ const envSecs = (name, fallbackMs) => {
 const PIT_FIRST_MS   = envSecs('PIT_FIRST', 120_000);
 const PIT_STAGGER_MS = envSecs('PIT_STAGGER', 20_000);
 const PIT_LENGTH_MS  = envSecs('PIT_LENGTH', 30_000);
+// Cars pit REPEATEDLY, not once: this is how long they run between stops.
+const PIT_EVERY_MS   = envSecs('PIT_EVERY', 240_000);
 
 // A rounded rectangle standing in for a circuit, in metres.
 function trackPoint(t) {
@@ -170,37 +185,87 @@ for (let i = 0; i < CARS; i++) {
   const s = dgram.createSocket('udp4');
   s.on('error', () => { /* heartbeat noise */ });
   await new Promise((res) => s.bind(0, ip, res));
-  socks.push({ ip, s, offset: i / CARS * SPREAD });  // strung out down the road
+  socks.push({
+    ip, s,
+    offset: i / CARS * SPREAD,   // strung out down the road
+    lapMs: lapMsFor(i),
+    raceMs: 0,                   // running time, frozen while stationary
+    fuel: TANK_L,
+    pitUntil: 0,                 // wall-clock ms this stop ends
+    nextStopAt: PIT_FIRST_MS + i * PIT_STAGGER_MS,
+    stops: 0,
+  });
 }
 
 console.log(`Feeding ${CARS} cars at ${HZ} Hz into the relay. Ctrl-C to stop.`);
-console.log(`First car boxes at ${(PIT_FIRST_MS / 1000).toFixed(0)}s, then every `
-  + `${(PIT_STAGGER_MS / 1000).toFixed(0)}s; each stop lasts ${(PIT_LENGTH_MS / 1000).toFixed(0)}s.`);
+console.log(`First car boxes at ${(PIT_FIRST_MS / 1000).toFixed(0)}s, the rest `
+  + `${(PIT_STAGGER_MS / 1000).toFixed(0)}s apart; each stop lasts `
+  + `${(PIT_LENGTH_MS / 1000).toFixed(0)}s and they run `
+  + `${(PIT_EVERY_MS / 1000).toFixed(0)}s between stops.`);
+console.log(`Pace spread ${(lapMsFor(0) / 1000).toFixed(1)}s to `
+  + `${(lapMsFor(CARS - 1) / 1000).toFixed(1)}s a lap, so the gaps actually move.`);
 const started = Date.now();
 let sent = 0;
 
-const timer = setInterval(() => {
-  const elapsed = Date.now() - started;
-  socks.forEach((car, i) => {
-    // The clock stops while the car is stationary in the pits, so its lap
-    // count does not advance and it rejoins genuinely behind.
-    const pitOpens = PIT_FIRST_MS + i * PIT_STAGGER_MS;
-    const inPit    = elapsed >= pitOpens && elapsed < pitOpens + PIT_LENGTH_MS;
-    const pitLost  = Math.min(Math.max(0, elapsed - pitOpens), PIT_LENGTH_MS);
+// Simulated per tick rather than derived from a closed-form expression. The
+// formula version had fuel wrap at the tank boundary with no stop in sight,
+// which the app quite correctly read as a refuel that never happened, and each
+// car pitted exactly once in its life. A car burns down, comes in when it is
+// nearly dry or when the schedule says so, refuels, and goes again.
+let lastTick = Date.now();
 
-    const progress = ((elapsed - pitLost) / LAP_MS) - car.offset;
+const timer = setInterval(() => {
+  const now = Date.now();
+  const dt = Math.max(0, now - lastTick);
+  lastTick = now;
+  const elapsed = now - started;
+
+  // Positions follow who is actually furthest round, so the board reorders as
+  // the quicker cars come through instead of being frozen at the grid order.
+  const order = [...socks].sort((a, b) => (b.progress ?? 0) - (a.progress ?? 0));
+
+  socks.forEach((car, i) => {
+    void i;
+    const inPit = now < car.pitUntil;
+
+    if (inPit) {
+      // Stationary: the clock stops, so the lap count does not advance and the
+      // car rejoins genuinely behind. Fuel goes in over the length of the stop.
+      const left = (car.pitUntil - now) / PIT_LENGTH_MS;
+      car.fuel = Math.min(TANK_L, TANK_L - (TANK_L - car.fuelAtStop) * left);
+    } else {
+      car.raceMs += dt;
+      car.fuel = Math.max(0, car.fuel - (dt / car.lapMs) * BURN_PER_LAP_L);
+
+      // Come in when the schedule says so, or when there is not a lap left.
+      const dry = car.fuel <= BURN_PER_LAP_L * 1.2;
+      if (elapsed >= car.nextStopAt || dry) {
+        car.fuelAtStop = car.fuel;
+        car.pitUntil = now + PIT_LENGTH_MS;
+        car.nextStopAt = elapsed + PIT_EVERY_MS + PIT_LENGTH_MS;
+        car.stops += 1;
+      }
+    }
+
+    const progress = (car.raceMs / car.lapMs) - car.offset;
+    car.progress = progress;
     const lap = Math.max(1, Math.floor(progress) + 1);
     const p = trackPoint(progress);
+    const lapMs = car.lapMs;
+    const fuel = car.fuel;
+
+    // A timed endurance race has no lap total, and GT7 reports none. Sending a
+    // fake 60 put a meaningless "12/60" on the dashboard.
     car.s.send(buildPacket({
       posX: p.x, posZ: p.z,
-      speedKmh: inPit ? 0 : 150 + ((i * 7) % 40),
+      speedKmh: inPit ? 0 : Math.round(LAP_MS / lapMs * 170),
       currentLap: lap,
-      totalLaps: 60,
-      fuel: Math.max(5, 90 - (progress % 1) * 40),
-      racePos: i + 1,
+      totalLaps: 0,
+      fuel,
+      racePos: order.indexOf(car) + 1,
       totalCars: CARS,
-      lastLapMs: lap > 1 ? LAP_MS + i * 400 : 0,
-      bestLapMs: lap > 1 ? LAP_MS + i * 250 : 0,
+      lastLapMs: lap > 1 ? Math.round(lapMs) : 0,
+      bestLapMs: lap > 1 ? Math.round(lapMs) - 400 : 0,
     }), 33740, '127.0.0.1');
     sent += 1;
   });

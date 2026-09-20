@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { DEFAULT_LANG, t } from '../i18n/strings';
-import { rivalSummary } from '../logic/rivalIntel';
+import { rivalSummary, burnProgress } from '../logic/rivalIntel';
 import { currentSetOutlook } from '../logic/tyreHistory';
 import { PIT_NOW, WAIT } from '../logic/pitNow';
 
@@ -13,6 +13,13 @@ function formatMs(ms) {
   const m = Math.floor(ms / 60000);
   const s = Math.floor((ms % 60000) / 1000);
   return `${m}:${String(s).padStart(2, '0')}.${String(ms % 1000).padStart(3, '0')}`;
+}
+
+/** Seconds as something read at a glance: "47s", "2m10". */
+function formatGain(secs) {
+  const s = Math.round(Math.abs(Number(secs) || 0));
+  if (s < 60) return `${s}s`;
+  return `${Math.floor(s / 60)}m${String(s % 60).padStart(2, '0')}`;
 }
 
 function gearLabel(g) {
@@ -561,6 +568,12 @@ export default function LiveDashboard({
   // What this car's own fuel trace says about when it has to come in. Works
   // for anyone on the LAN — it is their telemetry, not our setup.
   const intel = rivalSummary(fuelRecord);
+  const measuring = intel ? null : burnProgress(fuelRecord);
+  // Laps until this car has to come in, which is the number an engineer acts
+  // on — "box on lap 74" needs arithmetic in your head at 3am.
+  const boxInLaps = intel && intel.confident && intel.pitLap != null && data.currentLap != null
+    ? Math.max(0, intel.pitLap - data.currentLap)
+    : null;
   const setOutlook = currentSetOutlook(stintEntry, compound, data.currentLap);
   const brakePct    = Math.round(((data.brake    ?? 0) / 255) * 100);
 
@@ -576,6 +589,8 @@ export default function LiveDashboard({
                 <span className="ld-meta-k">{t('ld_lap', lang)}</span>
                 <span className="ld-meta-v">
                   {data.currentLap}
+                  {/* A timed endurance race has no lap total and GT7 reports
+                      none, so there is usually nothing to put here. */}
                   {data.totalLaps > 0 && <span className="ld-dim">/{data.totalLaps}</span>}
                 </span>
               </span>
@@ -679,9 +694,11 @@ export default function LiveDashboard({
                     {t('ld_burn', lang)} {intel.burnPerLap.toFixed(2)} L
                   </span>
                 </>
-              ) : (
-                <span className="ld-fi-wait">{t('ld_estimating', lang)}</span>
-              )}
+              ) : measuring ? (
+                <span className="ld-fi-wait">
+                  {t('ld_estimating', lang, { n: measuring.have, need: measuring.need })}
+                </span>
+              ) : null}
             </div>
 
             {/* What the incident actually cost: the one-off, the ongoing rate,
@@ -745,9 +762,9 @@ export default function LiveDashboard({
                             : t('inc_wait_flag', lang)))}
                       {!incident.compare.tied && (
                         <span className="ld-inc-margin">
-                          {incident.compare.lapsDelta !== 0
-                            ? t('inc_ahead_laps', lang, { n: Math.abs(incident.compare.lapsDelta) })
-                            : t('inc_ahead_secs', lang, { n: Math.abs(incident.compare.secsDelta).toFixed(0) })}
+                          {t('inc_ahead_time', lang, {
+                            n: formatGain(incident.compare.advantageSecs),
+                          })}
                         </span>
                       )}
                     </div>
@@ -824,6 +841,17 @@ export default function LiveDashboard({
                 <span className="ld-time-lbl">{t('ld_best_lap', lang)}</span>
                 <span className="ld-time-val ld-mono ld-gold">{formatMs(data.bestLapMs)}</span>
               </div>
+              {/* Next to the lap times, because that is where the eye already
+                  is when deciding whether this car is about to come in. */}
+              {boxInLaps != null && (
+                <div className="ld-time-row ld-box-row">
+                  <span className="ld-time-lbl">{t('ld_box_in', lang)}</span>
+                  <span className="ld-time-val ld-mono ld-box-val">
+                    {t('ld_box_in_laps', lang, { n: boxInLaps })}
+                    <span className="ld-dim"> {t('ld_box_on', lang, { lap: intel.pitLap })}</span>
+                  </span>
+                </div>
+              )}
             </div>
 
             {(data.tireTemp || compound || drivers?.length) && (

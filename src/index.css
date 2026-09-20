@@ -254,10 +254,12 @@ body {
   align-items: start;
 }
 
-.app-main--telemetry {
+/* Every tab but Strategy is race data, and the setup rail has no business
+   taking a third of the width there. */
+.app-main--full {
   grid-template-columns: 1fr;
 }
-.app-main--telemetry .sidebar { display: none; }
+.app-main--full .sidebar { display: none; }
 
 /* ── Sidebar ── */
 .sidebar {
@@ -2527,6 +2529,11 @@ input[type="range"]::-moz-range-thumb {
   color: var(--text-muted);
 }
 .lb-gap-laps { color: var(--text-muted); }
+
+/* Laps until a car has to box, next to the lap times where the eye already is. */
+.ld-box-row { border-top: 1px solid var(--rule); margin-top: 4px; padding-top: 5px; }
+.ld-box-val { color: var(--warning); }
+.lb-box-on { opacity: 0.55; }
 
 /* The lap a car must box on, read off its own fuel trace. Amber because it is
    a prediction, not a measurement, and should not read like a lap time. */

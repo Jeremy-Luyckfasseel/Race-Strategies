@@ -141,9 +141,25 @@ export function pitNowScenarios({
  * "it makes no difference" is a real and useful answer on the pit wall, and
  * inventing a winner from a rounding difference is not.
  */
+/**
+ * Both plans run the same clock, so a one-lap advantage is worth about one lap
+ * time. "+1 lap" over a 250-lap race is a true but unreadable way to say "two
+ * minutes better" — and at a glance 247 vs 246 looks like nothing at all.
+ */
+function advantageSecs(lapsDelta, secsDelta, refLapSecs) {
+  const lapPart = Math.abs(lapsDelta) * (refLapSecs > 0 ? refLapSecs : 0);
+  return lapPart + Math.abs(secsDelta || 0);
+}
+
 export function comparePitNow(pitNowResult, waitResult) {
   const lapsOf = (r) => r?.best?.strategy?.totalLaps ?? null;
   const timeOf = (r) => r?.best?.strategy?.estTotalRaceTimeSecs ?? null;
+  // A representative lap, for turning laps into the seconds an engineer reads.
+  const refLap = (r) => {
+    const s = r?.best?.strategy;
+    return s && s.totalLaps > 0 ? s.estTotalRaceTimeSecs / s.totalLaps : 0;
+  };
+  const refLapSecs = refLap(pitNowResult) || refLap(waitResult) || 0;
 
   const pitLaps = lapsOf(pitNowResult);
   const waitLaps = lapsOf(waitResult);
@@ -155,6 +171,7 @@ export function comparePitNow(pitNowResult, waitResult) {
     return {
       best: lapsDelta > 0 ? PIT_NOW : WAIT,
       pitLaps, waitLaps, lapsDelta, secsDelta: null, tied: false,
+      advantageSecs: advantageSecs(lapsDelta, 0, refLapSecs),
     };
   }
 
@@ -164,10 +181,13 @@ export function comparePitNow(pitNowResult, waitResult) {
 
   // Under a second over hours of racing is noise, not a decision.
   if (secsDelta == null || Math.abs(secsDelta) < 1) {
-    return { best: null, pitLaps, waitLaps, lapsDelta: 0, secsDelta, tied: true };
+    return {
+      best: null, pitLaps, waitLaps, lapsDelta: 0, secsDelta, tied: true, advantageSecs: 0,
+    };
   }
   return {
     best: secsDelta > 0 ? PIT_NOW : WAIT,
     pitLaps, waitLaps, lapsDelta: 0, secsDelta, tied: false,
+    advantageSecs: advantageSecs(0, secsDelta, refLapSecs),
   };
 }

@@ -151,6 +151,11 @@ export default function TelemetryLeaderboard({
         // about their car. Held back until a few clean laps have been seen.
         const intel      = rivalSummary(fuelUse?.get(ip));
         const boxLap     = intel && intel.confident ? intel.pitLap : null;
+        // Laps until they have to come in. The lap number alone makes you do
+        // the subtraction; this is the number you actually act on.
+        const boxIn      = boxLap != null && d.currentLap != null
+          ? Math.max(0, boxLap - d.currentLap)
+          : null;
         // A step down in pace that holds, with no stop to explain it. Free
         // intel: they will have to come in, and they are takeable now.
         // Under a safety car every car loses the same three seconds at the
@@ -245,8 +250,10 @@ export default function TelemetryLeaderboard({
                     <span className="lb-meta-fuel">
                       {d.fuelLiters != null ? `${d.fuelLiters.toFixed(0)}L` : '—'}
                     </span>
-                    {boxLap != null && (
-                      <span className="lb-meta-box">{t('lb_box_lap', lang, { lap: boxLap })}</span>
+                    {boxIn != null && (
+                      <span className="lb-meta-box" title={t('lb_box_lap', lang, { lap: boxLap })}>
+                        {t('lb_box_in', lang, { n: boxIn })}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -303,7 +310,8 @@ export default function TelemetryLeaderboard({
                       burn: intel.burnPerLap.toFixed(2),
                     })}
                   >
-                    {t('lb_box_lap', lang, { lap: boxLap })}
+                    {t('lb_box_in', lang, { n: boxIn })}
+                    <span className="lb-box-on"> {t('lb_box_lap', lang, { lap: boxLap })}</span>
                   </span>
                 )}
               </div>

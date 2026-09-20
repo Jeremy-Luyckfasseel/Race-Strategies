@@ -323,7 +323,7 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
                 <th title={t("ip_t0_title", lang)}>t(0)</th>
                 <th title={t("ip_thalf_title", lang)}>t(½)</th>
                 <th title={t("ip_t1_title", lang)}>t(1)</th>
-                <th title={t("ip_mandatory_title", lang)}>★</th>
+                <th title={t("ip_mandatory_title", lang)}>{t("ip_mandatory", lang)}</th>
               </tr>
             </thead>
             <tbody>
@@ -515,7 +515,7 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
                   >×</button>
                 )}
               </div>
-              {activeCompounds.length > 0 && (
+              {inputs.compounds.length > 0 && (
                 <details className="driver-times-details">
                   <summary className="driver-times-summary">
                     {t("ip_lap_times", lang)} {Object.keys(driver.compounds || {}).length > 0 ? t("ip_custom", lang) : t("ip_uses_global", lang)}
@@ -531,7 +531,11 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
                         </tr>
                       </thead>
                       <tbody>
-                        {activeCompounds.map((comp) => {
+                        {/* Every compound, not just the active ones. Filtering by
+                            tireLife > 0 meant you could not enter a driver's wet
+                            times until you had first given the wet tyre a life —
+                            and in the rain that is exactly the wrong order. */}
+                        {inputs.compounds.map((comp) => {
                           const dc = driver.compounds?.[comp.id] || {};
                           const placeholder = (key) => {
                             const m = { startLapTime: comp.startLapTime, halfLapTime: comp.halfLapTime, endLapTime: comp.endLapTime };

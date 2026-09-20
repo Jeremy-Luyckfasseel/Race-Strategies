@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { DEFAULT_LANG, t } from '../i18n/strings';
 
 export default function TelemetryControls({
@@ -8,7 +8,18 @@ export default function TelemetryControls({
   teamLabels, onTeamLabelChange,
   lang = DEFAULT_LANG,
 }) {
+  // Open until the relay is up and a car is streaming, then out of the way:
+  // this is needed once, before the race, and it was costing a scroll every
+  // time anyone wanted to see the whole track map.
   const [open, setOpen] = useState(true);
+  const settled = telem.connected && telem.teams?.size > 0;
+  const collapsedOnce = useRef(false);
+  useEffect(() => {
+    if (settled && !collapsedOnce.current) {
+      collapsedOnce.current = true;
+      setOpen(false);
+    }
+  }, [settled]);
   const addIP    = () => onSavePS5IPs([...ps5IPs, '']);
   const removeIP = (i) => onSavePS5IPs(ps5IPs.filter((_, j) => j !== i));
   const updateIP = (i, v) => onSavePS5IPs(ps5IPs.map((ip, j) => j === i ? v : ip));
