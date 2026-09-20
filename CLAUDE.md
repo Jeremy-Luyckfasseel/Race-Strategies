@@ -112,7 +112,7 @@ The `no-unused-vars` rule ignores variables whose names start with an uppercase 
 
 | File | Purpose |
 |------|---------|
-| `src/logic/strategy.js` | Pure-JS strategy engine — also takes `pacePenaltySecs`, a flat cost added to every lap after the fuel-weight correction (it is a property of the car's condition, not of fuel load), so a damaged car can be planned for honestly (~700 lines); exports `findBestStrategies`, `TIRE_COMPOUNDS`, `CAR_PRESETS`, `formatLapTime`, `formatRaceTime`, `parseLapTime`, `isValidLapTimeStr`, `calcPitStopTime` |
+| `src/logic/strategy.js` | Pure-JS strategy engine — also takes `pacePenaltySecs` + `pacePenaltyLaps`: a flat cost on every lap for a bounded number of laps. **Bounded because damage does not last the race — the car is repaired at the next stop.** Applied per lap in the simulation rather than folded into the compound constants, which could not express a penalty that ends; it deliberately does not move `avgLapTimeSecs`, a planning estimate, since over the handful of laps damage usually lasts that beats pretending the whole race is slower (~700 lines); exports `findBestStrategies`, `TIRE_COMPOUNDS`, `CAR_PRESETS`, `formatLapTime`, `formatRaceTime`, `parseLapTime`, `isValidLapTimeStr`, `calcPitStopTime` |
 | `src/logic/tyreHistory.js` | Reads the stint log back as per-compound history: sets run, laps each, best/avg, and measured fall-off. `currentSetOutlook` says how long previous sets of the compound you are on lasted and how many laps that leaves. The **median** of previous sets, so one stint cut short by a spin does not become the expectation, and completed stints only — the one being driven would drag it down. Silent on a first set |
 | `src/logic/conditions.js` | Dry/wet as a **filter over which compounds the engine may pick**, not a second simulation — nothing about the car changes because it started raining. Falls back to whatever is active rather than refusing to plan when no wet tyre is set up. Also `crossoverSecsPerLap`: a stop costs X and you have N laps to win it back, so the per-lap loss that justifies changing tyres is X/N |
 | `src/logic/paceTrack.js` | A ten-lap rolling window of completed lap times per car — the stint log keeps aggregates on purpose, which is useless for "what was this car doing just before X". Powers incident measurement and `detectPaceDrop`, which finds a **step** in a rival's pace rather than a slope (tyres going off is a slope) and requires the step to be **sustained across every one of the last three laps**, so a pit stop's slow in-lap and out-lap followed by a normal one does not read as damage |
@@ -166,7 +166,7 @@ The `no-unused-vars` rule ignores variables whose names start with an uppercase 
 
 ## Default inputs (App.jsx)
 
-- Race: 8 hours, 1 mandatory stop
+- Race: 8 hours, **0 mandatory stops** — endurance racing has no stop count in the rules; fuel and tyres decide when the car comes in. The input remains for series that do impose one
 - Fuel: 100L tank, 28 laps/tank, fuel map 1.0×, weight penalty 0.03 s/L
 - Pit: 25s base, 27s tire change, 4.0 L/s fuel rate
 - Tire compounds: H, M, S, IM, W (all active by default)

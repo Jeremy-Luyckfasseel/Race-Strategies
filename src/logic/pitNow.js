@@ -25,6 +25,25 @@
  * Pure — the engine is passed in, so this is testable without running it.
  */
 
+/**
+ * What an unscheduled stop actually costs, when you take the opportunity.
+ *
+ * Coming in for damage does not mean coming in for damage alone — the tyres go
+ * on and the tank goes up while the car is already stationary, because it
+ * would be daft not to. So the cost is the full service, not just the pit lane
+ * and a set of tyres, and the fuel term depends on how empty the car is right
+ * now: a stop on lap 3 costs far more in fuel time than one on lap 25.
+ */
+export function fullServiceLoss(inputs, currentFuel) {
+  const base = Number(inputs?.pitBaseSecs) || 0;
+  const tyres = Number(inputs?.tireChangeSecs) || 0;
+  const tank = Number(inputs?.tankSize) || 0;
+  const rate = Number(inputs?.fuelRateLitersPerSec) || 0;
+  const have = Math.max(0, Number(currentFuel) || 0);
+  const fuelSecs = rate > 0 ? Math.max(0, tank - have) / rate : 0;
+  return base + tyres + fuelSecs;
+}
+
 export const PIT_NOW = 'pit_now';
 export const WAIT = 'wait';
 

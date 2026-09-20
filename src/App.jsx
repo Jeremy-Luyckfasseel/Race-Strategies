@@ -16,7 +16,7 @@ import { conditionsUnavailable, crossoverSecsPerLap, tyreOnlyPitLoss } from "./l
 import { isSafetyCar, safetyCarDeployed, fieldSlowdown, pitLossUnderSafetyCar } from "./logic/carRoles";
 import { paceBefore, paceAfter, incidentLapCostMs } from "./logic/paceTrack";
 import { measuredLossSecs, effectiveLossSecs } from "./logic/incident";
-import { pitNowScenarios, comparePitNow } from "./logic/pitNow";
+import { pitNowScenarios, comparePitNow, fullServiceLoss } from "./logic/pitNow";
 import { findBestStrategies } from "./logic/strategy";
 import LiveDashboard, { TrackMap } from "./components/LiveDashboard";
 import TelemetryLeaderboard from "./components/TelemetryLeaderboard";
@@ -53,7 +53,10 @@ const DEFAULT_INPUTS = {
   fuelWeightPenaltyPerLiter: 0.03,
   drivers: [{ id: "d1", name: "Driver 1", compounds: {} }], // localised by defaultInputs()
   minDriverTimeSecs: 7200,
-  mandatoryStops: 1,
+  // Endurance racing has no mandatory stop count — fuel and tyres decide when
+  // the car comes in, not a rule. Left at zero so the plan is driven by the
+  // car rather than by a constraint that is not there.
+  mandatoryStops: 0,
   conditions: "dry",
   midRaceMode: false,
   currentLap: "",
@@ -289,10 +292,19 @@ export default function App() {
     [raceStartedAt, inputs.raceDurationHours, clockNow],
   );
   const remainingMins = clock ? clock.remainingMins : null;
-  const engineInputs = useMemo(
-    () => applyRaceClock(inputs, remainingMins != null ? { remainingMins } : null),
-    [inputs, remainingMins],
-  );
+  const myLap = strategyIp ? (telem.teams.get(strategyIp)?.currentLap ?? null) : null;
+
+  const engineInputs = useMemo(() => {
+    const withClock = applyRaceClock(inputs, remainingMins != null ? { remainingMins } : null);
+    // Damage does not last the race: the car is repaired at the next stop. The
+    // penalty is therefore stored as the lap it stops applying ON, and turned
+    // into a countdown here, so it shrinks as the car gets closer and expires
+    // by itself at the stop rather than quietly slowing the whole plan.
+    const untilLap = Number(inputs.pacePenaltyUntilLap);
+    if (!(Number(inputs.pacePenaltySecs) > 0)) return withClock;
+    if (!Number.isFinite(untilLap) || myLap == null) return withClock;
+    return { ...withClock, pacePenaltyLaps: Math.max(0, untilLap - myLap) };
+  }, [inputs, remainingMins, myLap]);
 
   const { result, calculating, calculate } = useStrategy(engineInputs);
 
@@ -632,7 +644,9 @@ export default function App() {
         lossPerLapSecs: lossSecs,
         lapsToNextStop: nextStop ? nextStop.pitLap - lap : null,
         lapsRemaining: (strat?.totalLaps ?? 0) - lap,
-        pitLossSecs: tyreOnlyPitLoss(inputs),
+        // Coming in for damage means tyres and fuel as well — the car is
+        // already stationary, so it would be daft not to take them.
+        pitLossSecs: fullServiceLoss(inputs, live.fuelLiters),
         repairSecs: REPAIR_SECS,
       });
       if (sc) {
@@ -652,9 +666,18 @@ export default function App() {
     };
   }, [incidentMark, strategyIp, telem.pace, telem.teams, nowBest, inputs, engineInputs, teamCompounds, openTyreLaps]);
 
-  /** Plan the rest of the race on the damaged pace, or stop doing so. */
-  const applyPacePenalty = useCallback((secs) => {
-    setInputs((prev) => ({ ...prev, pacePenaltySecs: Number(secs) || 0 }));
+  /**
+   * Plan on the damaged pace — until the next stop, where it gets repaired.
+   * Storing the lap it ends on rather than a lap count keeps it correct as the
+   * race goes on: the window shrinks on its own and expires at the stop.
+   */
+  const applyPacePenalty = useCallback((secs, untilLap) => {
+    const on = Number(secs) > 0;
+    setInputs((prev) => ({
+      ...prev,
+      pacePenaltySecs: on ? Number(secs) : 0,
+      pacePenaltyUntilLap: on ? (untilLap ?? null) : null,
+    }));
     setSelectedIndex(0);
   }, []);
 

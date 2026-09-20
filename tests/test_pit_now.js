@@ -10,7 +10,7 @@
  * Run with: node tests/test_pit_now.js
  */
 
-import { pitNowScenarios, comparePitNow, PIT_NOW, WAIT } from '../src/logic/pitNow.js';
+import { pitNowScenarios, comparePitNow, fullServiceLoss, PIT_NOW, WAIT } from '../src/logic/pitNow.js';
 import { findBestStrategies } from '../src/logic/strategy.js';
 
 let passed = 0;
@@ -154,6 +154,50 @@ section('the real engine: damage bad enough to be worth the stop');
   );
   assert('twelve seconds a lap is worth coming in for',
     cmp.best === PIT_NOW || cmp.tied, JSON.stringify(cmp));
+}
+
+section('a stop for damage is a full service, not a tyre change');
+{
+  // Coming in with 30 of 100 litres: 70 litres at 4 L/s is 17.5 s on top of
+  // the pit lane and the tyres. Charging only base + tyres would make coming
+  // in look cheaper than it is, and on an early lap it is much cheaper.
+  assert('pit lane, tyres and the fuel it takes to fill it',
+    Math.abs(fullServiceLoss(INPUTS, 30) - (25 + 27 + 70 / 4)) < 1e-9,
+    String(fullServiceLoss(INPUTS, 30)));
+  assert('a nearly-full car pays almost no fuel time',
+    Math.abs(fullServiceLoss(INPUTS, 98) - (25 + 27 + 0.5)) < 1e-9,
+    String(fullServiceLoss(INPUTS, 98)));
+  assert('an empty one pays the lot',
+    Math.abs(fullServiceLoss(INPUTS, 0) - (25 + 27 + 25)) < 1e-9,
+    String(fullServiceLoss(INPUTS, 0)));
+  assert('and a stop early in a stint costs more than one late in it',
+    fullServiceLoss(INPUTS, 10) > fullServiceLoss(INPUTS, 80));
+  assert('no inputs is zero rather than NaN', fullServiceLoss(null, 0) === 0);
+}
+
+section('damage is carried until the next stop, not to the flag');
+{
+  const base = { ...INPUTS, mandatoryStops: 0 };
+  const plan = (o) => findBestStrategies({ ...base, ...o })[0].strategy;
+
+  const healthy = plan({});
+  const forever = plan({ pacePenaltySecs: 8 });
+  const untilStop = plan({ pacePenaltySecs: 8, pacePenaltyLaps: 6 });
+
+  assert('unrepaired damage costs the whole race',
+    forever.estTotalRaceTimeSecs !== healthy.estTotalRaceTimeSecs
+      || forever.totalLaps < healthy.totalLaps,
+    `${healthy.totalLaps} vs ${forever.totalLaps}`);
+  assert('six damaged laps cost far less than a damaged race',
+    untilStop.totalLaps >= forever.totalLaps, `${untilStop.totalLaps} vs ${forever.totalLaps}`);
+  assert('and a window of zero laps costs nothing at all',
+    plan({ pacePenaltySecs: 8, pacePenaltyLaps: 0 }).totalLaps === healthy.totalLaps);
+
+  // The window must actually bite: the same damage over more laps costs more.
+  const six = plan({ pacePenaltySecs: 8, pacePenaltyLaps: 6 }).estTotalRaceTimeSecs;
+  const twenty = plan({ pacePenaltySecs: 8, pacePenaltyLaps: 20 }).estTotalRaceTimeSecs;
+  assert('twenty damaged laps is worse than six',
+    twenty !== six, `${six} vs ${twenty}`);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

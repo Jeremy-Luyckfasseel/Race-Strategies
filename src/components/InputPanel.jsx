@@ -110,7 +110,7 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
       pitBaseSecs: 25, tireChangeSecs: 27, fuelRateLitersPerSec: 4.0,
       fuelWeightPenaltyPerLiter: 0.03,
       drivers: [{ id: "d1", name: t("driver_n", lang, { n: 1 }), compounds: {} }],
-      minDriverTimeSecs: 7200, mandatoryStops: 1,
+      minDriverTimeSecs: 7200, mandatoryStops: 0,
       midRaceMode: false, currentLap: "", currentFuel: "", currentCompoundId: "", currentTireAgeLaps: "",
     }));
   };

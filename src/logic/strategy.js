@@ -357,6 +357,10 @@ function simulateStrategy(p) {
     initialCompound,
     currentTireAgeLaps,
     fuelWeightPenaltyPerLiter,
+    // Seconds on every lap from the car's condition rather than its fuel or
+    // tyres, for as many laps as that condition lasts. See findBestStrategies.
+    pacePenalty = 0,
+    pacePenaltyLapCount = Infinity,
     processedDrivers,
     minDriverTimeSecs,
     cyclic = true,
@@ -366,6 +370,9 @@ function simulateStrategy(p) {
 
   const stints = [];
   let currentLap = startLapOffset || 1;
+  // Where the simulated remainder begins, so a bounded pace penalty knows how
+  // many laps it has left to run.
+  const simStartLap = currentLap;
   let elapsedSecs = 0;
   let activeComp = initialCompound || compoundPlan[0];
   let tireLapsLeft = Math.max(1, activeComp.tireLife - (currentTireAgeLaps || 0));
@@ -474,7 +481,9 @@ function simulateStrategy(p) {
       // As fuel burns the car gets lighter → faster. Correction is negative (speeds up lap).
       let fuelAtStartOfLap = Math.max(0, currentFuelLiters - lapsInStint * effectiveLitersPerLap);
       let fuelWeightCorrection = (fuelAtStartOfLap - tankSize) * fuelWeightPenaltyPerLiter;
-      let dynamicLapTime = Math.max(1, baseLapTime + fuelWeightCorrection);
+      // Damage is carried for a known number of laps and then repaired.
+      const damaged = pacePenalty > 0 && (lap - simStartLap) < pacePenaltyLapCount;
+      let dynamicLapTime = Math.max(1, baseLapTime + fuelWeightCorrection + (damaged ? pacePenalty : 0));
       stintDrivingSecs += dynamicLapTime;
       lapsInStint++;
       if (elapsedSecs + stintDrivingSecs >= targetRaceTimeSecs) {
@@ -709,12 +718,29 @@ export function findBestStrategies(params) {
     raceDurationHours, tankSize, lapsPerFullTank, fuelMap,
     compounds, pitBaseSecs, tireChangeSecs, fuelRateLitersPerSec,
     mandatoryStops, midRaceMode, currentLap, currentFuel,
-    fuelWeightPenaltyPerLiter, drivers, minDriverTimeSecs, pacePenaltySecs = 0,
+    fuelWeightPenaltyPerLiter, drivers, minDriverTimeSecs,
+    pacePenaltySecs = 0, pacePenaltyLaps = null,
   } = params;
   const penalty = Number(fuelWeightPenaltyPerLiter) || 0;
   // Seconds added to every lap regardless of fuel or tyre: a damaged car, or
   // one being driven to a delta. Zero for a healthy car, which is the default.
+  // Seconds added to every lap regardless of fuel or tyre: a damaged car, or
+  // one being driven to a delta.
+  //
+  // Bounded, because damage does not last the race: the car is repaired at the
+  // next stop, and after that it is healthy again. `pacePenaltyLaps` is how
+  // many laps from here the penalty applies for — normally the laps until that
+  // stop. Null means it is never repaired and it runs to the flag.
+  //
+  // Applied per lap rather than folded into the compound times, which are
+  // constants for the whole race and could not express a penalty that ends.
+  // It therefore does NOT move `avgLapTimeSecs`, which is a planning estimate
+  // used for stint sizing; over the handful of laps damage usually lasts, that
+  // is a better approximation than pretending the whole race is slower.
   const pacePenalty = Math.max(0, Number(pacePenaltySecs) || 0);
+  const pacePenaltyLapCount = pacePenaltyLaps == null || !Number.isFinite(Number(pacePenaltyLaps))
+    ? Infinity
+    : Math.max(0, Math.floor(Number(pacePenaltyLaps)));
 
   if (!compounds || compounds.length === 0) return [];
   const targetRaceTimeSecs = Number(raceDurationHours) * 3600;
@@ -749,12 +775,9 @@ export function findBestStrategies(params) {
       const fuelAtMid = Math.max(0, tankSize - lapsToMid * effectiveLitersPerLap);
       const fuelAtEnd = Math.max(0, tankSize - lapsToEnd * effectiveLitersPerLap);
 
-      // A car that is damaged, or being nursed, is simply slower every lap.
-      // Added after the fuel-weight correction so it is not itself corrected:
-      // it is a flat cost of the car's condition, not a function of fuel load.
-      const startFT = startSecs + pacePenalty;
-      const halfFT  = halfSecs  + (tankSize - fuelAtMid) * penalty + pacePenalty;
-      const endFT   = endSecs   + (tankSize - fuelAtEnd) * penalty + pacePenalty;
+      const startFT = startSecs;
+      const halfFT  = halfSecs  + (tankSize - fuelAtMid) * penalty;
+      const endFT   = endSecs   + (tankSize - fuelAtEnd) * penalty;
 
       return {
         id: c.id,
@@ -855,6 +878,8 @@ export function findBestStrategies(params) {
       initialCompound,
       currentTireAgeLaps,
       fuelWeightPenaltyPerLiter: penalty,
+      pacePenalty,
+      pacePenaltyLapCount,
       processedDrivers,
       minDriverTimeSecs: minDriveTimeSecs,
       cyclic,

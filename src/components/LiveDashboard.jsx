@@ -759,7 +759,7 @@ export default function LiveDashboard({
                 {incident.lossSecs != null && onApplyPace && (
                   <button
                     className={`ld-inc-apply${incident.applied ? ' is-applied' : ''}`}
-                    onClick={() => onApplyPace(incident.applied ? 0 : incident.lossSecs)}
+                    onClick={() => onApplyPace(incident.applied ? 0 : incident.lossSecs, incident.nextStopLap)}
                   >
                     {incident.applied ? t('inc_applied', lang) : t('inc_apply', lang)}
                   </button>
