@@ -57,8 +57,14 @@ export function raceProgress(startedAt, durationHours, now) {
  * identity and not recompute.
  */
 export function applyRaceClock(inputs, progress) {
-  if (!progress || progress.remainingMins <= 0) return inputs;
-  return { ...inputs, raceDurationHours: progress.remainingMins / 60 };
+  if (!progress) return inputs;
+  // Past the flag the answer is not "plan a fresh eight-hour race", which is
+  // what returning the untouched inputs did — the Strategy tab produced a
+  // brand-new multi-stop plan while the clock beside it read RACE OVER. The
+  // engine refuses a zero-length race, so the floor is a minute: a plan for
+  // what is left of a race that is over, which is the honest answer.
+  const mins = Math.max(1, progress.remainingMins);
+  return { ...inputs, raceDurationHours: mins / 60 };
 }
 
 /** `h:mm:ss`, for a clock that is read at a glance rather than parsed. */

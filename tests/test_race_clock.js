@@ -87,9 +87,19 @@ section('what the engine actually runs on');
   assert('and changes nothing else', eff.tankSize === 100);
   assert('without mutating the original', inputs.raceDurationHours === 8);
 
+  // This used to assert that past the flag applyRaceClock returned the inputs
+  // untouched. That WAS the bug: it handed the engine the full configured
+  // length back, so the Strategy tab drew a brand-new eight-hour multi-stop
+  // plan while the clock beside it read RACE OVER — and on any reload with a
+  // finished race still in localStorage. The engine refuses a zero-length
+  // race, so the floor is a minute.
   const over = raceProgress(T0, 1, T0 + 2 * H);
-  assert('past the flag it stops overriding rather than asking for a zero-hour race',
-    applyRaceClock(inputs, over) === inputs);
+  const past = applyRaceClock(inputs, over);
+  assert('past the flag it does not revert to the configured race length',
+    past.raceDurationHours !== 8, String(past.raceDurationHours));
+  assert('it floors at a minute rather than asking for a zero-hour race',
+    Math.abs(past.raceDurationHours - 1 / 60) < 1e-9, String(past.raceDurationHours));
+  assert('and still changes nothing else', past.tankSize === 100);
 }
 
 section('formatClock');

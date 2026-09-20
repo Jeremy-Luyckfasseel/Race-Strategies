@@ -82,11 +82,26 @@ export function pitNowScenarios({
 
   const hoursLostTo = (secs) => Math.max(0, remainingHours - secs / 3600);
 
+  // A missing fuel reading is not an empty tank. A poisoned wait simulation
+  // produced a confident "BOX NOW by 59 laps" where the truth was a dead heat.
+  //
+  // `Number(null)` is 0, not NaN, so null is rejected BEFORE coercing — the
+  // same trap that had a missing reading read as a dry tank in rivalIntel and
+  // "never repaired" read as "repaired immediately" in the penalty window.
+  if (currentFuel == null) return null;
+  const fuelNow = Number(currentFuel);
+  if (!Number.isFinite(fuelNow) || fuelNow < 0) return null;
+
   const mid = {
     ...inputs,
     midRaceMode: true,
     currentLap: Number(currentLap) || 0,
     currentCompoundId: compoundId || null,
+    // Both futures are costed by taking time off the clock, so neither may
+    // ALSO carry a per-lap penalty — inheriting one from the live inputs
+    // charged the damage twice and simulated the just-repaired car as broken.
+    pacePenaltySecs: 0,
+    pacePenaltyLaps: null,
   };
 
   // Come in. The car is repaired and on fresh tyres with a full tank, and the
@@ -109,7 +124,7 @@ export function pitNowScenarios({
   const wait = {
     ...mid,
     raceDurationHours: hoursLostTo(loss * bleedLaps + (repairedLater ? repair : 0)),
-    currentFuel: Number(currentFuel),
+    currentFuel: fuelNow,
     currentTireAgeLaps: Math.max(0, Number(tyreAgeLaps) || 0),
   };
 
@@ -132,7 +147,8 @@ export function comparePitNow(pitNowResult, waitResult) {
 
   const pitLaps = lapsOf(pitNowResult);
   const waitLaps = lapsOf(waitResult);
-  if (pitLaps == null || waitLaps == null) return null;
+  // Non-finite laps mean a poisoned simulation, not a close call.
+  if (!Number.isFinite(pitLaps) || !Number.isFinite(waitLaps)) return null;
 
   const lapsDelta = pitLaps - waitLaps;
   if (lapsDelta !== 0) {

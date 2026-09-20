@@ -28,6 +28,8 @@ function section(name) {
 
 const SC = '10.0.0.9';
 const rows = (...ips) => ips.map((ip) => ({ ip, d: {} }));
+/** Rows carrying GT7's own race position, which is what the board must show. */
+const ranked = (...pairs) => pairs.map(([ip, racePos]) => ({ ip, d: { racePos } }));
 
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -57,8 +59,39 @@ section('the standings count competitors only');
   assert('and kept aside rather than dropped', safety.length === 1 && safety[0].ip === SC);
   assert('the order of the rest is preserved',
     competitors.map((r) => r.ip).join(',') === 'a,b,c');
-  assert('and they are renumbered without a hole in the middle',
+  assert('and with no position reported, order of arrival is all there is',
     competitors.map((r) => r.position).join(',') === '1,2,3',
+    competitors.map((r) => r.position).join(','));
+}
+
+section('GT7 knows the field; we only know the cars on our LAN');
+{
+  // Four of a twelve-car lobby are on the relay, running P3, P6, P9 and P11.
+  const { competitors } = splitByRole(ranked(['a', 3], ['b', 6], ['c', 9], ['d', 11]), {});
+  assert('their real positions are shown, not 1-2-3-4',
+    competitors.map((r) => r.position).join(',') === '3,6,9,11',
+    competitors.map((r) => r.position).join(','));
+
+  const solo = splitByRole(ranked(['a', 7]), {});
+  assert('and a single connected car is not promoted to the lead',
+    solo.competitors[0].position === 7, String(solo.competitors[0].position));
+}
+
+section('a classified safety car shifts the cars behind it, and only those');
+{
+  const rowsIn = [...ranked(['a', 2], ['b', 5]), { ip: SC, d: { racePos: 4 } }, ...ranked(['c', 8])];
+  const { competitors } = splitByRole(rowsIn, { [SC]: ROLE_SAFETY });
+  assert('the car ahead of it is untouched, the ones behind close up',
+    competitors.map((r) => r.position).join(',') === '2,4,7',
+    competitors.map((r) => r.position).join(','));
+}
+
+section('a safety car GT7 does not classify shifts nobody');
+{
+  const rowsIn = [...ranked(['a', 2], ['b', 5]), { ip: SC, d: {} }];
+  const { competitors } = splitByRole(rowsIn, { [SC]: ROLE_SAFETY });
+  assert('nothing to subtract, so nothing is subtracted',
+    competitors.map((r) => r.position).join(',') === '2,5',
     competitors.map((r) => r.position).join(','));
 }
 
@@ -67,6 +100,21 @@ section('with no safety car marked, nothing changes but the numbering');
   const { competitors, safety } = splitByRole(rows('a', 'b', 'c'), {});
   assert('everyone races', competitors.length === 3 && safety.length === 0);
   assert('numbered in order', competitors.map((r) => r.position).join(',') === '1,2,3');
+}
+
+section('positions survive the safety car going stale');
+{
+  // dropStaleTeams evicts a silent car after 20 s. Nobody's position may jump
+  // just because the safety car stopped transmitting.
+  const withSC = splitByRole(
+    [...ranked(['a', 2], ['b', 5]), { ip: SC, d: { racePos: 9 } }],
+    { [SC]: ROLE_SAFETY },
+  );
+  const withoutSC = splitByRole(ranked(['a', 2], ['b', 5]), { [SC]: ROLE_SAFETY });
+  assert('a safety car behind everyone never shifted them anyway',
+    withSC.competitors.map((r) => r.position).join(',')
+      === withoutSC.competitors.map((r) => r.position).join(','),
+    `${withSC.competitors.map((r) => r.position)} vs ${withoutSC.competitors.map((r) => r.position)}`);
 }
 
 section('deployment is leaving the pit lane');

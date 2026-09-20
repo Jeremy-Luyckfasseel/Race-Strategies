@@ -72,12 +72,19 @@ export function tyreHistory(entry, currentLap = null) {
       if (stint.falloffMs != null) rec._falloffs.push(stint.falloffMs);
     }
 
-    if (stint.bestLapMs != null) {
-      rec.bestMs = rec.bestMs == null ? stint.bestLapMs : Math.min(rec.bestMs, stint.bestLapMs);
-    }
-    if (stint.avgLapMs != null) {
-      rec._avgSum += stint.avgLapMs;
-      rec._avgCount += 1;
+    // Only finished stints, for the same reason the lap counts above exclude
+    // the live one: three laps on fresh rubber and a light tank average far
+    // quicker than a stint, and that figure is read to decide whether to
+    // stretch the next one. It drifted every lap and always flattered itself
+    // right after a stop.
+    if (!stint.live) {
+      if (stint.bestLapMs != null) {
+        rec.bestMs = rec.bestMs == null ? stint.bestLapMs : Math.min(rec.bestMs, stint.bestLapMs);
+      }
+      if (stint.avgLapMs != null) {
+        rec._avgSum += stint.avgLapMs;
+        rec._avgCount += 1;
+      }
     }
 
     out.set(stint.compound, rec);

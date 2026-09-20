@@ -53,8 +53,12 @@ const result = (totalLaps, estTotalRaceTimeSecs) => ({ best: { strategy: { total
 
 section('the two futures');
 {
+  // The live inputs carry a penalty, because by the time an engineer asks this
+  // question they may already have applied one. Both futures cost their option
+  // by taking time off the clock, so neither may ALSO be slowed per lap.
   const s = pitNowScenarios({
-    inputs: INPUTS, currentLap: 20, currentFuel: 30, compoundId: 'M',
+    inputs: { ...INPUTS, pacePenaltySecs: 4, pacePenaltyLaps: 10 },
+    currentLap: 20, currentFuel: 30, compoundId: 'M',
     tyreAgeLaps: 12, lossPerLapSecs: 2, lapsToNextStop: 10, lapsRemaining: 40,
     pitLossSecs: 52, repairSecs: 5,
   });
@@ -73,7 +77,11 @@ section('the two futures');
 
   assert('both are mid-race runs', s.pitNow.midRaceMode && s.wait.midRaceMode);
   assert('and neither carries a pace penalty, since the cost is off the clock',
-    !s.pitNow.pacePenaltySecs && !s.wait.pacePenaltySecs);
+    s.pitNow.pacePenaltySecs === 0 && s.wait.pacePenaltySecs === 0,
+    `${s.pitNow.pacePenaltySecs} / ${s.wait.pacePenaltySecs}`);
+  assert('nor a penalty window inherited from the live inputs',
+    s.pitNow.pacePenaltyLaps === null && s.wait.pacePenaltyLaps === null,
+    `${s.pitNow.pacePenaltyLaps} / ${s.wait.pacePenaltyLaps}`);
 }
 
 section('with no stop left in the plan, waiting means carrying it to the flag');
@@ -89,6 +97,26 @@ section('with no stop left in the plan, waiting means carrying it to the flag');
   assert('which is 24 seconds off the clock',
     Math.abs(s.wait.raceDurationHours - (2 - 24 / 3600)) < 1e-9,
     String(s.wait.raceDurationHours));
+}
+
+section('a missing fuel reading is not an empty tank');
+{
+  for (const fuel of [undefined, null, NaN, -3]) {
+    assert(`fuel ${String(fuel)} gives no scenarios rather than a poisoned one`,
+      pitNowScenarios({
+        inputs: INPUTS, currentLap: 20, currentFuel: fuel, compoundId: 'M',
+        lossPerLapSecs: 2, lapsToNextStop: 10, lapsRemaining: 40,
+        pitLossSecs: 52, repairSecs: 5,
+      }) === null);
+  }
+  assert('an empty tank is still a real reading',
+    pitNowScenarios({
+      inputs: INPUTS, currentLap: 20, currentFuel: 0, compoundId: 'M',
+      lossPerLapSecs: 2, lapsToNextStop: 10, lapsRemaining: 40,
+      pitLossSecs: 52, repairSecs: 5,
+    }) !== null);
+  assert('and a non-finite lap count is not a close call',
+    comparePitNow(result(NaN, 1), result(80, 1)) === null);
 }
 
 section('no time left is not a decision');

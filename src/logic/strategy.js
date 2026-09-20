@@ -724,9 +724,6 @@ export function findBestStrategies(params) {
   const penalty = Number(fuelWeightPenaltyPerLiter) || 0;
   // Seconds added to every lap regardless of fuel or tyre: a damaged car, or
   // one being driven to a delta. Zero for a healthy car, which is the default.
-  // Seconds added to every lap regardless of fuel or tyre: a damaged car, or
-  // one being driven to a delta.
-  //
   // Bounded, because damage does not last the race: the car is repaired at the
   // next stop, and after that it is healthy again. `pacePenaltyLaps` is how
   // many laps from here the penalty applies for — normally the laps until that

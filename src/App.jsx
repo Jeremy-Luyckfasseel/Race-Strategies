@@ -17,7 +17,7 @@ import { isSafetyCar, safetyCarDeployed, fieldSlowdown, pitLossUnderSafetyCar } 
 import { paceBefore, paceAfter, incidentLapCostMs } from "./logic/paceTrack";
 import { measuredLossSecs, effectiveLossSecs } from "./logic/incident";
 import { pitNowScenarios, comparePitNow, fullServiceLoss } from "./logic/pitNow";
-import { findBestStrategies } from "./logic/strategy";
+import { computeStrategy } from "./hooks/useStrategy";
 import LiveDashboard, { TrackMap } from "./components/LiveDashboard";
 import TelemetryLeaderboard from "./components/TelemetryLeaderboard";
 import TelemetryControls from "./components/TelemetryControls";
@@ -58,6 +58,10 @@ const DEFAULT_INPUTS = {
   // car rather than by a constraint that is not there.
   mandatoryStops: 0,
   conditions: "dry",
+  // Seconds lost to damage every lap, and the lap it is repaired on. Declared
+  // here so a reload cannot resurrect a penalty the UI has no way to clear.
+  pacePenaltySecs: 0,
+  pacePenaltyUntilLap: null,
   midRaceMode: false,
   currentLap: "",
   currentFuel: "",
@@ -273,15 +277,16 @@ export default function App() {
   const autoScannedRef = useRef(false);
   const autoOpenedLbRef = useRef(false);
   const telem    = useTelemetry();
-  const detector = useCompoundDetector(telem.teams);
   // The safety car spends the race going in and out of the pit lane, which is
-  // exactly what opens and closes stints. Keep it out of the log entirely.
+  // exactly what opens and closes stints and raises tyre prompts. Everything
+  // that treats a car as a competitor gets this, not the raw field.
   const racingTeams = useMemo(() => {
     if (!Object.keys(carRoles).length) return telem.teams;
     const out = new Map();
     for (const [ip, packet] of telem.teams) if (!isSafetyCar(carRoles, ip)) out.set(ip, packet);
     return out;
   }, [telem.teams, carRoles]);
+  const detector = useCompoundDetector(racingTeams);
   const stintLog = useStintLog(racingTeams, teamCompounds, inputs.drivers, myTeamIp || null);
   const teamKeys = useMemo(() => [...telem.teams.keys()], [telem.teams]);
   const getTeamLabel = useCallback((ip) => teamLabels[ip] || ip, [teamLabels]);
@@ -293,6 +298,23 @@ export default function App() {
     [myTeamIp, telemSelectedIp, teamKeys],
   );
 
+  // My car's live state, reduced to the few scalars the plan actually needs.
+  // Reading them out here rather than passing the packet around matters: the
+  // teams Map gets a fresh identity on every 50 ms flush, so anything that
+  // depends on it recomputes twenty times a second.
+  const myLive = strategyIp ? telem.teams.get(strategyIp) : null;
+  const myLap = myLive?.currentLap ?? null;
+  // Whole litres. The engine plans stints in laps and does not need tenths;
+  // quantising here is what stops the strategy being re-run on every packet,
+  // which with useStrategy's 600 ms debounce would mean it never ran at all.
+  const myFuelL = myLive?.fuelLiters != null ? Math.round(myLive.fuelLiters) : null;
+
+  // Laps on the set my car is running, from the stint log.
+  const openTyreLaps = useMemo(() => {
+    const open = strategyIp ? stintLog.logs.get(strategyIp)?.current : null;
+    return open && myLap != null ? Math.max(0, myLap - open.startLap) : null;
+  }, [strategyIp, stintLog.logs, myLap]);
+
   // While a race is running the plan is built from what is LEFT of it, not
   // from the configured length — which is the field you would otherwise be
   // retyping every few minutes from the pit wall. Quantised to the minute by
@@ -302,19 +324,52 @@ export default function App() {
     [raceStartedAt, inputs.raceDurationHours, clockNow],
   );
   const remainingMins = clock ? clock.remainingMins : null;
-  const myLap = strategyIp ? (telem.teams.get(strategyIp)?.currentLap ?? null) : null;
 
+  /**
+   * What the engine actually runs on: the user's setup, reconciled with the
+   * race clock and with where my car really is.
+   *
+   * The clock alone was not enough and was quietly wrong. Shortening
+   * `raceDurationHours` without `midRaceMode` left the engine planning the
+   * remaining four hours *from lap 1, on a full tank, on fresh tyres* — so the
+   * plan's stints were numbered 1..N of the remainder while every consumer
+   * compared them against the car's absolute lap, and from about half distance
+   * the Now view told the engineer "run to the flag" for the rest of the race.
+   *
+   * Derived in one place, from `strategyIp` only. It replaces an effect that
+   * wrote the same fields from `telemSelectedIp` — the car you are LOOKING at —
+   * so clicking a rival's row rebuilt your plan from their lap and fuel and
+   * persisted it. There is now one writer (the user, via InputPanel) and one
+   * deriver (this).
+   */
   const engineInputs = useMemo(() => {
-    const withClock = applyRaceClock(inputs, remainingMins != null ? { remainingMins } : null);
+    let next = applyRaceClock(inputs, remainingMins != null ? { remainingMins } : null);
+
+    // Only once a race has been started AND my car is transmitting. With no
+    // telemetry the user's own mid-race toggle is left to mean what it says.
+    if (clock && myLap != null) {
+      next = {
+        ...next,
+        midRaceMode: true,
+        currentLap: myLap,
+        currentFuel: myFuelL,
+        currentCompoundId: teamCompounds[strategyIp] || null,
+        currentTireAgeLaps: openTyreLaps ?? 0,
+      };
+    }
+
     // Damage does not last the race: the car is repaired at the next stop. The
-    // penalty is therefore stored as the lap it stops applying ON, and turned
-    // into a countdown here, so it shrinks as the car gets closer and expires
-    // by itself at the stop rather than quietly slowing the whole plan.
-    const untilLap = Number(inputs.pacePenaltyUntilLap);
-    if (!(Number(inputs.pacePenaltySecs) > 0)) return withClock;
-    if (!Number.isFinite(untilLap) || myLap == null) return withClock;
-    return { ...withClock, pacePenaltyLaps: Math.max(0, untilLap - myLap) };
-  }, [inputs, remainingMins, myLap]);
+    // penalty is stored as the lap it stops applying ON, and turned into a
+    // countdown here, so it shrinks as the car gets closer and expires by
+    // itself at the stop rather than quietly slowing the whole plan.
+    // `Number(null)` is 0, not NaN, so the null case is checked before coercing
+    // — otherwise "never repaired" became "repaired immediately".
+    const untilLap = inputs.pacePenaltyUntilLap;
+    if (Number(inputs.pacePenaltySecs) > 0 && untilLap != null && myLap != null) {
+      next = { ...next, pacePenaltyLaps: Math.max(0, Number(untilLap) - myLap) };
+    }
+    return next;
+  }, [inputs, remainingMins, clock, myLap, myFuelL, teamCompounds, strategyIp, openTyreLaps]);
 
   const { result, calculating, calculate } = useStrategy(engineInputs);
 
@@ -379,7 +434,7 @@ export default function App() {
   // question, still answered only by an explicit pick, per DECISION 4 — and
   // only my car's pit entry may clear my compound.)
   const { mapRef, resetMap } = useTrackMap(
-    telem.teams,
+    racingTeams,
     strategyIp,
     () => { if (strategyIp) updateTeamCompound(strategyIp, null, false); },
   );
@@ -407,22 +462,6 @@ export default function App() {
       }
     }
   }, [telem.teams, updateTeamCompound]);
-
-  useEffect(() => {
-    if (!telemSelectedIp) return;
-    const data = telem.teams.get(telemSelectedIp);
-    if (!data) return;
-    setInputs((prev) => {
-      if (!prev.midRaceMode) return prev;
-      return {
-        ...prev,
-        currentLap: data.currentLap ?? prev.currentLap,
-        currentFuel: data.fuelLiters != null
-          ? Math.round(data.fuelLiters * 10) / 10
-          : prev.currentFuel,
-      };
-    });
-  }, [telem.teams, telemSelectedIp]);
 
   // Auto-connect on launch (Phase 3, Task 3.1): connect to the relay and let the
   // hook hold the link with capped-backoff auto-reconnect. The user does not
@@ -468,6 +507,10 @@ export default function App() {
     try { localStorage.setItem(RACE_START_KEY, String(at)); } catch { /* ignore */ }
     stintLog.resetAll();
     setTeamCompounds({});
+    // Whatever went wrong in the lobby did not happen in this race, and its
+    // lap numbers refer to a counter that is about to reset.
+    setIncidentMark(null);
+    setInputs((prev) => ({ ...prev, pacePenaltySecs: 0, pacePenaltyUntilLap: null }));
     try { localStorage.setItem("gt7-team-compounds", "{}"); } catch { /* ignore */ }
     setSelectedIndex(0);
     setPlanFrozen(false);
@@ -578,15 +621,6 @@ export default function App() {
   // Something went wrong. Deliberately not a "damage" flag: a spin, a penalty
   // or anything else that makes the plan wrong gets the same treatment, since
   // the questions are the same — what is it costing, and do I stop.
-  // Laps on my current set, which the pit-now comparison needs to know what
-  // staying out is actually running on.
-  const openTyreLaps = useMemo(() => {
-    if (!strategyIp) return null;
-    const open = stintLog.logs.get(strategyIp)?.current;
-    const lap = telem.teams.get(strategyIp)?.currentLap;
-    return open && lap != null ? Math.max(0, lap - open.startLap) : null;
-  }, [strategyIp, stintLog.logs, telem.teams]);
-
   // GT7 repairs are quick — five seconds covers most of them, and it is not
   // knowable in advance anyway, so it is a constant rather than a field nobody
   // can fill in honestly before the car is already in the box.
@@ -594,15 +628,11 @@ export default function App() {
 
   const [incidentMark, setIncidentMark] = useState(null);
   const markIncident = useCallback(() => {
-    const rec = strategyIp ? telem.pace?.get(strategyIp) : null;
-    setIncidentMark({
-      lap: (strategyIp ? telem.teams.get(strategyIp)?.currentLap : null) ?? 0,
-      // How many laps were already on record, so the laps before and after can
-      // be told apart later.
-      beforeCount: rec ? rec.times.length : 0,
-      manualSecs: '',
-    });
-  }, [strategyIp, telem.pace, telem.teams]);
+    // The LAP it happened on, not how many laps were on record. The pace window
+    // slides, so a stored index points somewhere else entirely ten laps later —
+    // which silently reported the damaged laps as the pace before the damage.
+    setIncidentMark({ lap: myLap ?? 0, manualSecs: '' });
+  }, [myLap]);
   const clearIncident = useCallback(() => setIncidentMark(null), []);
   const setIncidentLoss = useCallback((v) => {
     setIncidentMark((prev) => (prev ? { ...prev, manualSecs: v } : prev));
@@ -612,59 +642,78 @@ export default function App() {
   // one-off cost of the lap it happened on, the ongoing rate since, and the
   // three-way call between carrying it, repairing at a stop you were making
   // anyway, and coming in now.
-  const incident = useMemo(() => {
+  // What the incident cost, measured. Cheap, so it stays a memo.
+  const incidentCost = useMemo(() => {
     if (!incidentMark) return null;
     const rec = strategyIp ? telem.pace?.get(strategyIp) : null;
-    const before = paceBefore(rec, incidentMark.beforeCount);
-    const after = paceAfter(rec, incidentMark.beforeCount);
-    const oneOffMs = incidentLapCostMs(rec, incidentMark.beforeCount);
-    const lossSecs = effectiveLossSecs(
-      incidentMark.manualSecs,
-      measuredLossSecs(before, after),
-    );
-
-    const strat = nowBest?.strategy ?? null;
-    const live = strategyIp ? telem.teams.get(strategyIp) : null;
-    const lap = live?.currentLap ?? incidentMark.lap;
-    const nextStop = strat?.stints?.find((st) => st.pitLap != null && st.pitLap >= lap) ?? null;
-
-    // Both futures go through the real engine rather than through arithmetic.
-    // Costing an early stop as "a whole extra stop" is wrong whenever the plan
-    // has slack — and it usually does, because the last stint rarely ends
-    // exactly as the tyre does. Only the engine knows whether the remaining
-    // race can absorb the stop, so only the engine is asked.
-    let compare = null;
-    if (lossSecs != null && live) {
-      const sc = pitNowScenarios({
-        inputs: engineInputs,
-        currentLap: lap,
-        currentFuel: live.fuelLiters,
-        compoundId: teamCompounds[strategyIp] || null,
-        tyreAgeLaps: openTyreLaps ?? 0,
-        lossPerLapSecs: lossSecs,
-        lapsToNextStop: nextStop ? nextStop.pitLap - lap : null,
-        lapsRemaining: (strat?.totalLaps ?? 0) - lap,
-        // Coming in for damage means tyres and fuel as well — the car is
-        // already stationary, so it would be daft not to take them.
-        pitLossSecs: fullServiceLoss(inputs, live.fuelLiters),
-        repairSecs: REPAIR_SECS,
-      });
-      if (sc) {
-        const run = (i) => { const r = findBestStrategies(i); return r?.length ? { best: r[0] } : null; };
-        compare = comparePitNow(run(sc.pitNow), run(sc.wait));
-      }
-    }
-
+    const oneOffMs = incidentLapCostMs(rec, incidentMark.lap);
     return {
-      lap: incidentMark.lap,
-      manualSecs: incidentMark.manualSecs,
       oneOffSecs: oneOffMs != null ? oneOffMs / 1000 : null,
-      lossSecs,
-      nextStopLap: nextStop ? nextStop.pitLap : null,
-      applied: Number(inputs.pacePenaltySecs) > 0,
-      compare,
+      lossSecs: effectiveLossSecs(
+        incidentMark.manualSecs,
+        measuredLossSecs(paceBefore(rec, incidentMark.lap), paceAfter(rec, incidentMark.lap)),
+      ),
     };
-  }, [incidentMark, strategyIp, telem.pace, telem.teams, nowBest, inputs, engineInputs, teamCompounds, openTyreLaps]);
+  }, [incidentMark, strategyIp, telem.pace]);
+
+  const nextStopLap = useMemo(() => {
+    const stints = nowBest?.strategy?.stints;
+    if (!stints || myLap == null) return null;
+    const next = stints.find((st) => st.pitLap != null && st.pitLap >= myLap);
+    return next ? next.pitLap : null;
+  }, [nowBest, myLap]);
+
+  /**
+   * Box now, or wait — run through the real engine, and therefore expensive.
+   *
+   * In an effect rather than a memo, and keyed on the lap rather than on the
+   * telemetry Maps. Those get a fresh identity on every 50 ms flush, so a memo
+   * listing them ran two full strategy searches — a few hundred milliseconds
+   * each — twenty times a second, synchronously during render, from the moment
+   * an incident was marked. The tab locked solid exactly while the car was
+   * damaged and the screen was needed.
+   */
+  const [incidentCompare, setIncidentCompare] = useState(null);
+  useEffect(() => {
+    const loss = incidentCost?.lossSecs;
+    if (!incidentMark || loss == null || myLap == null || myFuelL == null) {
+      setIncidentCompare(null);
+      return;
+    }
+    const sc = pitNowScenarios({
+      inputs: engineInputs,
+      currentLap: myLap,
+      currentFuel: myFuelL,
+      compoundId: teamCompounds[strategyIp] || null,
+      tyreAgeLaps: openTyreLaps ?? 0,
+      lossPerLapSecs: loss,
+      lapsToNextStop: nextStopLap != null ? nextStopLap - myLap : null,
+      lapsRemaining: (nowBest?.strategy?.totalLaps ?? 0) - myLap,
+      // Coming in for damage means tyres and fuel as well — the car is already
+      // stationary, so it would be daft not to take them.
+      pitLossSecs: fullServiceLoss(inputs, myFuelL),
+      repairSecs: REPAIR_SECS,
+    });
+    if (!sc) { setIncidentCompare(null); return; }
+    // Through the same validated path the Strategy tab uses, so a wet/dry
+    // switch or a malformed lap time cannot produce a confident verdict here
+    // while the rest of the app has correctly given up.
+    const run = (i) => computeStrategy(i);
+    setIncidentCompare(comparePitNow(run(sc.pitNow), run(sc.wait)));
+  }, [
+    incidentMark, incidentCost, myLap, myFuelL, nextStopLap,
+    engineInputs, inputs, teamCompounds, strategyIp, openTyreLaps, nowBest,
+  ]);
+
+  const incident = useMemo(() => (incidentMark ? {
+    lap: incidentMark.lap,
+    manualSecs: incidentMark.manualSecs,
+    oneOffSecs: incidentCost?.oneOffSecs ?? null,
+    lossSecs: incidentCost?.lossSecs ?? null,
+    nextStopLap,
+    applied: Number(inputs.pacePenaltySecs) > 0,
+    compare: incidentCompare,
+  } : null), [incidentMark, incidentCost, nextStopLap, inputs.pacePenaltySecs, incidentCompare]);
 
   /**
    * Plan on the damaged pace — until the next stop, where it gets repaired.
@@ -970,6 +1019,7 @@ export default function App() {
               carRoles,
               onRoleChange: updateCarRoles,
               pace: telem.pace,
+              scDeployed: !!scDeployedIp,
               lang,
             };
             return (

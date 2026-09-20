@@ -10,6 +10,8 @@ const PIT_SLOW_KMH   = 100;
 const PIT_STOP_KMH   = 10;
 const PIT_MIN_DUR_MS = 15_000;
 const PIT_ZONE_M     = 35;
+// A pit lane is seconds long at 60 Hz; anything past this is a parked car.
+const SLOW_BUF_MAX   = 3000;
 
 export function saveTrackMap(m) {
   try {
@@ -141,7 +143,14 @@ export function useTrackMap(teams, strategyIp, onPitEntry) {
       if (spd > PIT_SLOW_KMH) {
         if (c.slowStart !== null) {
           const buf = c.slowBuf;
-          if (Date.now() - c.slowStart > PIT_MIN_DUR_MS && buf.some(p => p.spd <= PIT_STOP_KMH)) {
+          // Only MY car may decide where the pit lane is. Any car could before,
+          // and the test is only "slow for fifteen seconds then quick again" —
+          // so a rival beached in the gravel at Eau Rouge redefined the pit box
+          // as that gravel trap, persisted it, and from then on every lap my
+          // car passed within 35 m of it cleared my confirmed compound.
+          if (isMine
+            && Date.now() - c.slowStart > PIT_MIN_DUR_MS
+            && buf.some(p => p.spd <= PIT_STOP_KMH)) {
             const box = buf.reduce((b, p) => p.spd < b.spd ? p : b, buf[0]);
             m.pitLane = { pts: buf.map(p => ({ x: p.x, z: p.z })), box: { x: box.x, z: box.z } };
             m.dirty = true;
@@ -150,7 +159,12 @@ export function useTrackMap(teams, strategyIp, onPitEntry) {
         }
       } else {
         if (c.slowStart === null) c.slowStart = Date.now();
-        c.slowBuf.push({ x: posX, z: posZ, spd });
+        // Capped. This runs at 60 Hz and is only cleared by exceeding
+        // PIT_SLOW_KMH, so a car that never does — one parked in the pit lane
+        // all race, which is exactly what a safety car is — grew it without
+        // bound: a few hundred thousand entries an hour, then a single frame
+        // spent reducing over all of them the moment it moved.
+        if (c.slowBuf.length < SLOW_BUF_MAX) c.slowBuf.push({ x: posX, z: posZ, spd });
       }
 
       // Low speed or off-track: update lastPkt (anchor for gap detection) but don't draw

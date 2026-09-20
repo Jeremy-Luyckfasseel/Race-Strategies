@@ -11,6 +11,13 @@
  * car, which is a few hundred bytes for a full grid and enough to see a step
  * change in pace against what came before it.
  *
+ * Every entry carries the LAP NUMBER it belongs to. The first version stored
+ * bare times and had callers index into them, which worked right up until the
+ * window filled: after ten laps the array stops growing, every stored index
+ * points at the wrong lap, and the incident measurement silently reports the
+ * damaged laps as the pace before the damage — or, more often, nothing at all.
+ * A lap number does not slide.
+ *
  * Pure — no React.
  */
 
@@ -23,6 +30,9 @@ const STEP_SAMPLE = 3;
 /**
  * Fold freshly arrived packets (ip → packet) into per-car lap-time history.
  * A lap is recorded once, when the lap counter moves on.
+ *
+ * `lastLapMs` is the time of the lap that has just FINISHED, so it is filed
+ * under the lap before the one the car has now started.
  *
  * Returns the same Map reference when nobody completed a lap, which is the
  * normal case at 20 flushes a second.
@@ -40,7 +50,9 @@ export function trackLapTimes(prev, packets) {
     if (next === prev) next = new Map(prev);
     // The first sighting tells us the lap number but the lap time belongs to a
     // lap we did not watch, so it is recorded from the next one on.
-    const times = rec ? [...rec.times, lastLapMs].slice(-PACE_WINDOW) : [];
+    const times = rec
+      ? [...rec.times, { lap: lap - 1, ms: lastLapMs }].slice(-PACE_WINDOW)
+      : [];
     next.set(ip, { lap, times });
   }
   return next;
@@ -54,6 +66,8 @@ function median(values) {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
+const msOf = (entries) => median(entries.map((e) => e.ms));
+
 /**
  * Representative pace from the most recent laps.
  *
@@ -62,40 +76,41 @@ function median(values) {
  */
 export function recentPace(rec, laps = STEP_SAMPLE) {
   if (!rec || rec.times.length === 0) return null;
-  return median(rec.times.slice(-laps));
+  return msOf(rec.times.slice(-laps));
 }
 
 /**
- * Pace before a given point in this car's history, for comparing against what
- * came after. `beforeCount` is how many laps had been recorded when the
- * something-happened moment was marked.
+ * Pace over the laps BEFORE the one an incident happened on.
+ *
+ * Keyed on the lap number the incident was marked at, not on how many laps had
+ * been recorded — see the note at the top of this file.
  */
-export function paceBefore(rec, beforeCount, laps = STEP_SAMPLE) {
-  if (!rec || beforeCount <= 0) return null;
-  const window = rec.times.slice(Math.max(0, beforeCount - laps), beforeCount);
-  return window.length ? median(window) : null;
+export function paceBefore(rec, incidentLap, laps = STEP_SAMPLE) {
+  if (!rec || !Number.isFinite(incidentLap)) return null;
+  const before = rec.times.filter((e) => e.lap < incidentLap).slice(-laps);
+  return before.length ? msOf(before) : null;
 }
 
 /**
- * Pace since that moment, skipping the lap the incident happened on.
+ * Pace since then, skipping the lap the incident happened on.
  *
  * That lap holds the spin, the gravel and the recovery: a one-off cost, not
  * the rate the car will run at from here. Averaging it in would make a light
  * scrape look like a broken car and send someone into the pits for nothing.
  */
-export function paceAfter(rec, beforeCount) {
-  if (!rec) return null;
-  const after = rec.times.slice(beforeCount + 1);
-  return after.length ? median(after) : null;
+export function paceAfter(rec, incidentLap) {
+  if (!rec || !Number.isFinite(incidentLap)) return null;
+  const after = rec.times.filter((e) => e.lap > incidentLap);
+  return after.length ? msOf(after) : null;
 }
 
 /** What the incident lap itself cost, over and above the pace before it. */
-export function incidentLapCostMs(rec, beforeCount) {
-  if (!rec) return null;
-  const lap = rec.times[beforeCount];
-  const before = paceBefore(rec, beforeCount);
-  if (lap == null || before == null) return null;
-  return Math.max(0, lap - before);
+export function incidentLapCostMs(rec, incidentLap) {
+  if (!rec || !Number.isFinite(incidentLap)) return null;
+  const lap = rec.times.find((e) => e.lap === incidentLap);
+  const before = paceBefore(rec, incidentLap);
+  if (!lap || before == null) return null;
+  return Math.max(0, lap.ms - before);
 }
 
 /**
@@ -109,20 +124,24 @@ export function incidentLapCostMs(rec, beforeCount) {
  * A pit stop produces a slow in-lap and a slow out-lap — two laps, which is
  * why three are required on each side before this says anything.
  *
+ * Note for callers: a safety car slows the whole field at once and trips this
+ * for every car. The caller knows whether one is deployed; this cannot.
+ *
  * @returns {{lostMs:number, fromLap:number}|null}
  */
 export function detectPaceDrop(rec, thresholdMs = 1500) {
   if (!rec || rec.times.length < STEP_SAMPLE * 2) return null;
-  const recent = median(rec.times.slice(-STEP_SAMPLE));
-  const earlier = median(rec.times.slice(-STEP_SAMPLE * 2, -STEP_SAMPLE));
+  const recentEntries = rec.times.slice(-STEP_SAMPLE);
+  const recent = msOf(recentEntries);
+  const earlier = msOf(rec.times.slice(-STEP_SAMPLE * 2, -STEP_SAMPLE));
   if (recent == null || earlier == null) return null;
 
   // Sustained means every recent lap is slower, not merely that their median
   // is. A pit stop is a slow in-lap and a slow out-lap followed by a normal
   // one, and a median over three would still call that a step; gating on the
   // FASTEST of the recent laps lets the recovery disqualify it.
-  const fastestRecent = Math.min(...rec.times.slice(-STEP_SAMPLE));
+  const fastestRecent = Math.min(...recentEntries.map((e) => e.ms));
   if (fastestRecent - earlier < thresholdMs) return null;
 
-  return { lostMs: recent - earlier, fromLap: rec.lap - STEP_SAMPLE };
+  return { lostMs: recent - earlier, fromLap: recentEntries[0].lap };
 }

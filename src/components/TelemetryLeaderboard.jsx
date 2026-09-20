@@ -37,7 +37,7 @@ function fuelBarColor(pct) {
 export default function TelemetryLeaderboard({
   teams, teamOrder = [], teamLabels, teamCompounds, pendingIps, selectedIp, onSelect, onCompoundChange,
   myTeamIp = '', onSetMyTeam, onRenameTeam, lapCrossings, fuelUse,
-  carRoles = {}, onRoleChange, pace, lang = DEFAULT_LANG,
+  carRoles = {}, onRoleChange, pace, scDeployed = false, lang = DEFAULT_LANG,
 }) {
   const [pickerIp, setPickerIp] = useState(null);
   const [editingIp, setEditingIp] = useState(null);
@@ -81,11 +81,15 @@ export default function TelemetryLeaderboard({
     [sorted, carRoles],
   );
 
+  // The purple belongs to the race. A safety car on a hot lap is not in it.
   const overallBestMs = useMemo(() => {
     let best = Infinity;
-    for (const [, d] of teams) if (d.bestLapMs && d.bestLapMs < best) best = d.bestLapMs;
+    for (const { ip, d } of competitors) {
+      if (d.bestLapMs && d.bestLapMs < best) best = d.bestLapMs;
+      void ip;
+    }
     return best === Infinity ? null : best;
-  }, [teams]);
+  }, [competitors]);
 
   return (
     <div className={`lb-wrap${myTeamIp ? '' : ' lb-wrap--unclaimed'}`}>
@@ -129,6 +133,7 @@ export default function TelemetryLeaderboard({
               lapCrossings?.get(ip),
               now,
               !d.onTrack,
+              !competitors[idx - 1].d.onTrack,
             );
         const gap        = formatInterval(interval);
         const isBestLap  = d.bestLapMs && d.bestLapMs === overallBestMs;
@@ -148,7 +153,9 @@ export default function TelemetryLeaderboard({
         const boxLap     = intel && intel.confident ? intel.pitLap : null;
         // A step down in pace that holds, with no stop to explain it. Free
         // intel: they will have to come in, and they are takeable now.
-        const paceDrop   = d.onTrack ? detectPaceDrop(pace?.get(ip)) : null;
+        // Under a safety car every car loses the same three seconds at the
+        // same moment, which is a caution, not a field full of broken cars.
+        const paceDrop   = d.onTrack && !scDeployed ? detectPaceDrop(pace?.get(ip)) : null;
         const isEditing  = editingIp === ip;
 
         const posClass = pos === 1 ? ' lbp-gold' : pos === 2 ? ' lbp-silver' : pos === 3 ? ' lbp-bronze' : '';

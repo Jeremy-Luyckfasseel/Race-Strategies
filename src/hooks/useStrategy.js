@@ -5,8 +5,14 @@ import { compoundsFor } from '../logic/conditions';
 /**
  * Run findBestStrategies with validated, coerced inputs.
  * Returns { ranked, best } or null if inputs are invalid.
+ *
+ * Exported because it is the ONLY sanctioned way into the engine. Calling
+ * findBestStrategies directly skips the dry/wet compound filter and the
+ * lap-time validation that CLAUDE.md names as a hard guardrail — which is how
+ * the incident panel came to print a confident verdict built on parseLapTime's
+ * silent 120 s fallback at the exact moment the rest of the app had gone blank.
  */
-function compute(inputs) {
+export function computeStrategy(inputs) {
   const {
     raceDurationHours,
     tankSize,
@@ -106,7 +112,7 @@ export function useStrategy(inputs) {
   useEffect(() => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      setResult(compute(inputs));
+      setResult(computeStrategy(inputs));
     }, 600);
     return () => clearTimeout(debounceRef.current);
   }, [inputs]);
@@ -116,7 +122,7 @@ export function useStrategy(inputs) {
     clearTimeout(debounceRef.current);
     setCalculating(true);
     requestAnimationFrame(() => {
-      setResult(compute(inputs));
+      setResult(computeStrategy(inputs));
       setCalculating(false);
     });
   }, [inputs]);

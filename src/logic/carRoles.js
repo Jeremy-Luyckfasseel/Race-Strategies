@@ -39,21 +39,46 @@ export function toggleSafetyCar(roles, id) {
 /**
  * Split a ranked list of `{ip, d}` rows into the race and everything else.
  *
- * Competitors keep the order they were given and are renumbered 1..n. The
- * renumbering matters even though GT7's own position is usually right: a
- * safety car parked in the pits is classified last and shifts nobody, but one
- * deployed mid-pack would push every car behind it down a place, and a
- * standings board that is wrong exactly when the safety car is out is wrong at
- * the worst possible moment.
+ * Competitors keep the order they were given and keep GT7's own race position,
+ * adjusted only for safety cars classified ahead of them: parked in the pits
+ * one is classified last and shifts nobody, but deployed mid-pack it would
+ * push every car behind it down a place, and a standings board that is wrong
+ * exactly when the safety car is out is wrong at the worst possible moment.
  */
 export function splitByRole(rows, roles) {
   const competitors = [];
   const safety = [];
   for (const row of rows || []) {
     if (isSafetyCar(roles, row.ip)) safety.push(row);
-    else competitors.push({ ...row, position: competitors.length + 1 });
+    else competitors.push(row);
   }
-  return { competitors, safety };
+
+  // GT7's own position is the truth and the only thing that knows about cars
+  // we are not receiving packets from. Renumbering 1..n over the tracked cars
+  // instead threw that away: a single connected console always read P1, and a
+  // quarter of a twelve-car lobby read P1-P4 for cars actually running P3, P6,
+  // P9 and P11.
+  //
+  // The safety car is the one real adjustment. Only ones currently classified
+  // are subtracted, which self-answers whether GT7 counts it as an entrant at
+  // all: if it is not in the classification there is nothing to subtract, and
+  // nobody's position jumps when it goes stale and drops off the board.
+  const scPositions = safety
+    .map((r) => Number(r.d?.racePos))
+    .filter((n) => Number.isFinite(n) && n > 0);
+
+  const positioned = competitors.map((row, i) => {
+    const raw = Number(row.d?.racePos);
+    if (!Number.isFinite(raw) || raw <= 0) {
+      // The relay already normalises an absent position to null, so this is
+      // practice, a lobby or a replay — order of arrival is all there is.
+      return { ...row, position: i + 1 };
+    }
+    const ahead = scPositions.filter((p) => p < raw).length;
+    return { ...row, position: raw - ahead };
+  });
+
+  return { competitors: positioned, safety };
 }
 
 /**

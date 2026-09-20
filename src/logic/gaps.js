@@ -146,9 +146,14 @@ export function lapProgress(rec, now) {
  * caller knows who is boxed (`onTrack`) and passes `behindStopped` to hold the
  * estimate at the line instead of inventing progress it has not made.
  */
-export function liveInterval(ahead, behind, now, behindStopped = false) {
+export function liveInterval(ahead, behind, now, behindStopped = false, aheadStopped = false) {
   if (!ahead || !behind) return null;
-  if (behindStopped) return lapInterval(ahead, behind);
+  // Either car being stationary breaks the interpolation, not just the one
+  // behind: a car in the pits is not covering ground, so crediting it with lap
+  // progress invents a gap. Falling back measures one instead — it is still
+  // frozen for the duration of the stop, because a stopped car genuinely is
+  // not moving, but it is frozen at a number that was true.
+  if (behindStopped || aheadStopped) return lapInterval(ahead, behind);
 
   const a = lapProgress(ahead, now);
   const b = lapProgress(behind, now);

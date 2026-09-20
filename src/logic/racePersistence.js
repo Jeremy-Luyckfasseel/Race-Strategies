@@ -38,6 +38,9 @@ export const RACE_KEYS = [
   'gt7-team-compounds',
   'gt7-my-team',
   'gt7-stint-log',
+  // Which car is the safety car. Without this a restored snapshot ranks a
+  // parked car back into the standings and the gap chain.
+  'gt7-car-roles',
 ];
 
 /**

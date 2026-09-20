@@ -106,6 +106,18 @@ export function stableCarId(registered, scannedHostname, sourceIp) {
  * @param pending Map<ip, packet> — buffered arrivals, newest per car
  * @param now epoch ms, for staleness
  */
+/** Drop entries for cars that are no longer present, by identity when unchanged. */
+function pruneTo(map, teams) {
+  if (!map || map.size === 0) return map;
+  let next = null;
+  for (const id of map.keys()) {
+    if (teams.has(id)) continue;
+    if (!next) next = new Map(map);
+    next.delete(id);
+  }
+  return next || map;
+}
+
 export function applyFlush(state, pending, now, staleMs = TEAM_STALE_MS) {
   let { teams, order, crossings, fuel, pace } = state;
 
@@ -126,7 +138,21 @@ export function applyFlush(state, pending, now, staleMs = TEAM_STALE_MS) {
     }
   }
 
+  const before = teams;
   teams = dropStaleTeams(teams, now, staleMs);
+
+  // Everything keyed by car has to be evicted with it. Keeping the fuel record
+  // meant a console that quit to the lobby on 12 L and rejoined for the race on
+  // a full tank read as 88 litres going in: the board announced a stop that
+  // never happened, and committed the rival to a stint they were not on. The
+  // stale burn window and lap times were just as wrong, measured against a
+  // different session.
+  if (teams !== before) {
+    crossings = pruneTo(crossings, teams);
+    fuel = pruneTo(fuel, teams);
+    pace = pruneTo(pace, teams);
+  }
+
   return { teams, order, crossings, fuel: fuel || new Map(), pace: pace || new Map() };
 }
 
