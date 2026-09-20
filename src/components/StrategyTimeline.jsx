@@ -22,8 +22,17 @@ import { DEFAULT_LANG, t, compoundName } from "../i18n/strings";
 
 const COMPOUND_IDS = ["H", "M", "S", "IM", "W"];
 
-/** A segment narrower than this has no room for its label. */
-const LABEL_MIN_PCT = 7;
+/**
+ * A floor, not the real test. Whether "S7 12" fits is a question about
+ * PIXELS, and a percentage of the race cannot answer it: 6% of a 1450px bar is
+ * 87px and holds the label twice over, while 6% of a 600px one is 36px and
+ * does not. A 16-stop race put every segment under the old flat 7% and left
+ * the bar unlabelled on a screen with room to spare. The fit is decided in CSS
+ * by a container query on the segment itself (`.tl-seg`), which measures the
+ * thing that actually varies. This only skips segments too thin to be worth a
+ * node at all.
+ */
+const LABEL_MIN_PCT = 1;
 
 function pct(n, total) {
   return total > 0 ? (n / total) * 100 : 0;

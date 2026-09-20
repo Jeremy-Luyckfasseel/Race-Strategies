@@ -11,7 +11,7 @@ import { useTrackMap } from "./hooks/useTrackMap";
 import { useTelemetryLearner } from "./hooks/useTelemetryLearner";
 import { applyRecommendation } from "./logic/recommendations";
 import { pickAutoConnectIp } from "./logic/connection";
-import { RACE_START_KEY, raceProgress, applyRaceClock } from "./logic/raceClock";
+import { RACE_START_KEY, raceProgress, applyRaceClock, formatClock } from "./logic/raceClock";
 import { conditionsUnavailable, crossoverSecsPerLap, tyreOnlyPitLoss } from "./logic/conditions";
 import { isSafetyCar, safetyCarDeployed, fieldSlowdown, pitLossUnderSafetyCar } from "./logic/carRoles";
 import { paceBefore, paceAfter, incidentLapCostMs } from "./logic/paceTrack";
@@ -837,16 +837,19 @@ export default function App() {
             inputs={inputs}
             onChange={handleChange}
             onCalculate={() => { setSelectedIndex(0); calculate(); }}
-            telem={telem}
-            telemSelectedIp={telemSelectedIp}
-            onTelemSelect={setTelemSelectedIp}
-            teamLabels={teamLabels}
+            liveDriven={!!clock && myLap != null}
             lang={lang}
           />
         </aside>
 
         <section className="results-area">
           <div className="tab-bar">
+            <button
+              className={`tab-btn${activeTab === "strategy" ? " tab-active" : ""}`}
+              onClick={() => setActiveTab("strategy")}
+            >
+              {t("app_tab_strategy", lang)}
+            </button>
             <button
               className={`tab-btn${activeTab === "race" ? " tab-active" : ""}`}
               onClick={() => setActiveTab("race")}
@@ -855,12 +858,6 @@ export default function App() {
               {telem.connected && telem.teams.size > 0 && (
                 <span className="tab-live-dot" />
               )}
-            </button>
-            <button
-              className={`tab-btn${activeTab === "strategy" ? " tab-active" : ""}`}
-              onClick={() => setActiveTab("strategy")}
-            >
-              {t("app_tab_strategy", lang)}
             </button>
             <button
               className={`tab-btn${activeTab === "drivers" ? " tab-active" : ""}`}
@@ -1064,6 +1061,34 @@ export default function App() {
 
           {activeTab === "strategy" && (
             <div className={`tab-content${calculating ? " results-calculating" : ""}`}>
+              {/* Without this the tab read "6:57:42" for an eight-hour race
+                  and looked broken. It is right — the clock has been running
+                  for an hour and the engine is planning the remainder — but
+                  nothing on the tab said so, and a total that does not match
+                  the one you typed is a bug until proven otherwise. */}
+              {clock && (
+                <div className="clock-banner">
+                  <span className="clock-banner-title">{t("app_clock_banner", lang)}</span>
+                  <span className="clock-banner-time">
+                    {t("app_clock_banner_time", lang, {
+                      left: formatClock(clock.remainingSecs),
+                      total: `${inputs.raceDurationHours}h`,
+                    })}
+                  </span>
+                  {engineInputs.midRaceMode && (
+                    <span className="clock-banner-car">
+                      {t("app_clock_banner_car", lang, {
+                        lap: engineInputs.currentLap,
+                        fuel: engineInputs.currentFuel,
+                      })}
+                    </span>
+                  )}
+                  <span className="clock-banner-hint">{t("app_clock_banner_hint", lang)}</span>
+                  <button className="clock-banner-clear" onClick={clearRaceStart}>
+                    {t("app_clock_banner_clear", lang)}
+                  </button>
+                </div>
+              )}
               <LearnerRecommendations
                 recommendations={learner.recommendations}
                 onAccept={acceptRecommendation}

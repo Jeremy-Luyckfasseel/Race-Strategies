@@ -35,7 +35,7 @@ function Section({ label, sectionKey, openSections, toggle, children }) {
   );
 }
 
-export default function InputPanel({ inputs, onChange, onCalculate, telem, telemSelectedIp, onTelemSelect, teamLabels = {}, lang = DEFAULT_LANG }) {
+export default function InputPanel({ inputs, onChange, onCalculate, liveDriven = false, lang = DEFAULT_LANG }) {
   const [openSections, setOpenSections] = useState(DEFAULT_OPEN);
   const [savedPresets, setSavedPresets] = useState(() => {
     try { return JSON.parse(localStorage.getItem("gt7-presets") || "[]"); }
@@ -199,9 +199,13 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
       {/* ── Race Settings ── */}
       <Section label={t("ip_race", lang)} sectionKey="race" openSections={openSections} toggle={toggle}>
         <div className="field-group">
+          {/* "Time remaining: 8" beside a banner reading "6:43 left of 8h" is
+              a contradiction. Once the clock is running this field is the
+              FULL race length — the clock does the subtracting — so it only
+              means "time left" when you are typing the remainder in by hand. */}
           <label htmlFor="raceDuration">
-            {inputs.midRaceMode ? t("ip_time_left", lang) : t("ip_race_duration", lang)}
-            {inputs.midRaceMode && <span className="hint">{t("ip_time_left_hint", lang)}</span>}
+            {inputs.midRaceMode && !liveDriven ? t("ip_time_left", lang) : t("ip_race_duration", lang)}
+            {inputs.midRaceMode && !liveDriven && <span className="hint">{t("ip_time_left_hint", lang)}</span>}
           </label>
           <input
             id="raceDuration"
@@ -404,27 +408,15 @@ export default function InputPanel({ inputs, onChange, onCalculate, telem, telem
             <span className="toggle-slider" />
           </label>
         </div>
-        {inputs.midRaceMode && telem?.teams?.size > 0 && (
-          <div className="field-group">
-            <label>{t("ip_autofill", lang)}</label>
-            <div className="midrace-team-list">
-              {[...telem.teams.entries()].map(([ip, d], idx) => {
-                const isSelected = ip === telemSelectedIp;
-                return (
-                  <button
-                    key={ip}
-                    className={`midrace-team-btn${isSelected ? " active" : ""}`}
-                    onClick={() => onTelemSelect(isSelected ? "" : ip)}
-                  >
-                    <span className={`midrace-dot${d.onTrack ? " on" : " pit"}`} />
-                    T{idx + 1} · {teamLabels[ip] || ip}
-                    {isSelected && <span className="midrace-filling">{t("ip_filling", lang)}</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        {/* There used to be a car picker here labelled "auto-fill", and it
+            filled nothing: the effect behind it was removed when the engine
+            started deriving lap/fuel/tyre from the ★ car in one place. All it
+            did was change which car the dashboard showed, from a tab where the
+            dashboard is not on screen, while claiming to be filling the boxes
+            below. What is left is a note saying who is actually driving them. */}
+        <p className="field-note">
+          {t(liveDriven ? "ip_midrace_live" : "ip_midrace_manual", lang)}
+        </p>
 
         {inputs.midRaceMode && (
           <>

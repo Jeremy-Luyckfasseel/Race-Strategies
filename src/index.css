@@ -1746,6 +1746,8 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .tl-seg {
+  /* Queried by its own label below: only the segment knows how wide it is. */
+  container-type: inline-size;
   position: absolute;
   top: 6px;
   bottom: 6px;
@@ -1787,6 +1789,21 @@ input[type="range"]::-moz-range-thumb {
 
 .tl-seg-num { font-weight: 700; }
 .tl-seg-laps { opacity: 0.75; }
+
+/* Hidden by default and shown once the segment is wide enough to hold it —
+   the lap count needs more room than the stint number, so it goes first. A
+   browser without container queries shows both, which is the old behaviour
+   at its most generous rather than a blank bar. */
+@supports (container-type: inline-size) {
+  .tl-seg-label { display: none; }
+  @container (min-width: 22px) {
+    .tl-seg-label { display: flex; }
+    .tl-seg-laps  { display: none; }
+  }
+  @container (min-width: 44px) {
+    .tl-seg-laps { display: inline; }
+  }
+}
 
 /* Pit stops on their own line, so a marker never covers a stint. */
 .tl-pits {
@@ -4457,3 +4474,49 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .empty-action .empty-text { margin: 0; }
+
+/* ---------------------------------------------------------------------------
+   Race-clock banner on the Strategy tab
+   Without it the tab reads "6:57:42" for the 8-hour race you typed in, and
+   looks broken. It is correct — the clock has been running for an hour — but
+   a total that does not match your input is a bug until something says why.
+   --------------------------------------------------------------------------- */
+.clock-banner {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-xs);
+  background: var(--bg-overlay);
+}
+.clock-banner-title {
+  font-family: var(--font-display);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-primary);
+}
+.clock-banner-time {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--accent);
+}
+.clock-banner-car  { font-family: var(--font-mono); font-size: 0.74rem; color: var(--text-secondary); }
+.clock-banner-hint { font-size: 0.72rem; color: var(--text-muted); flex: 1 1 auto; }
+.clock-banner-clear {
+  padding: 4px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+}
+.clock-banner-clear:hover { color: var(--text-primary); border-color: var(--rule-bright, var(--text-muted)); }

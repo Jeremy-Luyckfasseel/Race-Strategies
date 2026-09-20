@@ -3,13 +3,37 @@
  *
  * Real Salsa20-encrypted packets from distinct loopback addresses, so the relay
  * and the whole app see what they would see at an event — useful for demoing or
- * exercising the UI with no PS5 in the room. Each car pits once, staggered from
- * two minutes in, so the pit prompts and the stint log fire too.
+ * exercising the UI with no PS5 in the room. Cars run at their own pace, burn
+ * fuel down, pit repeatedly and rejoin, so the pit prompts, the stint log, the
+ * gaps and the fuel prediction all have something real to chew on.
+ *
+ * Needs the relay up first, in its own terminal:
+ *
+ *   npm run telemetry                 # terminal 1 — the UDP→WebSocket relay
+ *   npm run dev                       # terminal 2 — the app
+ *   npm run demo                      # terminal 3 — ten fake PS5s
+ *
+ * npm run demo is `fake-field.mjs 10 0 0.35`. Directly:
  *
  *   node scripts/fake-field.mjs [cars] [seconds] [spread]
  *
- * spread is the fraction of a lap the field is strung out over (default 0.06).
- * Raise it to around 0.35 for a screenshot where the dots do not all overlap.
+ * cars   how many consoles to fake (default 6).
+ * seconds how long to run; 0 runs until Ctrl-C.
+ * spread the fraction of a lap the field is strung out over (default 0.06).
+ *        Around 0.35 gives a screenshot where the dots do not all overlap.
+ *
+ * Pit behaviour is set by environment variables, all in seconds:
+ *
+ *   PIT_FIRST=90 PIT_STAGGER=20 PIT_LENGTH=25 PIT_EVERY=180 npm run demo
+ *
+ * PIT_FIRST   when the first car boxes      (default 120)
+ * PIT_STAGGER gap between each car's first stop (default 15)
+ * PIT_LENGTH  how long a stop lasts         (default 30)
+ * PIT_EVERY   how long they run between stops (default 240)
+ *
+ * Safe to leave running while `npm test` runs: the relay suite spawns its own
+ * relay on its own ports (34740/21777) and sends from 127.0.9.x, so it no
+ * longer collides with a pit wall that is already set up.
  *
  * Ctrl-C to stop early.
  */

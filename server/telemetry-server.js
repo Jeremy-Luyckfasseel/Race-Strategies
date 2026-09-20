@@ -45,9 +45,15 @@ import { stableCarId } from '../src/logic/teams.js';
 // ── Salsa20 key (GT7, community-documented) ──────────────────────────────────
 const SALSA20_KEY = Buffer.from('Simulator Interface Packet GT7 ver 0.0', 'utf8').slice(0, 32);
 
-const UDP_PORT = 33740;   // GT7 sends telemetry here
-const HB_PORT  = 33739;   // GT7 listens for heartbeat here
-const WS_PORT  = 20777;   // WebSocket port for the React app
+// GT7's ports are fixed, so these defaults are the only ones a real session
+// ever uses. They are overridable purely so the relay e2e suite can spawn its
+// own relay beside a relay you already have running: without that, `npm test`
+// fails with EADDRINUSE on a machine where the pit wall is set up and ready,
+// which reads as three broken tests rather than as a busy port.
+const port = (name, dflt) => Number(process.env[name]) || dflt;
+const UDP_PORT = port('GT7_UDP_PORT', 33740);   // GT7 sends telemetry here
+const HB_PORT  = port('GT7_HB_PORT', 33739);    // GT7 listens for heartbeat here
+const WS_PORT  = port('GT7_WS_PORT', 20777);    // WebSocket port for the React app
 
 // label → resolved IP (e.g. "PS5-642" → "192.168.1.10")
 const labelToIP  = new Map();

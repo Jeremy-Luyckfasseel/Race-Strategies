@@ -154,6 +154,35 @@ section('the clock counts down, and drives the plan');
   v.unmount();
 }
 
+section('the Strategy tab says why its total is not the one you typed');
+{
+  // The tab read "6:57:42" for an 8 h race and looked broken. It was right —
+  // the clock had been running an hour — but nothing said so, and a total
+  // that does not match your input is a bug until something explains it.
+  localStorage.clear();
+  const v = boot();
+  click($$(v.container, '.tab-btn').find((b) => /Strategy|Stratégie/.test(b.textContent)));
+  assert('nothing to explain before the race is started',
+    $(v.container, '.clock-banner') === null);
+
+  click($$(v.container, '.tab-btn').find((b) => /Race|Course/.test(b.textContent)));
+  click(startButton(v.container));
+  click($$(v.container, '.tab-btn').find((b) => /Strategy|Stratégie/.test(b.textContent)));
+
+  const banner = $(v.container, '.clock-banner');
+  assert('once it is running the tab says the plan is for the remainder', banner !== null);
+  assert('and names both the time left and the race you configured',
+    /8h/.test(textOf($(v.container, '.clock-banner-time'))),
+    textOf($(v.container, '.clock-banner-time')));
+
+  // The way out is on the banner itself, not back on another tab.
+  click($(v.container, '.clock-banner-clear'));
+  assert('clearing the start from here removes the banner',
+    $(v.container, '.clock-banner') === null);
+  assert('and the stamp with it', localStorage.getItem(RACE_START_KEY) === null);
+  v.unmount();
+}
+
 section('clearing the start');
 {
   localStorage.clear();
