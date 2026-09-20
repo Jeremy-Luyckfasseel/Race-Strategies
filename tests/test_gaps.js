@@ -9,7 +9,7 @@
  */
 
 import {
-  trackLapCrossings, lapInterval, formatInterval, lapProgress, liveInterval,
+  trackLapCrossings, lapInterval, formatInterval, lapProgress, liveInterval, lapsOnMe,
 } from '../src/logic/gaps.js';
 
 let passed = 0;
@@ -265,6 +265,52 @@ section('liveInterval — the gap moves between crossings, not once a lap');
   const fresh = trackLapCrossings(new Map(), feed(5, 0)).get('x');
   assert('an unplaceable car falls back instead of vanishing',
     liveInterval(ahead, fresh, 95_000) === lapInterval(ahead, fresh));
+}
+
+section('who is traffic and who is a rival');
+{
+  // On the map every dot looks the same, so a car about to be lapped is
+  // indistinguishable from one you are fighting — and they call for opposite
+  // things. This is the number that separates them.
+  const me = { lap: 40, crossedAt: 100_000, prevCrossedAt: 0, witnessed: true };
+
+  assert('a car on my lap is a rival, not traffic',
+    lapsOnMe(me, { lap: 40, crossedAt: 103_000, witnessed: true }) === null);
+
+  assert('two laps down reads as two laps down',
+    lapsOnMe(me, { lap: 38, crossedAt: 100_000, witnessed: true }) === -2);
+
+  assert('and a car two laps up reads the other way',
+    lapsOnMe(me, { lap: 42, crossedAt: 100_000, witnessed: true }) === 2);
+
+  // The whole reason this goes through lapInterval: between their crossing and
+  // mine, a car three seconds ahead of me is on a higher lap number.
+  // Subtracting counters would put "+1L" on it for part of every lap — on the
+  // car I am actually racing, which is the one dot that must stay clean.
+  // Both started lap 40 on a 120 s lap: them at t=100s, me three seconds later.
+  // They have now started lap 41 while I am still on 40.
+  const meMidLap = { lap: 40, crossedAt: 103_000, prevCrossedAt: 0, witnessed: true };
+  const justAhead = { lap: 41, crossedAt: 220_000, prevCrossedAt: 100_000, witnessed: true };
+  assert('a car three seconds ahead that has just crossed is still a rival',
+    lapsOnMe(meMidLap, justAhead) === null, String(lapsOnMe(meMidLap, justAhead)));
+
+  // ...while one genuinely a lap down does read as lapped, by the same
+  // discriminator: a whole lap elapsed between the two crossings.
+  // They began their lap 39 BEFORE I began my lap 40 — a whole lap apart, not
+  // a hundred-and-something seconds within the same one.
+  const meLapped = { lap: 40, crossedAt: 220_000, prevCrossedAt: 100_000, witnessed: true };
+  const aLapDown = { lap: 39, crossedAt: 95_000, prevCrossedAt: 0, witnessed: true };
+  assert('but a car a full lap behind does read as lapped',
+    lapsOnMe(meLapped, aLapDown) === -1, String(lapsOnMe(meLapped, aLapDown)));
+
+  // And the boundary the discriminator actually draws: a car nearly a lap
+  // behind but still inside my current lap is 118 s back, not lapped. Calling
+  // that "-1L" would put a lapped marker on a car still on the same lap.
+  const nearlyALap = { lap: 39, crossedAt: 218_000, prevCrossedAt: 0, witnessed: true };
+  assert('a car 118s back on a 120s lap is not yet lapped',
+    lapsOnMe(meLapped, nearlyALap) === null);
+
+  assert('a car we have never seen cross says nothing', lapsOnMe(me, null) === null);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

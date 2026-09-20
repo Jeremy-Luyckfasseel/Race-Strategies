@@ -15,6 +15,7 @@ import { RACE_START_KEY, raceProgress, applyRaceClock, formatClock } from "./log
 import { conditionsUnavailable, crossoverSecsPerLap, tyreOnlyPitLoss } from "./logic/conditions";
 import { isSafetyCar, safetyCarDeployed, fieldSlowdown, pitLossUnderSafetyCar } from "./logic/carRoles";
 import { paceBefore, paceAfter, incidentLapCostMs } from "./logic/paceTrack";
+import { lapsOnMe } from "./logic/gaps";
 import { measuredLossSecs, effectiveLossSecs } from "./logic/incident";
 import { pitNowScenarios, comparePitNow, fullServiceLoss } from "./logic/pitNow";
 import { computeStrategy } from "./hooks/useStrategy";
@@ -877,15 +878,24 @@ export default function App() {
             const cars = teamKeys.map((ip, i) => {
               const d = telem.teams.get(ip);
               const raw = teamLabels[ip];
+              // Whole laps between us, so a car about to be lapped does not
+              // look identical to one you are fighting. Nothing is added for a
+              // car on my lap — a clean tag IS the signal that this one counts.
+              const dl = strategyIp && ip !== strategyIp && !isSafetyCar(carRoles, ip)
+                ? lapsOnMe(telem.lapCrossings.get(strategyIp), telem.lapCrossings.get(ip))
+                : null;
+              const tag = isSafetyCar(carRoles, ip)
+                ? 'SC'
+                : (raw ? raw.trim().slice(0, 3).toUpperCase() : `T${i + 1}`);
               return {
                 id: ip,
                 // A short tag, not the full name: a dozen 9-character labels on
                 // a 420px-wide map is an unreadable pile on the start grid. The
                 // colour plus 3 letters identifies the car; the leaderboard has
                 // the full name.
-                label: isSafetyCar(carRoles, ip)
-                  ? 'SC'
-                  : (raw ? raw.trim().slice(0, 3).toUpperCase() : `T${i + 1}`),
+                label: dl ? `${tag} ${dl > 0 ? '+' : ''}${dl}L` : tag,
+                // Traffic is dimmed; the cars on my lap keep full weight.
+                lapped: dl != null,
                 posX: d?.posX, posZ: d?.posZ, onTrack: d?.onTrack,
                 isOwn: ip === strategyIp,
                 // The safety car is not one of the teams, so it does not take

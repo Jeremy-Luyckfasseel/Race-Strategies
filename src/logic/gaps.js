@@ -103,6 +103,32 @@ export function lapInterval(ahead, behind) {
   return secs >= 0 ? { secs } : null;
 }
 
+/**
+ * How many laps a car is up or down on mine, or null when we are on the same
+ * lap and are therefore racing each other.
+ *
+ * On the track map every dot looks the same, so a car you are about to lap is
+ * indistinguishable from one you are fighting — and they call for opposite
+ * things. This is what makes them different at a glance.
+ *
+ * It goes through `lapInterval` rather than subtracting the two lap counters,
+ * because a raw subtraction says "+1" about a car three seconds ahead of you
+ * for the part of every lap between their crossing and yours. That flicker is
+ * the bug lapInterval exists to resolve; doing the subtraction here would just
+ * reintroduce it on the map.
+ *
+ * @returns {number|null} positive if they are ahead by whole laps, negative if
+ *   they are down on me, null if we are on the same lap (or it cannot be told)
+ */
+export function lapsOnMe(mine, theirs) {
+  if (!mine || !theirs) return null;
+  const up = lapInterval(theirs, mine);
+  if (up && up.laps) return up.laps;
+  const down = lapInterval(mine, theirs);
+  if (down && down.laps) return -down.laps;
+  return null;
+}
+
 /** Render an interval for the leaderboard. Null becomes an em dash. */
 export function formatInterval(interval) {
   if (!interval) return null;

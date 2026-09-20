@@ -210,7 +210,7 @@ function CarDots({ live, map }) {
     // larger dot — not by a different colour, or it would stop matching its
     // leaderboard row. Cars in the pits stay on the map, dimmed, so you can
     // see who is boxed rather than having them blink out of existence.
-    const mkDot = (isOwn, color, label) => {
+    const mkDot = (isOwn, color, label, lapped) => {
       const g = document.createElementNS(NS, 'g');
       if (isOwn) {
         const ring = document.createElementNS(NS, 'circle');
@@ -224,9 +224,11 @@ function CarDots({ live, map }) {
       }
 
       const dot = document.createElementNS(NS, 'circle');
-      dot.setAttribute('r', isOwn ? '4.5' : '4');
+      // A car a lap or more away is not in your race this lap: smaller and
+      // faded, so the dots that are still full weight are the ones to look at.
+      dot.setAttribute('r', isOwn ? '4.5' : lapped ? '3' : '4');
       dot.setAttribute('fill', color);
-      if (!isOwn) dot.setAttribute('fill-opacity', '0.85');
+      if (!isOwn) dot.setAttribute('fill-opacity', lapped ? '0.45' : '0.85');
       dot.setAttribute('stroke', 'rgba(0,0,0,0.55)');
       dot.setAttribute('stroke-width', '0.75');
       g.appendChild(dot);
@@ -235,7 +237,8 @@ function CarDots({ live, map }) {
       txt.setAttribute('text-anchor', 'middle');
       txt.setAttribute('y', isOwn ? '-10' : '-7');
       txt.setAttribute('fill', color);
-      txt.setAttribute('font-size', isOwn ? '8.5' : '7.5');
+      if (lapped) txt.setAttribute('fill-opacity', '0.6');
+      txt.setAttribute('font-size', isOwn ? '8.5' : lapped ? '6.5' : '7.5');
       txt.setAttribute('font-weight', isOwn ? '800' : '700');
       txt.setAttribute('font-family', 'Barlow Condensed, sans-serif');
       // Dark outline painted behind the glyphs so short tags stay readable
@@ -356,11 +359,11 @@ function CarDots({ live, map }) {
           // Rebuild inner elements only when what they draw actually changes —
           // which car this slot holds, whether it is mine, or its name after a
           // rename. Its colour is fixed for the session, so it is not a factor.
-          const shape = `${c.id}|${c.isOwn ? 1 : 0}|${c.label}`;
+          const shape = `${c.id}|${c.isOwn ? 1 : 0}|${c.label}|${c.lapped ? 1 : 0}`;
           if (child._carShape !== shape) {
             child._carShape = shape;
             while (child.firstChild) child.removeChild(child.firstChild);
-            const fresh = mkDot(c.isOwn, color, c.label);
+            const fresh = mkDot(c.isOwn, color, c.label, c.lapped);
             while (fresh.firstChild) child.appendChild(fresh.firstChild);
           }
 
