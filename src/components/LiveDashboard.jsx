@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { DEFAULT_LANG, t } from '../i18n/strings';
 import { rivalSummary } from '../logic/rivalIntel';
 import { currentSetOutlook } from '../logic/tyreHistory';
+import { CARRY, REPAIR_AT_STOP, PIT_NOW } from '../logic/incident';
 
 const CANVAS_W = 420, CANVAS_H = 190, PAD = 16;
 
@@ -545,7 +546,8 @@ export function TrackMap({ currentLap, cars, mapRef, onReset, lang = DEFAULT_LAN
 export default function LiveDashboard({
   data, label, compound, pendingConfirmation, onCompoundChange,
   drivers, currentDriverId, pendingDriver, onDriverChange,
-  tyreLaps = null, tyreLife = null, fuelRecord = null, stintEntry = null, lang = DEFAULT_LANG,
+  tyreLaps = null, tyreLife = null, fuelRecord = null, stintEntry = null,
+  incident = null, onIncident, onClearIncident, onIncidentLoss, lang = DEFAULT_LANG,
 }) {
   const [showVitals, setShowVitals] = useState(false);
 
@@ -586,6 +588,22 @@ export default function LiveDashboard({
                   {data.totalCars > 0 && <span className="ld-dim">/{data.totalCars}</span>}
                 </span>
               </span>
+            )}
+            {onIncident && (
+              incident ? (
+                <button
+                  className="ld-incident-btn is-active"
+                  onClick={onClearIncident}
+                  title={t('inc_clear', lang)}
+                >
+                  {t('inc_active', lang, { lap: incident.lap })}
+                  <span className="ld-incident-x">×</span>
+                </button>
+              ) : (
+                <button className="ld-incident-btn" onClick={onIncident} title={t('inc_title', lang)}>
+                  {t('inc_button', lang)}
+                </button>
+              )
             )}
             {data.paused && <span className="ld-badge ld-badge-paused">{t('ld_paused', lang)}</span>}
             <span className={`ld-badge ${data.onTrack ? 'ld-badge-track' : 'ld-badge-pit'}`}>
@@ -665,6 +683,50 @@ export default function LiveDashboard({
                 <span className="ld-fi-wait">{t('ld_estimating', lang)}</span>
               )}
             </div>
+
+            {/* What the incident actually cost: the one-off, the ongoing rate,
+                and the three-way call that follows from them. */}
+            {incident && (
+              <div className="ld-incident">
+                <div className="ld-inc-line">
+                  {incident.oneOffSecs != null && (
+                    <span className="ld-inc-once">
+                      {t('inc_one_off', lang, { n: incident.oneOffSecs.toFixed(1) })}
+                    </span>
+                  )}
+                  {incident.lossSecs != null ? (
+                    <span className="ld-inc-rate">
+                      {t('inc_per_lap', lang, { n: incident.lossSecs.toFixed(1) })}
+                    </span>
+                  ) : (
+                    <span className="ld-inc-wait">{t('inc_measuring', lang)}</span>
+                  )}
+                  <label className="ld-inc-manual">
+                    <input
+                      type="number" min="0" step="0.1"
+                      value={incident.manualSecs ?? ''}
+                      placeholder={t('inc_manual_ph', lang)}
+                      onChange={(e) => onIncidentLoss?.(e.target.value)}
+                    />
+                    {t('inc_manual', lang)}
+                  </label>
+                </div>
+
+                {incident.decision && (
+                  <div className={`ld-inc-call ld-inc-call--${incident.decision.best}`}>
+                    {incident.decision.best === PIT_NOW && t('inc_best_pit_now', lang)}
+                    {incident.decision.best === CARRY && t('inc_best_carry', lang)}
+                    {incident.decision.best === REPAIR_AT_STOP
+                      && t('inc_best_repair_at_stop', lang, { lap: incident.nextStopLap ?? '?' })}
+                    {incident.decision.marginSecs != null && (
+                      <span className="ld-inc-margin">
+                        {t('inc_margin', lang, { n: incident.decision.marginSecs.toFixed(0) })}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {intel && intel.lastStopFuel != null && (
               <div className="ld-fuel-intel ld-fuel-intel--dim">

@@ -13,6 +13,7 @@
  */
 
 import { trackFuelUse } from './rivalIntel.js';
+import { trackLapTimes } from './paceTrack.js';
 import { trackLapCrossings } from './gaps.js';
 
 /**
@@ -101,12 +102,12 @@ export function stableCarId(registered, scannedHostname, sourceIp) {
  * Every field of the returned state reuses the incoming reference when nothing
  * about it changed, so callers can compare by identity and skip re-rendering.
  *
- * @param state {{teams: Map, order: string[], crossings: Map, fuel: Map}}
+ * @param state {{teams: Map, order: string[], crossings: Map, fuel: Map, pace: Map}}
  * @param pending Map<ip, packet> — buffered arrivals, newest per car
  * @param now epoch ms, for staleness
  */
 export function applyFlush(state, pending, now, staleMs = TEAM_STALE_MS) {
-  let { teams, order, crossings, fuel } = state;
+  let { teams, order, crossings, fuel, pace } = state;
 
   if (pending.size > 0) {
     // Read crossings before merging, while each packet's own arrival stamp is
@@ -114,6 +115,9 @@ export function applyFlush(state, pending, now, staleMs = TEAM_STALE_MS) {
     crossings = trackLapCrossings(crossings, pending);
     // Every car's fuel, which is what tells you when a rival must box.
     fuel = trackFuelUse(fuel || new Map(), pending);
+    // A short window of completed laps, for measuring what an incident cost
+    // and for spotting a rival who has quietly lost pace.
+    pace = trackLapTimes(pace || new Map(), pending);
 
     teams = new Map(teams);
     for (const [ip, packet] of pending) {
@@ -123,7 +127,7 @@ export function applyFlush(state, pending, now, staleMs = TEAM_STALE_MS) {
   }
 
   teams = dropStaleTeams(teams, now, staleMs);
-  return { teams, order, crossings, fuel: fuel || new Map() };
+  return { teams, order, crossings, fuel: fuel || new Map(), pace: pace || new Map() };
 }
 
 /**

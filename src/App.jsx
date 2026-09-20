@@ -14,6 +14,8 @@ import { pickAutoConnectIp } from "./logic/connection";
 import { RACE_START_KEY, raceProgress, applyRaceClock } from "./logic/raceClock";
 import { conditionsUnavailable, crossoverSecsPerLap, tyreOnlyPitLoss } from "./logic/conditions";
 import { isSafetyCar, safetyCarDeployed, fieldSlowdown, pitLossUnderSafetyCar } from "./logic/carRoles";
+import { paceBefore, paceAfter, incidentLapCostMs } from "./logic/paceTrack";
+import { incidentDecision, measuredLossSecs, effectiveLossSecs } from "./logic/incident";
 import LiveDashboard, { TrackMap } from "./components/LiveDashboard";
 import TelemetryLeaderboard from "./components/TelemetryLeaderboard";
 import TelemetryControls from "./components/TelemetryControls";
@@ -559,6 +561,60 @@ export default function App() {
   );
   const scPitLoss = pitLossUnderSafetyCar(tyreOnlyPitLoss(inputs), scSlowdown);
 
+  // Something went wrong. Deliberately not a "damage" flag: a spin, a penalty
+  // or anything else that makes the plan wrong gets the same treatment, since
+  // the questions are the same — what is it costing, and do I stop.
+  const [incidentMark, setIncidentMark] = useState(null);
+  const markIncident = useCallback(() => {
+    const rec = strategyIp ? telem.pace?.get(strategyIp) : null;
+    setIncidentMark({
+      lap: (strategyIp ? telem.teams.get(strategyIp)?.currentLap : null) ?? 0,
+      // How many laps were already on record, so the laps before and after can
+      // be told apart later.
+      beforeCount: rec ? rec.times.length : 0,
+      manualSecs: '',
+    });
+  }, [strategyIp, telem.pace, telem.teams]);
+  const clearIncident = useCallback(() => setIncidentMark(null), []);
+  const setIncidentLoss = useCallback((v) => {
+    setIncidentMark((prev) => (prev ? { ...prev, manualSecs: v } : prev));
+  }, []);
+
+  // Everything the incident panel shows, derived rather than stored: the
+  // one-off cost of the lap it happened on, the ongoing rate since, and the
+  // three-way call between carrying it, repairing at a stop you were making
+  // anyway, and coming in now.
+  const incident = useMemo(() => {
+    if (!incidentMark) return null;
+    const rec = strategyIp ? telem.pace?.get(strategyIp) : null;
+    const before = paceBefore(rec, incidentMark.beforeCount);
+    const after = paceAfter(rec, incidentMark.beforeCount);
+    const oneOffMs = incidentLapCostMs(rec, incidentMark.beforeCount);
+    const lossSecs = effectiveLossSecs(
+      incidentMark.manualSecs,
+      measuredLossSecs(before, after),
+    );
+
+    const strat = nowBest?.strategy ?? null;
+    const lap = (strategyIp ? telem.teams.get(strategyIp)?.currentLap : null) ?? incidentMark.lap;
+    const nextStop = strat?.stints?.find((st) => st.pitLap != null && st.pitLap >= lap) ?? null;
+
+    return {
+      lap: incidentMark.lap,
+      manualSecs: incidentMark.manualSecs,
+      oneOffSecs: oneOffMs != null ? oneOffMs / 1000 : null,
+      lossSecs,
+      nextStopLap: nextStop ? nextStop.pitLap : null,
+      decision: incidentDecision({
+        lossPerLapSecs: lossSecs,
+        lapsRemaining: (strat?.totalLaps ?? 0) - lap,
+        lapsToNextStop: nextStop ? nextStop.pitLap - lap : null,
+        pitLossSecs: tyreOnlyPitLoss(inputs),
+        repairSecs: 15,
+      }),
+    };
+  }, [incidentMark, strategyIp, telem.pace, telem.teams, nowBest, inputs]);
+
   const nowCompoundId = (strategyIp && teamCompounds[strategyIp]) || null;
   const nowTireLife = nowCompoundId
     ? Number(inputs.compounds.find((c) => c.id === nowCompoundId)?.tireLife) || 0
@@ -847,6 +903,7 @@ export default function App() {
               fuelUse: telem.fuelUse,
               carRoles,
               onRoleChange: updateCarRoles,
+              pace: telem.pace,
               lang,
             };
             return (
@@ -927,6 +984,13 @@ export default function App() {
                           ) || null}
                           fuelRecord={telem.fuelUse?.get(displayIp) ?? null}
                           stintEntry={stintLog.logs.get(displayIp) ?? null}
+                          // The incident is about MY car, so the controls only
+                          // appear on mine — a rival's dashboard has nothing to
+                          // report and nothing to decide.
+                          incident={displayIp === strategyIp ? incident : null}
+                          onIncident={displayIp === strategyIp ? markIncident : undefined}
+                          onClearIncident={clearIncident}
+                          onIncidentLoss={setIncidentLoss}
                           lang={lang}
                         />
                       ) : (

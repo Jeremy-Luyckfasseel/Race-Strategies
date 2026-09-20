@@ -3598,6 +3598,100 @@ input[type="range"]::-moz-range-thumb {
 
 .now-empty,
 /* Race clock — only present once the race has actually been started. */
+/* ── Incident ── */
+.ld-incident-btn {
+  background: transparent;
+  border: 1px solid var(--rule-bright);
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
+  padding: 2px 9px;
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ld-incident-btn:hover { color: var(--text-primary); border-color: var(--text-muted); }
+
+.ld-incident-btn.is-active {
+  background: var(--danger);
+  border-color: transparent;
+  color: #fff;
+}
+
+.ld-incident-x { margin-left: 6px; opacity: 0.8; }
+
+.ld-incident {
+  margin-top: 6px;
+  padding: 7px 10px;
+  border-left: 3px solid var(--danger);
+  background: rgba(228, 0, 43, 0.07);
+  border-radius: var(--radius-xs);
+}
+
+.ld-inc-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--font-data);
+  font-size: 0.64rem;
+}
+
+.ld-inc-once { color: var(--text-muted); }
+.ld-inc-rate { color: var(--danger); font-weight: 700; }
+.ld-inc-wait { color: var(--text-muted); font-style: italic; }
+
+.ld-inc-manual {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  color: var(--text-muted);
+}
+
+.ld-inc-manual input {
+  width: 52px;
+  padding: 1px 4px;
+  font-family: var(--font-data);
+  font-size: 0.64rem;
+  background: transparent;
+  border: 1px solid var(--rule-bright);
+  border-radius: 2px;
+  color: var(--text-primary);
+}
+
+.ld-inc-call {
+  margin-top: 5px;
+  font-family: var(--font-display);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+}
+
+.ld-inc-call--pit_now { color: var(--danger); }
+.ld-inc-call--carry { color: var(--success); }
+.ld-inc-call--repair_at_stop { color: var(--warning); }
+.ld-inc-margin { margin-left: 8px; font-family: var(--font-data); font-size: 0.62rem; color: var(--text-muted); font-weight: 400; }
+
+/* A rival who has quietly lost pace. */
+.lb-damaged-pill {
+  margin-left: 4px;
+  padding: 1px 4px 0;
+  border-radius: 2px;
+  background: rgba(228, 0, 43, 0.18);
+  color: var(--danger);
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
 /* ── Safety car ── */
 .lb-row-sc {
   grid-template-columns: 40px 1fr 66px 80px 80px 50px 84px;

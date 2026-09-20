@@ -3,6 +3,7 @@ import { teamColor } from '../logic/teams';
 import { liveInterval, formatInterval } from '../logic/gaps';
 import { rivalSummary } from '../logic/rivalIntel';
 import { splitByRole, isSafetyCar, toggleSafetyCar } from '../logic/carRoles';
+import { detectPaceDrop } from '../logic/paceTrack';
 import { DEFAULT_LANG, t, compoundShort } from '../i18n/strings';
 
 const COMPOUNDS = ['H', 'M', 'S', 'IM', 'W'];
@@ -36,7 +37,7 @@ function fuelBarColor(pct) {
 export default function TelemetryLeaderboard({
   teams, teamOrder = [], teamLabels, teamCompounds, pendingIps, selectedIp, onSelect, onCompoundChange,
   myTeamIp = '', onSetMyTeam, onRenameTeam, lapCrossings, fuelUse,
-  carRoles = {}, onRoleChange, lang = DEFAULT_LANG,
+  carRoles = {}, onRoleChange, pace, lang = DEFAULT_LANG,
 }) {
   const [pickerIp, setPickerIp] = useState(null);
   const [editingIp, setEditingIp] = useState(null);
@@ -145,6 +146,9 @@ export default function TelemetryLeaderboard({
         // about their car. Held back until a few clean laps have been seen.
         const intel      = rivalSummary(fuelUse?.get(ip));
         const boxLap     = intel && intel.confident ? intel.pitLap : null;
+        // A step down in pace that holds, with no stop to explain it. Free
+        // intel: they will have to come in, and they are takeable now.
+        const paceDrop   = d.onTrack ? detectPaceDrop(pace?.get(ip)) : null;
         const isEditing  = editingIp === ip;
 
         const posClass = pos === 1 ? ' lbp-gold' : pos === 2 ? ' lbp-silver' : pos === 3 ? ' lbp-bronze' : '';
@@ -206,6 +210,16 @@ export default function TelemetryLeaderboard({
                           ✎
                         </button>
                       </>
+                    )}
+                    {paceDrop && (
+                      <span
+                        className="lb-damaged-pill"
+                        title={t('lb_damaged_title', lang, {
+                          n: (paceDrop.lostMs / 1000).toFixed(1), lap: paceDrop.fromLap,
+                        })}
+                      >
+                        {t('lb_damaged', lang, { n: (paceDrop.lostMs / 1000).toFixed(1) })}
+                      </span>
                     )}
                     {isMine && <span className="lb-mine-pill">{t('lb_me', lang)}</span>}
                     {!d.onTrack && <span className="lb-box-pill">{t('lb_box', lang)}</span>}
