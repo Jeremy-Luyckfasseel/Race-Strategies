@@ -40,6 +40,7 @@ export default {
 
   // ── Now view ──
   now_tab: 'Course',
+  now_show_field: 'Afficher le peloton',
   now_waiting: 'En attente de télémétrie',
   now_no_team: "Des voitures émettent, mais aucune n'est marquée comme la vôtre",
   now_no_plan: 'Aucune stratégie — configurez et calculez',
@@ -144,7 +145,6 @@ export default {
   app_import_failed: 'Import impossible : {reason}.',
   app_import_confirm: 'Restaurer cette sauvegarde ?\n\nElle remplacera la course en cours.',
   app_tab_strategy: 'Stratégie',
-  app_tab_telemetry: 'Télémétrie',
   app_tab_drivers: 'Pilotes',
   app_recalculating: 'Recalcul…',
   app_empty_title: 'Aucune Donnée',
@@ -273,7 +273,7 @@ export default {
   // ── DriversTab ──
   dt_title: 'Journal des Relais',
   dt_reset: 'Réinitialiser',
-  dt_no_team: 'Marquez votre équipe avec ★ dans le classement (onglet Télémétrie) pour suivre vos relais ici.',
+  dt_no_team: 'Marquez votre équipe avec ★ dans le classement, onglet Course, pour suivre vos relais ici.',
   dt_go_telemetry: 'Ouvrir {tab}',
   dt_empty: "Aucun relais enregistré pour l'instant.",
   dt_live: ' (en cours)',

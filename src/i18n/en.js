@@ -46,6 +46,7 @@ export default {
 
   // ── Now view ──
   now_tab: 'Race',
+  now_show_field: 'Show the field',
   now_waiting: 'Waiting for telemetry',
   now_no_team: 'Cars are streaming, but none is marked as yours',
   now_no_plan: 'No strategy yet — set up inputs and calculate',
@@ -150,7 +151,6 @@ export default {
   app_import_failed: 'Import failed: {reason}.',
   app_import_confirm: 'Restore this backup?\n\nIt will replace the running race.',
   app_tab_strategy: 'Strategy',
-  app_tab_telemetry: 'Telemetry',
   app_tab_drivers: 'Drivers',
   app_recalculating: 'Recalculating…',
   app_empty_title: 'No Data',
@@ -279,7 +279,7 @@ export default {
   // ── DriversTab ──
   dt_title: 'Stint Log',
   dt_reset: 'Reset',
-  dt_no_team: 'Mark your team with ★ in the leaderboard (Telemetry tab) to follow your stints here.',
+  dt_no_team: 'Mark your team with ★ in the leaderboard, on the Race tab, to follow your stints here.',
   dt_go_telemetry: 'Open {tab}',
   dt_empty: 'No stint recorded yet.',
   dt_live: ' (running)',

@@ -16,10 +16,11 @@ endurance race and ranks them by laps completed, then race time. It also has a
 **live telemetry** tab that reads real-time data from one or more PS5s running
 GT7 via a standalone Node UDP→WebSocket relay.
 
-Four tabs: **Course** (the live single-team "Now" view — default landing),
-**Stratégie** (the calculator), **Télémétrie** (live dashboard + track map +
-the multi-team leaderboard, which now reveals itself automatically once a
-second car appears), and **Pilotes** (per-driver drive-time totals + the
+Three tabs: **Course** (the in-race screen and default landing — the plan
+strip across the top, and under it the multi-team leaderboard, the track map
+and the selected car's dashboard; the leaderboard reveals itself automatically
+once a second car appears), **Stratégie** (the calculator, the only tab that
+carries the setup sidebar), and **Pilotes** (per-driver drive-time totals + the
 per-stint log — duration, tyre, avg/best/worst lap — built from pit-exit/entry
 events; see `stintLog.js`/`useStintLog.js` below). **Every user-facing string now
 goes through the i18n layer** (`src/i18n/strings.js` + `en.js`/`fr.js`): English is

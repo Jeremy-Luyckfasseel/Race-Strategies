@@ -133,9 +133,11 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
       {!hasData && (
         <div className="now-waiting">
           <span>{t(needsTeam ? 'now_no_team' : 'now_waiting', lang)}</span>
+          {/* The leaderboard is on this same screen now — it just starts
+              folded away, so this opens it rather than changing tab. */}
           {needsTeam && onGoToTelemetry && (
             <button className="btn-secondary now-waiting-action" onClick={onGoToTelemetry}>
-              {t('dt_go_telemetry', lang, { tab: t('app_tab_telemetry', lang) })}
+              {t('now_show_field', lang)}
             </button>
           )}
         </div>

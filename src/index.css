@@ -2103,12 +2103,74 @@ input[type="range"]::-moz-range-thumb {
    Telemetry full-screen layout
    ============================================================ */
 
-.tab-content--telemetry {
+.tab-content--race {
   padding: 0;
   display: flex;
   flex-direction: column;
   height: calc(100vh - var(--header-height) - 48px); /* 48px = tab bar */
   overflow: hidden;
+}
+
+/* ── The race strip ──
+   The plan and the field used to be two tabs, so you read the call on one
+   screen and watched the car obey it on another. The strip is the same
+   NowView laid out as a band: everything you act on across the top, the
+   field, the map and the car underneath it. It does not scroll and it does
+   not grow — the columns below are what needs the height. */
+.race-strip {
+  flex: 0 0 auto;
+  padding: 12px 20px 14px;
+  border-bottom: 1px solid var(--rule-mid);
+  background: var(--bg-overlay, transparent);
+}
+.race-strip .now-view {
+  max-width: none;
+  margin: 0;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 28px;
+}
+/* Full-width rows: the header, and anything that is an alert. */
+.race-strip .now-header,
+.race-strip .now-sc,
+.race-strip .now-cond-warn,
+.race-strip .now-waiting,
+.race-strip .now-empty { flex: 0 0 100%; }
+/* The big lap countdown reads as one line here, not a stacked block. */
+.race-strip .now-countdown {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.race-strip .now-countdown-num { font-size: 2.6rem; line-height: 1; }
+.race-strip .now-action { flex: 1 1 auto; min-width: 260px; }
+/* The crossover number is a standing fact, not a call — it led the strip
+   because it happens to render first. It goes under everything you act on. */
+.race-strip .now-crossover { order: 9; flex: 0 0 100%; }
+
+/* ── The setup row ──
+   Both bars are folded almost all race, so side by side they cost one row
+   instead of two. Whichever is opened takes the width back by wrapping. */
+.race-util {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0 12px;
+  padding: 8px 20px 0;
+}
+.race-util .tc-panel { flex: 1 1 340px; margin-bottom: 8px; }
+.race-util .advanced-lan-toggle { width: auto; flex: 0 0 auto; margin-bottom: 8px; }
+/* Opening the CONNECTIONS panel unfolds a form; it takes the row back. The
+   toggle's own "open" means the leaderboard is showing, not that the button
+   grew, so it keeps its width. */
+.race-util:has(.tc-row) .tc-panel { flex-basis: 100%; }
+
+@media (max-width: 1100px) {
+  /* Below this the strip costs more height than the map can spare. */
+  .tab-content--race { height: auto; overflow: visible; }
+  .tab-content--race .telem-3col { flex-wrap: wrap; overflow: visible; }
 }
 
 /* ── 3-column telemetry layout ── */
@@ -3463,7 +3525,6 @@ input[type="range"]::-moz-range-thumb {
    "Now" view — glanceable in-race surface for the engineer (Phase 2, Task 2.1)
    --------------------------------------------------------------------------- */
 
-.tab-content--now { display: block; }
 
 .now-view {
   max-width: 880px;

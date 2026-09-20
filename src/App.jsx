@@ -220,7 +220,10 @@ export default function App() {
   const [telemSelectedIp, setTelemSelectedIp] = useState("");
   // Single-team is the default landing experience (Phase 2, Task 2.2). The
   // multi-team leaderboard still exists but is demoted behind an Advanced toggle.
-  const [activeTab, setActiveTab] = useState("now");
+  // "race" is the merged in-race screen: the plan strip over the field,
+  // the map and the selected car. Splitting those across two tabs meant
+  // reading the call on one and watching the car obey it on the other.
+  const [activeTab, setActiveTab] = useState("race");
   const [showAdvancedLb, setShowAdvancedLb] = useState(false);
 
   // First-run onboarding gate (Phase 3, Task 3.3).
@@ -845,8 +848,8 @@ export default function App() {
         <section className="results-area">
           <div className="tab-bar">
             <button
-              className={`tab-btn${activeTab === "now" ? " tab-active" : ""}`}
-              onClick={() => setActiveTab("now")}
+              className={`tab-btn${activeTab === "race" ? " tab-active" : ""}`}
+              onClick={() => setActiveTab("race")}
             >
               {t("now_tab", lang)}
               {telem.connected && telem.teams.size > 0 && (
@@ -860,15 +863,6 @@ export default function App() {
               {t("app_tab_strategy", lang)}
             </button>
             <button
-              className={`tab-btn${activeTab === "telemetry" ? " tab-active" : ""}`}
-              onClick={() => setActiveTab("telemetry")}
-            >
-              {t("app_tab_telemetry", lang)}
-              {telem.connected && telem.teams.size > 0 && (
-                <span className="tab-live-dot" />
-              )}
-            </button>
-            <button
               className={`tab-btn${activeTab === "drivers" ? " tab-active" : ""}`}
               onClick={() => setActiveTab("drivers")}
             >
@@ -879,14 +873,58 @@ export default function App() {
             </button>
           </div>
 
-          {activeTab === "now" && (
-            <div className="tab-content tab-content--now">
+          {activeTab === "race" && (() => {
+            const cars = teamKeys.map((ip, i) => {
+              const d = telem.teams.get(ip);
+              const raw = teamLabels[ip];
+              return {
+                id: ip,
+                // A short tag, not the full name: a dozen 9-character labels on
+                // a 420px-wide map is an unreadable pile on the start grid. The
+                // colour plus 3 letters identifies the car; the leaderboard has
+                // the full name.
+                label: isSafetyCar(carRoles, ip)
+                  ? 'SC'
+                  : (raw ? raw.trim().slice(0, 3).toUpperCase() : `T${i + 1}`),
+                posX: d?.posX, posZ: d?.posZ, onTrack: d?.onTrack,
+                isOwn: ip === strategyIp,
+                // The safety car is not one of the teams, so it does not take
+                // a team colour — it reads as what it is, at a glance.
+                isSafety: isSafetyCar(carRoles, ip),
+                color: isSafetyCar(carRoles, ip) ? '#FFFFFF' : teamColor(telem.teamOrder.indexOf(ip)),
+              };
+            });
+            const lbProps = {
+              teams: telem.teams,
+              teamOrder: telem.teamOrder,
+              teamLabels,
+              teamCompounds,
+              pendingIps: detector.pendingIps,
+              selectedIp: displayIp,
+              onSelect: setTelemSelectedIp,
+              onCompoundChange: (ip, c) => updateTeamCompound(ip, c),
+              myTeamIp,
+              onSetMyTeam: setMyTeam,
+              onRenameTeam: updateTeamLabel,
+              lapCrossings: telem.lapCrossings,
+              fuelUse: telem.fuelUse,
+              carRoles,
+              onRoleChange: updateCarRoles,
+              pace: telem.pace,
+              scDeployed: !!scDeployedIp,
+              lang,
+            };
+            return (
+            <div className="tab-content tab-content--race">
               <LearnerRecommendations
                 recommendations={learner.recommendations}
                 onAccept={acceptRecommendation}
                 onIgnore={learner.ignore}
                 lang={lang}
               />
+              {/* The strip: the clock, the plan and the next call, across the
+                  top of the screen the car is actually watched on. */}
+              <div className="race-strip">
               <NowView
                 data={strategyIp ? telem.teams.get(strategyIp) : null}
                 strategy={nowBest?.strategy ?? null}
@@ -897,7 +935,7 @@ export default function App() {
                 onToggleFreeze={toggleFreeze}
                 label={strategyIp ? getTeamLabel(strategyIp) : null}
                 needsTeam={!strategyIp && telem.teams.size > 0}
-                onGoToTelemetry={() => setActiveTab("telemetry")}
+                onGoToTelemetry={() => setShowAdvancedLb(true)}
                 clock={clock}
                 onStartRace={startRace}
                 onClearRace={clearRaceStart}
@@ -919,8 +957,110 @@ export default function App() {
                 )}
                 lang={lang}
               />
+              </div>
+
+              {/* Two folded setup bars, stacked, cost 50px of a screen whose
+                  whole job is the columns below. They share a row; either one
+                  takes the full width back when it is opened. */}
+              <div className="race-util">
+                <TelemetryControls
+                  telem={telem}
+                  ps5IPs={ps5IPs}
+                  onSavePS5IPs={savePS5IPs}
+                  telemUrl={telemUrl}
+                  setTelemUrl={setTelemUrl}
+                  teamLabels={teamLabels}
+                  onTeamLabelChange={updateTeamLabel}
+                  lang={lang}
+                />
+                {telem.teams.size > 0 && (
+                  <button
+                    className={`advanced-lan-toggle${showAdvancedLb ? " is-open" : ""}`}
+                    onClick={() => setShowAdvancedLb((v) => !v)}
+                  >
+                    {showAdvancedLb
+                      ? t("app_lb_hide", lang)
+                      : `${t("app_lb_show", lang)}${telem.teams.size > 1 ? ` (${telem.teams.size})` : ""}`}
+                  </button>
+                )}
+              </div>
+              {telem.teams.size === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-text-block">
+                    <p className="empty-title">
+                      {telem.connected ? t("app_waiting_ps5", lang) : t("app_telem_offline", lang)}
+                    </p>
+                    <p className="empty-text">
+                      {telem.connected
+                        ? t("app_waiting_ps5_text", lang)
+                        : t("app_offline_text", lang)}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="telem-3col">
+                  {showAdvancedLb && (
+                    <div className="telem-3col-lb">
+                      <TelemetryLeaderboard {...lbProps} />
+                    </div>
+                  )}
+                  <div className="telem-3col-map">
+                    <TrackMap
+                      currentLap={telem.teams.get(displayIp)?.currentLap ?? 0}
+                      cars={cars}
+                      mapRef={mapRef}
+                      onReset={resetMap}
+                      lang={lang}
+                    />
+                  </div>
+                  <div className="telem-3col-data">
+                    {displayIp ? (
+                      <LiveDashboard
+                        data={telem.teams.get(displayIp)}
+                        label={`T${teamKeys.indexOf(displayIp) + 1} · ${getTeamLabel(displayIp)}`}
+                        compound={teamCompounds[displayIp] || null}
+                        pendingConfirmation={detector.pendingIps.has(displayIp)}
+                        onCompoundChange={(c) => updateTeamCompound(displayIp, c)}
+                        // Only my own car has a driver roster — offering my
+                        // drivers on a rival's dashboard would just log a lie.
+                        drivers={displayIp === strategyIp ? inputs.drivers : null}
+                        currentDriverId={stintLog.logs.get(displayIp)?.current?.driverId ?? null}
+                        pendingDriver={stintLog.pendingDriverIps.has(displayIp)}
+                        onDriverChange={(id) => stintLog.assignDriver(displayIp, id)}
+                        // Tyre life is counted in laps since this set went
+                        // on, measured against the life configured for that
+                        // compound — GT7 reports no wear of its own.
+                        tyreLaps={(() => {
+                          const open = stintLog.logs.get(displayIp)?.current;
+                          const lap = telem.teams.get(displayIp)?.currentLap;
+                          return open && lap != null ? Math.max(0, lap - open.startLap) : null;
+                        })()}
+                        tyreLife={Number(
+                          inputs.compounds.find((c) => c.id === teamCompounds[displayIp])?.tireLife,
+                        ) || null}
+                        fuelRecord={telem.fuelUse?.get(displayIp) ?? null}
+                        stintEntry={stintLog.logs.get(displayIp) ?? null}
+                        // The incident is about MY car, so the controls only
+                        // appear on mine — a rival's dashboard has nothing to
+                        // report and nothing to decide.
+                        incident={displayIp === strategyIp ? incident : null}
+                        onIncident={displayIp === strategyIp ? markIncident : undefined}
+                        onClearIncident={clearIncident}
+                        onIncidentLoss={setIncidentLoss}
+                        onApplyPace={displayIp === strategyIp ? applyPacePenalty : undefined}
+                        lang={lang}
+                      />
+                    ) : (
+                      <div className="telem-no-sel">
+                        <p>{t("app_no_selection", lang)}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+            );
+          })()}
 
           {activeTab === "strategy" && (
             <div className={`tab-content${calculating ? " results-calculating" : ""}`}>
@@ -975,152 +1115,12 @@ export default function App() {
                 minDriverTimeSecs={inputs.minDriverTimeSecs}
                 activeIp={strategyIp}
                 onReset={stintLog.resetAll}
-                onGoToTelemetry={() => setActiveTab("telemetry")}
+                onGoToTelemetry={() => setActiveTab("race")}
                 lang={lang}
               />
             </div>
           )}
 
-          {activeTab === "telemetry" && (() => {
-            const cars = teamKeys.map((ip, i) => {
-              const d = telem.teams.get(ip);
-              const raw = teamLabels[ip];
-              return {
-                id: ip,
-                // A short tag, not the full name: a dozen 9-character labels on
-                // a 420px-wide map is an unreadable pile on the start grid. The
-                // colour plus 3 letters identifies the car; the leaderboard has
-                // the full name.
-                label: isSafetyCar(carRoles, ip)
-                  ? 'SC'
-                  : (raw ? raw.trim().slice(0, 3).toUpperCase() : `T${i + 1}`),
-                posX: d?.posX, posZ: d?.posZ, onTrack: d?.onTrack,
-                isOwn: ip === strategyIp,
-                // The safety car is not one of the teams, so it does not take
-                // a team colour — it reads as what it is, at a glance.
-                isSafety: isSafetyCar(carRoles, ip),
-                color: isSafetyCar(carRoles, ip) ? '#FFFFFF' : teamColor(telem.teamOrder.indexOf(ip)),
-              };
-            });
-            const lbProps = {
-              teams: telem.teams,
-              teamOrder: telem.teamOrder,
-              teamLabels,
-              teamCompounds,
-              pendingIps: detector.pendingIps,
-              selectedIp: displayIp,
-              onSelect: setTelemSelectedIp,
-              onCompoundChange: (ip, c) => updateTeamCompound(ip, c),
-              myTeamIp,
-              onSetMyTeam: setMyTeam,
-              onRenameTeam: updateTeamLabel,
-              lapCrossings: telem.lapCrossings,
-              fuelUse: telem.fuelUse,
-              carRoles,
-              onRoleChange: updateCarRoles,
-              pace: telem.pace,
-              scDeployed: !!scDeployedIp,
-              lang,
-            };
-            return (
-              <div className="tab-content tab-content--telemetry">
-                <TelemetryControls
-                  telem={telem}
-                  ps5IPs={ps5IPs}
-                  onSavePS5IPs={savePS5IPs}
-                  telemUrl={telemUrl}
-                  setTelemUrl={setTelemUrl}
-                  teamLabels={teamLabels}
-                  onTeamLabelChange={updateTeamLabel}
-                  lang={lang}
-                />
-                {telem.teams.size > 0 && (
-                  <button
-                    className={`advanced-lan-toggle${showAdvancedLb ? " is-open" : ""}`}
-                    onClick={() => setShowAdvancedLb((v) => !v)}
-                  >
-                    {showAdvancedLb
-                      ? t("app_lb_hide", lang)
-                      : `${t("app_lb_show", lang)}${telem.teams.size > 1 ? ` (${telem.teams.size})` : ""}`}
-                  </button>
-                )}
-                {telem.teams.size === 0 ? (
-                  <div className="empty-state">
-                    <div className="empty-text-block">
-                      <p className="empty-title">
-                        {telem.connected ? t("app_waiting_ps5", lang) : t("app_telem_offline", lang)}
-                      </p>
-                      <p className="empty-text">
-                        {telem.connected
-                          ? t("app_waiting_ps5_text", lang)
-                          : t("app_offline_text", lang)}
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="telem-3col">
-                    {showAdvancedLb && (
-                      <div className="telem-3col-lb">
-                        <TelemetryLeaderboard {...lbProps} />
-                      </div>
-                    )}
-                    <div className="telem-3col-map">
-                      <TrackMap
-                        currentLap={telem.teams.get(displayIp)?.currentLap ?? 0}
-                        cars={cars}
-                        mapRef={mapRef}
-                        onReset={resetMap}
-                        lang={lang}
-                      />
-                    </div>
-                    <div className="telem-3col-data">
-                      {displayIp ? (
-                        <LiveDashboard
-                          data={telem.teams.get(displayIp)}
-                          label={`T${teamKeys.indexOf(displayIp) + 1} · ${getTeamLabel(displayIp)}`}
-                          compound={teamCompounds[displayIp] || null}
-                          pendingConfirmation={detector.pendingIps.has(displayIp)}
-                          onCompoundChange={(c) => updateTeamCompound(displayIp, c)}
-                          // Only my own car has a driver roster — offering my
-                          // drivers on a rival's dashboard would just log a lie.
-                          drivers={displayIp === strategyIp ? inputs.drivers : null}
-                          currentDriverId={stintLog.logs.get(displayIp)?.current?.driverId ?? null}
-                          pendingDriver={stintLog.pendingDriverIps.has(displayIp)}
-                          onDriverChange={(id) => stintLog.assignDriver(displayIp, id)}
-                          // Tyre life is counted in laps since this set went
-                          // on, measured against the life configured for that
-                          // compound — GT7 reports no wear of its own.
-                          tyreLaps={(() => {
-                            const open = stintLog.logs.get(displayIp)?.current;
-                            const lap = telem.teams.get(displayIp)?.currentLap;
-                            return open && lap != null ? Math.max(0, lap - open.startLap) : null;
-                          })()}
-                          tyreLife={Number(
-                            inputs.compounds.find((c) => c.id === teamCompounds[displayIp])?.tireLife,
-                          ) || null}
-                          fuelRecord={telem.fuelUse?.get(displayIp) ?? null}
-                          stintEntry={stintLog.logs.get(displayIp) ?? null}
-                          // The incident is about MY car, so the controls only
-                          // appear on mine — a rival's dashboard has nothing to
-                          // report and nothing to decide.
-                          incident={displayIp === strategyIp ? incident : null}
-                          onIncident={displayIp === strategyIp ? markIncident : undefined}
-                          onClearIncident={clearIncident}
-                          onIncidentLoss={setIncidentLoss}
-                          onApplyPace={displayIp === strategyIp ? applyPacePenalty : undefined}
-                          lang={lang}
-                        />
-                      ) : (
-                        <div className="telem-no-sel">
-                          <p>{t("app_no_selection", lang)}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
         </section>
       </main>
 

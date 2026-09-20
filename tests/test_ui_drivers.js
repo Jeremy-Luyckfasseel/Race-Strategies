@@ -57,7 +57,7 @@ section('no team marked yet');
     activeIp: null, onReset: () => {},
   }));
   assert('the tab explains how to claim a team',
-    /★/.test(v.container.textContent) && /Télémétrie/.test(v.container.textContent),
+    /★/.test(v.container.textContent) && /Course/.test(v.container.textContent),
     v.container.textContent.slice(0, 140));
   assert('no stint table is drawn', $(v.container, '.stint-table') === null);
   assert('and offers no Reset, because there is nothing to reset',
@@ -72,7 +72,7 @@ section('the empty state can take you there');
     logs: new Map(), drivers: DRIVERS, minDriverTimeSecs: 3600,
     activeIp: null, onReset: () => {}, onGoToTelemetry: () => { went += 1; },
   }));
-  const btn = $$(v.container, 'button').find((b) => /Télémétrie/.test(b.textContent));
+  const btn = $$(v.container, 'button').find((b) => /Course/.test(b.textContent));
   assert('a button goes to the telemetry tab', !!btn, v.container.textContent.slice(0, 120));
   if (btn) {
     click(btn);

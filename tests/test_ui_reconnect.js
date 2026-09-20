@@ -99,7 +99,7 @@ section('1. the PS5 goes quiet — the relay and browser stay up');
   freshStorage();
   const v = await mountApp();
   await v.send();
-  click(tabButton(v.container, 'Télémétrie'));
+  click(tabButton(v.container, 'Course'));
   await settle(30);
   assert('all three cars are listed', $$(v.container, '.lb-row').length === 3);
 
@@ -128,7 +128,7 @@ section('2. the relay drops — the browser reconnects by itself');
   freshStorage();
   const v = await mountApp();
   await v.send();
-  click(tabButton(v.container, 'Télémétrie'));
+  click(tabButton(v.container, 'Course'));
   await settle(30);
   const before = sockets.length;
 
@@ -161,7 +161,7 @@ section('3. the browser is reloaded — what comes back');
   freshStorage();
   const first = await mountApp();
   await first.send();
-  click(tabButton(first.container, 'Télémétrie'));
+  click(tabButton(first.container, 'Course'));
   await settle(30);
 
   // Name a team, claim one, and set a tyre — the things worth not losing.
@@ -188,7 +188,7 @@ section('3. the browser is reloaded — what comes back');
 
   const second = await mountApp();
   await second.send();
-  click(tabButton(second.container, 'Télémétrie'));
+  click(tabButton(second.container, 'Course'));
   await settle(30);
 
   assert('my team is still marked', $$(second.container, '.lb-mine-pill').length === 1);
@@ -210,7 +210,7 @@ section('4. a tyre cleared by a pit stop must not come back after a reload');
   freshStorage();
   const first = await mountApp();
   await first.send();
-  click(tabButton(first.container, 'Télémétrie'));
+  click(tabButton(first.container, 'Course'));
   await settle(30);
 
   click($($$(first.container, '.lb-row')[0], '.lb-tyre'));
@@ -231,7 +231,7 @@ section('4. a tyre cleared by a pit stop must not come back after a reload');
 
   const second = await mountApp();
   await second.send();
-  click(tabButton(second.container, 'Télémétrie'));
+  click(tabButton(second.container, 'Course'));
   await settle(30);
   assert('and it stays cleared after a reload, rather than resurrecting the old tyre',
     $$(second.container, '.lb-tyre')[0].textContent.trim() === '?',

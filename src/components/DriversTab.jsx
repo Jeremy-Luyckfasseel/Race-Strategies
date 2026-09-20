@@ -143,7 +143,7 @@ export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp,
               <button className="btn-secondary" onClick={onGoToTelemetry}>
                 {/* Named off the tab's own key so the button and the tab can
                     never drift apart, in any language. */}
-                {t('dt_go_telemetry', lang, { tab: t('app_tab_telemetry', lang) })}
+                {t('dt_go_telemetry', lang, { tab: t('now_tab', lang) })}
               </button>
             )}
           </div>

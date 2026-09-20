@@ -159,7 +159,7 @@ section('a ten-car field arrives and is shown');
   const v = await bootApp();
   await v.sendField();
 
-  click(tabButton(v.container, 'Télémétrie'));
+  click(tabButton(v.container, 'Course'));
   await settle(30);
 
   const rows = $$(v.container, '.lb-row');
@@ -180,7 +180,7 @@ section('claiming a team with ★ reaches everything downstream');
 {
   const v = await bootApp();
   await v.sendField();
-  click(tabButton(v.container, 'Télémétrie'));
+  click(tabButton(v.container, 'Course'));
   await settle(30);
 
   const MINE = 4;
@@ -206,7 +206,7 @@ section('naming a team reaches the map too');
 {
   const v = await bootApp();
   await v.sendField();
-  click(tabButton(v.container, 'Télémétrie'));
+  click(tabButton(v.container, 'Course'));
   await settle(30);
 
   const row = $$(v.container, '.lb-row')[2];
@@ -238,7 +238,7 @@ section('a car that goes quiet leaves the board');
 {
   const v = await bootApp();
   await v.sendField();
-  click(tabButton(v.container, 'Télémétrie'));
+  click(tabButton(v.container, 'Course'));
   await settle(30);
   assert('ten cars to start', $$(v.container, '.lb-row').length === 10);
 
@@ -258,7 +258,7 @@ section('the Pilotes tab follows the starred car, not the selected one');
 {
   const v = await bootApp();
   await v.sendField();
-  click(tabButton(v.container, 'Télémétrie'));
+  click(tabButton(v.container, 'Course'));
   await settle(30);
 
   // Claim car 4, then click car 7's row to inspect it.
@@ -285,7 +285,7 @@ section('a pit stop for my car prompts only for my car');
 {
   const v = await bootApp();
   await v.sendField();
-  click(tabButton(v.container, 'Télémétrie'));
+  click(tabButton(v.container, 'Course'));
   await settle(30);
   click($($$(v.container, '.lb-row')[4], '.lb-mine-btn'));
   await settle(30);
@@ -308,11 +308,43 @@ section('a pit stop for my car prompts only for my car');
   v.unmount();
 }
 
-section('all four tabs render with a full field');
+section('the race screen carries the plan strip and the field at once');
+{
+  // The plan and the car used to be two tabs: you read the call on one screen
+  // and watched the car obey it on another. This asserts they share a screen.
+  const v = await bootApp();
+  await v.sendField();
+  click(tabButton(v.container, 'Course'));
+  await settle(30);
+
+  assert('the plan strip is on the race screen',
+    $(v.container, '.race-strip .now-view') !== null);
+  assert('so is the track map',
+    $(v.container, '.telem-3col-map .track-map') !== null);
+  assert('so is the selected car',
+    $(v.container, '.telem-3col-data') !== null);
+  assert('and there is no separate telemetry tab left to switch to',
+    tabButton(v.container, 'Télémétrie') === undefined);
+
+  assert('and so is the field, on the same screen',
+    $(v.container, '.telem-3col-lb .lb-row') !== null);
+
+  // Folding the field away is a layout change, and the strip must not be
+  // part of it — it is the one thing on this screen that is always wanted.
+  click($$(v.container, '.advanced-lan-toggle')[0]);
+  await settle(30);
+  assert('folding the field away leaves the strip alone',
+    $(v.container, '.telem-3col-lb') === null
+    && $(v.container, '.race-strip .now-view') !== null
+    && $(v.container, '.telem-3col-map .track-map') !== null);
+  v.unmount();
+}
+
+section('all three tabs render with a full field');
 {
   const v = await bootApp();
   await v.sendField();
-  for (const tab of ['Course', 'Stratégie', 'Télémétrie', 'Pilotes']) {
+  for (const tab of ['Course', 'Stratégie', 'Pilotes']) {
     click(tabButton(v.container, tab));
     await settle(30);
     assert(`the ${tab} tab renders without blowing up`,
