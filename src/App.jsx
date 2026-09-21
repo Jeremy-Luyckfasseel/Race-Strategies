@@ -216,11 +216,14 @@ export default function App() {
   // is not re-rendering once a second for nothing.
   const [clockNow, setClockNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!raceStartedAt) return undefined;
-    setClockNow(Date.now());
+    // Unconditional. It used to run only once a race was started, which was
+    // fine while the only reader was the race clock — but the track map now
+    // places cars from it too, and in the lobby a frozen `now` freezes every
+    // car's position around the lap at different, stale fractions. One
+    // setState a second is nothing beside a 20 Hz telemetry flush.
     const id = setInterval(() => setClockNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [raceStartedAt]);
+  }, []);
   const [telemSelectedIp, setTelemSelectedIp] = useState("");
   // Single-team is the default landing experience (Phase 2, Task 2.2). The
   // multi-team leaderboard still exists but is demoted behind an Advanced toggle.
@@ -678,7 +681,7 @@ export default function App() {
       for (const ip of racingIps) {
         if (ip === strategyIp) continue;
         // Same lap only: you cannot undercut somebody you are lapping.
-        if (lapsOnMe(mine, telem.lapCrossings.get(ip)) != null) continue;
+        if (lapsOnMe(mine, telem.lapCrossings.get(ip), clockNow) != null) continue;
         const p = lapProgress(telem.lapCrossings.get(ip), clockNow);
         if (p == null || p <= myTrackPos) continue;
         if (!ahead || p < ahead.pos) ahead = { ip, pos: p };
@@ -705,11 +708,17 @@ export default function App() {
 
     const tf = trafficAhead(
       telem.lapCrossings, strategyIp, clockNow,
-      (ip) => (racingIps.includes(ip) ? lapsOnMe(mine, telem.lapCrossings.get(ip)) : null),
+      (ip) => (racingIps.includes(ip) ? lapsOnMe(mine, telem.lapCrossings.get(ip), clockNow) : null),
     );
 
     return {
-      position: position && { ...position, behind: position.aheadAfter.length ? name(position.aheadAfter[position.aheadAfter.length - 1]) : null },
+      position: position && {
+        ...position,
+        // Named here rather than in the pure layer, which has no idea what a
+        // car is called.
+        ahead: position.ahead && { ...position.ahead, name: name(position.ahead.ip) },
+        behind: position.behind && { ...position.behind, name: name(position.behind.ip) },
+      },
       undercut: uc,
       traffic: tf && { ...tf, who: name(tf.ip) },
     };
@@ -983,7 +992,7 @@ export default function App() {
               // look identical to one you are fighting. Nothing is added for a
               // car on my lap — a clean tag IS the signal that this one counts.
               const dl = strategyIp && ip !== strategyIp && !isSafetyCar(carRoles, ip)
-                ? lapsOnMe(telem.lapCrossings.get(strategyIp), telem.lapCrossings.get(ip))
+                ? lapsOnMe(telem.lapCrossings.get(strategyIp), telem.lapCrossings.get(ip), clockNow)
                 : null;
               const tag = isSafetyCar(carRoles, ip)
                 ? 'SC'

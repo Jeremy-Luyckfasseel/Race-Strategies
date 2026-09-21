@@ -18,9 +18,9 @@
  */
 
 import { useState } from "react";
-import { DEFAULT_LANG, t, compoundName } from "../i18n/strings";
+import { DEFAULT_LANG, t, compoundName, COMPOUND_ORDER } from "../i18n/strings";
 
-const COMPOUND_IDS = ["H", "M", "S", "IM", "W"];
+
 
 /**
  * A floor, not the real test. Whether "S7 12" fits is a question about
@@ -99,7 +99,7 @@ export default function StrategyTimeline({ stints, totalLaps, lang = DEFAULT_LAN
       <div className="card-header">
         <span className="card-title">{t("tl_title", lang)}</span>
         <div className="timeline-legend">
-          {COMPOUND_IDS.filter((id) => usedCompounds.has(id)).map((id) => (
+          {COMPOUND_ORDER.filter((id) => usedCompounds.has(id)).map((id) => (
             <span key={id} className="legend-item">
               <span className={`legend-swatch cmpd-fill-${id}`} />
               {compoundName(id, lang)}

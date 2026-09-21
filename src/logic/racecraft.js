@@ -62,7 +62,13 @@ function positionOf(crossings, ip, now) {
  *   P1, which is two notions of position on one screen. The geometry is only
  *   trusted for the DELTA — who crosses me while I am stationary — which is the
  *   part GT7 cannot answer.
- * @returns {{from:number,to:number,lost:number,aheadAfter:string[]}|null}
+ * @returns {{from:number,to:number,lost:number,aheadAfter:string[],
+ *   ahead:{ip:string,secs:number}|null, behind:{ip:string,secs:number}|null}|null}
+ *   `ahead`/`behind` are the cars I would rejoin BETWEEN, and how far off each
+ *   is in seconds of my own pace. Dropping a place matters much less if the car
+ *   that took it is eight seconds up the road than if it is half a second up,
+ *   and the position alone cannot tell you which — that is the difference
+ *   between rejoining into a fight and rejoining into clean air.
  */
 export function positionIfPitNow(crossings, myIp, pitLossSecs, now, only = null, basePos = null) {
   if (!crossings || !myIp || !(pitLossSecs > 0)) return null;
@@ -97,15 +103,31 @@ export function positionIfPitNow(crossings, myIp, pitLossSecs, now, only = null,
   // the leaderboard never print different numbers for the same car.
   const from = Number.isFinite(basePos) && basePos > 0 ? basePos : before;
 
+  // Where I land, and who is immediately either side of it.
+  const rejoinPos = me.pos - lostLaps;
+  const others = placed.filter((c) => c.ip !== myIp);
+  const gapTo = (c) => Math.abs(c.pos - rejoinPos) * (myLapMs / 1000);
+
+  // Nearest car still in front of me after the stop, and nearest still behind.
+  // Measured in MY lap time, because it is my pace that closes or holds them.
+  const inFront = others
+    .filter((c) => c.pos > rejoinPos)
+    .sort((a, b) => a.pos - b.pos)[0] ?? null;
+  const justBehind = others
+    .filter((c) => c.pos <= rejoinPos)
+    .sort((a, b) => b.pos - a.pos)[0] ?? null;
+
   return {
     from,
     to: Math.min(from + lost, placed.length),
     lost,
     // Named, because "P4" tells you the number and this tells you the problem.
-    aheadAfter: placed
-      .filter((c) => c.ip !== myIp && c.pos > me.pos - lostLaps)
+    aheadAfter: others
+      .filter((c) => c.pos > rejoinPos)
       .sort((a, b) => b.pos - a.pos)
       .map((c) => c.ip),
+    ahead: inFront ? { ip: inFront.ip, secs: gapTo(inFront) } : null,
+    behind: justBehind ? { ip: justBehind.ip, secs: gapTo(justBehind) } : null,
   };
 }
 

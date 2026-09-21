@@ -26,6 +26,27 @@ import { CONDITIONS } from '../logic/conditions';
 
 const round1 = (x) => Math.round(x * 10) / 10;
 
+/**
+ * Who you come out between, and by how much.
+ *
+ * Named cars with seconds either side, because "P6" alone does not distinguish
+ * rejoining into clean air from rejoining into a fight. Says "nothing behind"
+ * rather than inventing a car — in a ten-car field there is no P11.
+ */
+function neighbours(position, lang) {
+  const { ahead, behind } = position;
+  const s = (n) => n.toFixed(1);
+  if (ahead && behind) {
+    return t('rc_pos_between', lang, {
+      ahead: ahead.name, aheadSecs: s(ahead.secs),
+      behind: behind.name, behindSecs: s(behind.secs),
+    });
+  }
+  if (ahead) return t('rc_pos_ahead_only', lang, { ahead: ahead.name, aheadSecs: s(ahead.secs) });
+  if (behind) return t('rc_pos_behind_only', lang, { behind: behind.name, behindSecs: s(behind.secs) });
+  return t('rc_pos_alone', lang);
+}
+
 function CompoundChip({ id, lang }) {
   if (!id) return null;
   return <span className={`now-compound compound-${id}`}>{compoundName(id, lang) || id}</span>;
@@ -133,9 +154,11 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
               {racecraft.position.lost > 0
                 ? t('rc_pos_drop', lang, { from: racecraft.position.from, to: racecraft.position.to })
                 : t('rc_pos_hold', lang, { n: racecraft.position.to })}
-              {racecraft.position.behind && (
-                <span className="now-rc-dim"> {t('rc_pos_behind', lang, { who: racecraft.position.behind })}</span>
-              )}
+              {/* The place is only half the answer. Dropping to P6 into clean
+                  air is a different race from dropping to P6 half a second off
+                  the car in front, and the position number cannot tell them
+                  apart — this is what says whether you rejoin into a fight. */}
+              <span className="now-rc-dim"> {neighbours(racecraft.position, lang)}</span>
             </span>
           )}
 

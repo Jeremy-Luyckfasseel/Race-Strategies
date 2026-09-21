@@ -76,7 +76,10 @@ section('nothing to say, nothing on screen');
 section('where I would come out');
 {
   const drop = view({
-    position: { from: 2, to: 4, lost: 2, aheadAfter: ['a', 'b', 'c'], behind: 'Bordeaux' },
+    position: {
+      from: 2, to: 4, lost: 2, aheadAfter: ['a', 'b', 'c'],
+      ahead: { ip: 'c', secs: 2.1, name: 'Bordeaux' }, behind: null,
+    },
     undercut: null, traffic: null,
   });
   const txt = textOf($(drop.container, '.now-rc'));
@@ -90,7 +93,10 @@ section('where I would come out');
   // A stop that costs nothing is the more useful of the two answers, because
   // it is the one you would not have guessed.
   const free = view({
-    position: { from: 2, to: 2, lost: 0, aheadAfter: ['a'], behind: null },
+    position: {
+      from: 2, to: 2, lost: 0, aheadAfter: ['a'],
+      ahead: { ip: 'a', secs: 9.5, name: 'Lyon' }, behind: null,
+    },
     undercut: null, traffic: null,
   });
   const freeTxt = textOf($(free.container, '.now-rc'));
@@ -98,6 +104,52 @@ section('where I would come out');
   assert('and is not dressed as a loss',
     $(free.container, '.now-rc-item.is-free') !== null);
   free.unmount();
+}
+
+
+section('rejoining into a fight, or into clean air');
+{
+  // The place is half the answer; who is either side of it is the other half.
+  const fight = view({
+    position: {
+      from: 2, to: 4, lost: 2, aheadAfter: ['a', 'b', 'c'],
+      ahead: { ip: 'a', secs: 0.4, name: 'Lyon' },
+      behind: { ip: 'b', secs: 0.8, name: 'Nantes' },
+    },
+    undercut: null, traffic: null,
+  });
+  const txt = textOf($(fight.container, '.now-rc'));
+  assert('both neighbours are named', /Lyon/.test(txt) && /Nantes/.test(txt), txt);
+  assert('with the gap to each', /0\.4s/.test(txt) && /0\.8s/.test(txt), txt);
+  fight.unmount();
+
+  // Nobody behind is said, not implied by absence — in a ten-car field there
+  // is no P11, and a blank there would read as "unknown".
+  const last = view({
+    position: {
+      from: 2, to: 10, lost: 8, aheadAfter: ['a'],
+      ahead: { ip: 'a', secs: 6.2, name: 'Lyon' },
+      behind: null,
+    },
+    undercut: null, traffic: null,
+  });
+  const lastTxt = textOf($(last.container, '.now-rc'));
+  assert('coming out last says so plainly', /nothing behind/i.test(lastTxt), lastTxt);
+  assert('and still names what is in front', /Lyon.*6\.2s/.test(lastTxt), lastTxt);
+  last.unmount();
+
+  // Clean air is the answer that changes the call, so it is said outright.
+  const clear = view({
+    position: {
+      from: 1, to: 1, lost: 0, aheadAfter: [],
+      ahead: null, behind: { ip: 'b', secs: 30, name: 'Nantes' },
+    },
+    undercut: null, traffic: null,
+  });
+  assert('leading into clean air says clear air',
+    /clear air/i.test(textOf($(clear.container, '.now-rc'))),
+    textOf($(clear.container, '.now-rc')));
+  clear.unmount();
 }
 
 section('the undercut');
@@ -146,7 +198,10 @@ section('traffic ahead');
 section('all three at once');
 {
   const all = view({
-    position: { from: 2, to: 3, lost: 1, aheadAfter: ['a', 'b'], behind: 'Lyon' },
+    position: {
+      from: 2, to: 3, lost: 1, aheadAfter: ['a', 'b'],
+      ahead: { ip: 'a', secs: 1.2, name: 'Lyon' }, behind: null,
+    },
     undercut: { works: true, marginSecs: 0.9, gainSecs: 2.4, laps: 3, who: 'Lyon' },
     traffic: { ip: 'x', laps: 2.9, gapSecs: 8.7, closingSecsPerLap: 3, lapsDown: -2, who: 'Nantes' },
   });

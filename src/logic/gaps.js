@@ -120,17 +120,39 @@ export function lapInterval(ahead, behind) {
  * indistinguishable from one you are fighting — and they call for opposite
  * things. This is what makes them different at a glance.
  *
- * It goes through `lapInterval` rather than subtracting the two lap counters,
- * because a raw subtraction says "+1" about a car three seconds ahead of you
- * for the part of every lap between their crossing and yours. That flicker is
- * the bug lapInterval exists to resolve; doing the subtraction here would just
- * reintroduce it on the map.
+ * Judged on TRACK POSITION when both cars can be placed, because that is what
+ * "a lap down" physically means — a whole lap of road between us.
  *
+ * It used to go through `lapInterval`, whose ±1 test asks whether the car
+ * behind crossed the line within the window of the car ahead's last lap. That
+ * is right for a gap and wrong for this: a car that has just STOPPED IN THE
+ * PITS crosses late enough to fall outside the window without being lapped at
+ * all, so the map flashed "-1L" on it for a few seconds and then took it back.
+ * Track position has no such edge — a car that pitted is a third of a lap
+ * behind, not a lap.
+ *
+ * Falls back to `lapInterval` while a car cannot be placed yet (no lap time
+ * seen), which is still better than subtracting the raw counters: those differ
+ * by one for every pair in the field between one car's crossing and the next.
+ *
+ * @param {number} [now]  wall-clock ms; without it, only the fallback applies
  * @returns {number|null} positive if they are ahead by whole laps, negative if
  *   they are down on me, null if we are on the same lap (or it cannot be told)
  */
-export function lapsOnMe(mine, theirs) {
+export function lapsOnMe(mine, theirs, now = null) {
   if (!mine || !theirs) return null;
+
+  if (now != null) {
+    const myPos = lapProgress(mine, now);
+    const theirPos = lapProgress(theirs, now);
+    if (myPos != null && theirPos != null) {
+      const delta = theirPos - myPos;
+      // Under a full lap of road between us is the same lap, however the two
+      // counters happen to read at this instant.
+      return Math.abs(delta) < 1 ? null : Math.trunc(delta);
+    }
+  }
+
   const up = lapInterval(theirs, mine);
   if (up && up.laps) return up.laps;
   const down = lapInterval(mine, theirs);

@@ -55,6 +55,16 @@ export function t(key, lang = DEFAULT_LANG, vars) {
  * Display name for a tyre compound id. The engine works in ids (H/M/S/IM/W) and
  * carries English names for logs and tests; what the screen shows comes from here.
  */
+/**
+ * The order tyres are shown in, everywhere: softest to hardest, then the wets.
+ *
+ * It is a display concern, not the engine's — `inputs.compounds` keeps its own
+ * order — but it has to be the SAME everywhere or the leaderboard, the picker
+ * and the timeline legend each teach a different muscle memory, and at 3am you
+ * click the wrong one.
+ */
+export const COMPOUND_ORDER = ['S', 'M', 'H', 'IM', 'W'];
+
 export function compoundName(id, lang = DEFAULT_LANG) {
   return id ? t(`compound_${id}`, lang) : '';
 }

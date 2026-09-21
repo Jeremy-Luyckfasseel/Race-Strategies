@@ -103,6 +103,39 @@ section('where I would come out');
     bigStop.lost <= 2, String(bigStop.lost));
 }
 
+
+section('who I come out between');
+{
+  // "P6" alone cannot tell rejoining into clean air from rejoining half a
+  // second off the car in front. Same place, different race.
+  const c = new Map([
+    ['lead', rec(10, 40_000)],
+    ['me', rec(10, 30_000)],
+    ['p3', rec(10, 20_000)],
+    ['p4', rec(10, 2_000)],
+  ]);
+
+  // A 25 s stop drops me between p3 and p4.
+  const r = positionIfPitNow(c, 'me', 25, NOW);
+  assert('the car I come out behind is named', r.ahead && r.ahead.ip === 'p3', JSON.stringify(r.ahead));
+  assert('and the one I come out in front of', r.behind && r.behind.ip === 'p4', JSON.stringify(r.behind));
+  assert('with the road to each in seconds of my own pace',
+    Math.abs(r.ahead.secs - 15) < 0.1 && Math.abs(r.behind.secs - 3) < 0.1,
+    `${r.ahead.secs.toFixed(1)} / ${r.behind.secs.toFixed(1)}`);
+
+  // Rejoining at the back: there is no car behind, and inventing one would be
+  // a lie — in a four-car field there is no P5.
+  const last = positionIfPitNow(c, 'me', 600, NOW);
+  assert('at the back nothing is claimed behind me', last.behind === null, JSON.stringify(last.behind));
+  assert('but the car in front still is', last.ahead !== null);
+
+  // And a lone car has neither.
+  const alone = new Map([['me', rec(10, 30_000)]]);
+  const solo = positionIfPitNow(alone, 'me', 25, NOW);
+  assert('a lone car has nobody either side',
+    solo.ahead === null && solo.behind === null, JSON.stringify(solo));
+}
+
 section('the undercut');
 {
   // I am 1.5 s behind. Fresh tyres are worth 0.8 s a lap for three laps.

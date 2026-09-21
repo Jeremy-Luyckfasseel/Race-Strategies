@@ -3196,7 +3196,12 @@ input[type="range"]::-moz-range-thumb {
   margin-bottom: 6px;
   animation: confirm-pulse 1.2s ease-in-out infinite;
 }
+/* The compound buttons take their colour from a .cp-* class. The DRIVER
+   buttons reuse this class and have none, so they inherited a near-black and
+   sat at 0.45 opacity — invisible on the panel. A readable default here costs
+   the compounds nothing: their own class still wins. */
 .ld-cp-btn {
+  color: var(--text-secondary);
   font-family: var(--font-display);
   font-size: 0.65rem;
   font-weight: 800;
@@ -3209,7 +3214,12 @@ input[type="range"]::-moz-range-thumb {
   transition: opacity var(--t-fast), border-color var(--t-fast);
   background: none;
 }
-.ld-cp-btn:hover  { opacity: 0.75; }
+.ld-cp-btn:hover  { opacity: 0.9; }
+/* Names are words, not one-letter codes, so they need to be legible before
+   they are picked — you are choosing between them, not confirming one. */
+.ld-driver-picker .ld-cp-btn { opacity: 0.8; color: var(--text-secondary); }
+.ld-driver-picker .ld-cp-btn:hover { opacity: 1; color: var(--text-primary); }
+.ld-driver-picker .ld-cp-btn.active { opacity: 1; color: var(--text-primary); }
 .ld-cp-btn.active { opacity: 1; border-color: currentColor; }
 .cp-hard  { color: #B4B4B4; }
 .cp-med   { color: #FFC832; }

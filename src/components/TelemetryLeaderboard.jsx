@@ -4,9 +4,9 @@ import { liveInterval, formatInterval } from '../logic/gaps';
 import { rivalSummary } from '../logic/rivalIntel';
 import { splitByRole, isSafetyCar, toggleSafetyCar } from '../logic/carRoles';
 import { detectPaceDrop } from '../logic/paceTrack';
-import { DEFAULT_LANG, t, compoundShort } from '../i18n/strings';
+import { DEFAULT_LANG, t, compoundShort, COMPOUND_ORDER } from '../i18n/strings';
 
-const COMPOUNDS = ['H', 'M', 'S', 'IM', 'W'];
+
 const COMPOUND_COLOR = { H: '#5EAED8', M: '#F08420', S: '#E4002B', IM: '#22CC6E', W: '#14BBCE' };
 const COMPOUND_BG    = {
   H:  'rgba(94,174,216,0.14)',
@@ -346,7 +346,7 @@ export default function TelemetryLeaderboard({
                   {pending ? t('lb_tyres_changed', lang) : t('lb_compound', lang)}
                 </span>
                 <div className="lb-picker-grid">
-                  {COMPOUNDS.map(id => (
+                  {COMPOUND_ORDER.map(id => (
                     <button
                       key={id}
                       className={`lb-cp${compound === id ? ' active' : ''}`}

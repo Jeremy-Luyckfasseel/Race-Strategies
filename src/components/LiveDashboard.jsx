@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { DEFAULT_LANG, t } from '../i18n/strings';
+import { DEFAULT_LANG, t, COMPOUND_ORDER } from '../i18n/strings';
 import { rivalSummary, burnProgress } from '../logic/rivalIntel';
 import { currentSetOutlook } from '../logic/tyreHistory';
 import { PIT_NOW, WAIT } from '../logic/pitNow';
@@ -73,13 +73,21 @@ function TyreAge({ laps, life, outlook, lang }) {
   const colour = tyreLifeColor(used);
   return (
     <div className="tw-age">
+      {/* This said "TYRE LIFE / estimated", which pointed the word "estimated"
+          at the one number here that is exact: laps since the car left the
+          pits, counted, not modelled. What is a guess is the LIFE it is
+          measured against — the figure you typed in the sidebar — so that is
+          what is labelled now. Reading "estimated" over a counted lap made the
+          whole block look untrustworthy. */}
       <span className="ld-section-label">
-        {t('ld_tyre_life', lang)} <span className="ld-dim">{t('ld_estimated', lang)}</span>
+        {t('ld_tyre_life', lang)}{' '}
+        <span className="ld-dim">
+          {known ? t('ld_estimated', lang, { n: life }) : t('ld_no_life_set', lang)}
+        </span>
       </span>
       <div className="tw-age-body">
         <span className="tw-age-val" style={{ color: colour }}>
           {laps}
-          {known && <span className="ld-dim"> / {life}</span>}
           <span className="tw-age-unit">{t('ld_laps', lang)}</span>
         </span>
         {known && (
@@ -153,7 +161,7 @@ function TireCorner({ temp, pos }) {
   );
 }
 
-const COMPOUNDS = ['H', 'M', 'S', 'IM', 'W'];
+
 const COMPOUND_CLS = { H: 'cp-hard', M: 'cp-med', S: 'cp-soft', IM: 'cp-inter', W: 'cp-wet' };
 
 // ── TrackMap — SVG output, RAF recording loop ──────────────────────────────
@@ -689,13 +697,21 @@ export default function LiveDashboard({
             <div className="ld-fuel-intel">
               {intel && intel.confident ? (
                 <>
-                  <span className="ld-fi-laps">{t('ld_fuel_laps', lang, { n: intel.fuelLapsLeft.toFixed(1) })}</span>
+                  {/* Range first, then the lap the TANK commits them to. That
+                      second number is not the plan's box lap — the plan may
+                      call them in earlier for tyres — so it says "dry", not
+                      "box", or the two read as the same thing disagreeing.
+                      The burn rate is the input to both rather than a decision
+                      of its own, so it is the tooltip and not a third chip. */}
+                  <span
+                    className="ld-fi-laps"
+                    title={t('ld_burn', lang, { n: intel.burnPerLap.toFixed(2) })}
+                  >
+                    {t('ld_fuel_laps', lang, { n: intel.fuelLapsLeft.toFixed(1) })}
+                  </span>
                   {intel.pitLap != null && (
                     <span className="ld-fi-box">{t('ld_box_lap', lang, { lap: intel.pitLap })}</span>
                   )}
-                  <span className="ld-fi-burn">
-                    {t('ld_burn', lang)} {intel.burnPerLap.toFixed(2)} L
-                  </span>
                 </>
               ) : measuring ? (
                 <span className="ld-fi-wait">
@@ -787,13 +803,16 @@ export default function LiveDashboard({
               </div>
             )}
 
-            {intel && intel.lastStopFuel != null && (
+            {/* "+10.2 L → 2 laps" reads as "that fill buys two laps". It does
+                not: the 2 is how long ago the stop was. Said in words, because
+                an arrow between two numbers will always be read as a rate. */}
+            {intel && intel.lastStopFuel != null && intel.lastStopStintLaps != null && (
               <div className="ld-fuel-intel ld-fuel-intel--dim">
                 <span className="ld-fi-burn">{t('ld_last_stop', lang)}</span>
                 <span className="ld-fi-laps">
                   {t('ld_took_on', lang, {
                     n: intel.lastStopFuel.toFixed(1),
-                    laps: intel.lastStopStintLaps ?? '?',
+                    laps: intel.lastStopStintLaps,
                   })}
                 </span>
               </div>
@@ -887,7 +906,7 @@ export default function LiveDashboard({
                 <div className="ld-tire-section-header">
                   <span className="ld-section-label">{t('ld_tyres', lang)}</span>
                   <div className={`ld-compound-picker${pendingConfirmation ? ' ld-compound-picker--pending' : !compound ? ' ld-compound-picker--alert' : ''}`}>
-                    {COMPOUNDS.map(id => (
+                    {COMPOUND_ORDER.map(id => (
                       <button
                         key={id}
                         className={`ld-cp-btn ${COMPOUND_CLS[id]}${compound === id ? ' active' : ''}`}
