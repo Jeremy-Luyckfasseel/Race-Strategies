@@ -15,7 +15,8 @@ import { RACE_START_KEY, raceProgress, applyRaceClock, formatClock } from "./log
 import { conditionsUnavailable, crossoverSecsPerLap, tyreOnlyPitLoss } from "./logic/conditions";
 import { isSafetyCar, safetyCarDeployed, fieldSlowdown, pitLossUnderSafetyCar } from "./logic/carRoles";
 import { paceBefore, paceAfter, incidentLapCostMs } from "./logic/paceTrack";
-import { lapsOnMe } from "./logic/gaps";
+import { lapsOnMe, liveInterval, lapProgress } from "./logic/gaps";
+import { positionIfPitNow, undercut, trafficAhead, freshTyreGainSecs } from "./logic/racecraft";
 import { measuredLossSecs, effectiveLossSecs } from "./logic/incident";
 import { pitNowScenarios, comparePitNow, fullServiceLoss } from "./logic/pitNow";
 import { computeStrategy } from "./hooks/useStrategy";
@@ -29,7 +30,7 @@ import NowView from "./components/NowView";
 import Onboarding from "./components/Onboarding";
 import TeamPanel from "./components/TeamPanel";
 import DriversTab from "./components/DriversTab";
-import { CAR_PRESETS } from "./logic/strategy";
+import { CAR_PRESETS, parseLapTime } from "./logic/strategy";
 import { mergeAnalysisIntoInputs, mergeDriverSessions } from "./logic/sessionAnalysis";
 import { teamColor, resolveActiveCars } from "./logic/teams";
 import {
@@ -641,6 +642,80 @@ export default function App() {
   // The safety car lives in the pit lane, so leaving it is the signal. Under
   // it, the stop itself is no quicker — but the race you are missing is, so
   // less of it goes by while you are stationary.
+  /**
+   * What a stop THIS LAP does to the race, as opposed to to the plan.
+   *
+   * The plan is set by fuel range and tyre life, both counted in laps, so
+   * racing somebody barely moves it. Where you come out, and whether stopping
+   * first gets you past them, are decided by the same one stop — and neither
+   * is readable off a gap column. Recomputed on the one-second clock, because
+   * all three answers move continuously as the field spreads.
+   */
+  const racecraft = useMemo(() => {
+    if (!strategyIp || !clock) return null;
+    const mine = telem.lapCrossings.get(strategyIp);
+    if (!mine) return null;
+
+    // Only cars that are racing: a safety car is not in the standings and must
+    // not take a place off anyone.
+    const racingIps = [...telem.teams.keys()].filter((ip) => !isSafetyCar(carRoles, ip));
+    const myFuel = Number(telem.teams.get(strategyIp)?.fuelLiters);
+    const pitLoss = fullServiceLoss(inputs, Number.isFinite(myFuel) ? myFuel : 0);
+    const name = (ip) => getTeamLabel(ip);
+
+    // GT7's own classification for "where I am now", so the strip agrees with
+    // the leaderboard; the geometry only supplies how many places the stop costs.
+    const myPos = Number(telem.teams.get(strategyIp)?.racePos) || null;
+    const position = positionIfPitNow(
+      telem.lapCrossings, strategyIp, pitLoss, clockNow, racingIps, myPos,
+    );
+
+    // The car directly ahead of me on the road, which is the one the undercut
+    // is against — not whoever happens to be next in the standings.
+    const myTrackPos = lapProgress(mine, clockNow);
+    let ahead = null;
+    if (myTrackPos != null) {
+      for (const ip of racingIps) {
+        if (ip === strategyIp) continue;
+        // Same lap only: you cannot undercut somebody you are lapping.
+        if (lapsOnMe(mine, telem.lapCrossings.get(ip)) != null) continue;
+        const p = lapProgress(telem.lapCrossings.get(ip), clockNow);
+        if (p == null || p <= myTrackPos) continue;
+        if (!ahead || p < ahead.pos) ahead = { ip, pos: p };
+      }
+    }
+
+    let uc = null;
+    if (ahead) {
+      const gap = liveInterval(telem.lapCrossings.get(ahead.ip), mine, clockNow);
+      const comp = engineInputs.compounds?.find((c) => c.id === teamCompounds[strategyIp]);
+      // The engine's compounds carry lap-time STRINGS; the racecraft helper
+      // wants the seconds they parse to, which is what tirePaceSecs uses.
+      const spec = comp && {
+        tireLife: comp.tireLife,
+        startSecs: parseLapTime(comp.startLapTime),
+        endSecs: parseLapTime(comp.endLapTime),
+      };
+      const gain = freshTyreGainSecs(spec, openTyreLaps ?? 0);
+      if (gap && gap.secs != null && gain > 0) {
+        const r = undercut({ gapSecs: gap.secs, myPitLossSecs: pitLoss, theirPitLossSecs: pitLoss, gainPerLapSecs: gain });
+        if (r) uc = { ...r, who: name(ahead.ip) };
+      }
+    }
+
+    const tf = trafficAhead(
+      telem.lapCrossings, strategyIp, clockNow,
+      (ip) => (racingIps.includes(ip) ? lapsOnMe(mine, telem.lapCrossings.get(ip)) : null),
+    );
+
+    return {
+      position: position && { ...position, behind: position.aheadAfter.length ? name(position.aheadAfter[position.aheadAfter.length - 1]) : null },
+      undercut: uc,
+      traffic: tf && { ...tf, who: name(tf.ip) },
+    };
+  }, [strategyIp, clock, clockNow, telem.lapCrossings, telem.teams, carRoles, inputs,
+      engineInputs.compounds, teamCompounds, openTyreLaps, getTeamLabel]);
+
   const scDeployedIp = useMemo(
     () => safetyCarDeployed(telem.teams, carRoles),
     [telem.teams, carRoles],
@@ -986,6 +1061,7 @@ export default function App() {
                 scPitLoss={scPitLoss}
                 scGreenPitLoss={tyreOnlyPitLoss(inputs)}
                 scSlowdown={scSlowdown}
+                racecraft={racecraft}
                 crossoverSecs={crossoverSecsPerLap(
                   tyreOnlyPitLoss(inputs),
                   (nowBest?.strategy?.totalLaps ?? 0)

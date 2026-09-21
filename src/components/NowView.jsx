@@ -31,7 +31,7 @@ function CompoundChip({ id, lang }) {
   return <span className={`now-compound compound-${id}`}>{compoundName(id, lang) || id}</span>;
 }
 
-export default function NowView({ data, strategy, planLabel, litersPerLap, tireLife, frozen, onToggleFreeze, label, needsTeam, onGoToTelemetry, clock, onStartRace, onClearRace, conditions = 'dry', onConditionsChange, conditionsWarning = null, crossoverSecs = null, scDeployed = false, scPitLoss = null, scGreenPitLoss = null, scSlowdown = null, lang }) {
+export default function NowView({ data, strategy, planLabel, litersPerLap, tireLife, frozen, onToggleFreeze, label, needsTeam, onGoToTelemetry, clock, onStartRace, onClearRace, conditions = 'dry', onConditionsChange, conditionsWarning = null, crossoverSecs = null, scDeployed = false, scPitLoss = null, scGreenPitLoss = null, scSlowdown = null, racecraft = null, lang }) {
   const hasData = !!data && Number.isFinite(Number(data.currentLap));
   const currentLap = hasData ? Number(data.currentLap) : strategy?.stints?.[0]?.startLap ?? null;
 
@@ -119,6 +119,49 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
       )}
 
       {conditionsWarning && <div className="now-cond-warn">{t(conditionsWarning, lang)}</div>}
+
+      {/* What a stop this lap does to the RACE, as opposed to to the plan. The
+          plan is set by fuel and tyres, both counted in laps, so a scrap for
+          position barely moves it — but where you come out, and whether the
+          undercut lands, are decided by the same one stop. */}
+      {racecraft && (racecraft.position || racecraft.undercut || racecraft.traffic) && (
+        <div className="now-rc">
+          <span className="now-rc-title">{t('rc_title', lang)}</span>
+
+          {racecraft.position && (
+            <span className={`now-rc-item${racecraft.position.lost > 0 ? ' is-cost' : ' is-free'}`}>
+              {racecraft.position.lost > 0
+                ? t('rc_pos_drop', lang, { from: racecraft.position.from, to: racecraft.position.to })
+                : t('rc_pos_hold', lang, { n: racecraft.position.to })}
+              {racecraft.position.behind && (
+                <span className="now-rc-dim"> {t('rc_pos_behind', lang, { who: racecraft.position.behind })}</span>
+              )}
+            </span>
+          )}
+
+          {racecraft.undercut && (
+            <span className={`now-rc-item${racecraft.undercut.works ? ' is-good' : ' is-dim'}`}>
+              {t(racecraft.undercut.works ? 'rc_uc_works' : 'rc_uc_fails', lang, { who: racecraft.undercut.who })}
+              <span className="now-rc-dim">
+                {' '}
+                {racecraft.undercut.works
+                  ? t('rc_uc_margin', lang, { n: racecraft.undercut.marginSecs.toFixed(1), laps: racecraft.undercut.laps })
+                  : t('rc_uc_short', lang, { n: Math.abs(racecraft.undercut.marginSecs).toFixed(1) })}
+              </span>
+            </span>
+          )}
+
+          {racecraft.traffic && (
+            <span className="now-rc-item is-warn">
+              {t('rc_traffic', lang, { who: racecraft.traffic.who, n: Math.round(racecraft.traffic.laps) })}
+              <span className="now-rc-dim">
+                {' '}
+                {t('rc_traffic_cost', lang, { n: racecraft.traffic.closingSecsPerLap.toFixed(1) })}
+              </span>
+            </span>
+          )}
+        </div>
+      )}
 
       {crossoverSecs != null && (
         <div className="now-crossover">
