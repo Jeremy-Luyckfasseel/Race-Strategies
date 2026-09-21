@@ -751,14 +751,19 @@ export default function App() {
    * The toast says a measurement landed; accepting or ignoring it is still a
    * decision made on the card, where the numbers are side by side.
    */
-  const recSeen = useRef(new Set());
+  // Keyed by recommendation, holding the last VALUE raised for it. As a Set of
+  // `key:value` strings it grew one entry per distinct decimal the learner ever
+  // produced — over eight hours of a figure drifting by hundredths, that is an
+  // unbounded cache of numbers nobody will ever look at again. A Map holds at
+  // most one entry per recommendation kind, which is a handful.
+  const recSeen = useRef(new Map());
   useEffect(() => {
     for (const rec of learner.recommendations) {
       // Keyed on the VALUE, not just the field: the same estimate drifting by
       // a hair must not raise a second notice, but a real change should.
-      const key = `rec:${rec.key}:${JSON.stringify(rec.measured)}`;
-      if (recSeen.current.has(key)) continue;
-      recSeen.current.add(key);
+      const value = JSON.stringify(rec.measured);
+      if (recSeen.current.get(rec.key) === value) continue;
+      recSeen.current.set(rec.key, value);
       toasts.push({
         key: `rec:${rec.key}`,
         kind: 'info',
@@ -778,6 +783,27 @@ export default function App() {
   }, [learner.recommendations, lang, toasts]);
 
   const pitExitSeen = useRef(new Map());
+
+  /**
+   * Both toast caches describe ONE car in ONE race, so both are dropped when
+   * either changes.
+   *
+   * `pitExitSeen` is keyed by lap number, and GT7's lap counter restarts with
+   * the race — which is exactly what the comment in `startRace` says about the
+   * incident mark. A stop on lap 3 of the lobby session would otherwise
+   * silence the stop on lap 3 of the race, and that toast is the one that says
+   * "confirm the tyre and the driver": miss it and the stint log and the
+   * learner spend the next stint describing a tyre that is not on the car.
+   *
+   * `recSeen` is dropped for the same reason plus one of its own: the learner
+   * is deliberately NOT reset at the flag (practice is how you learn the car),
+   * so without this it would go on suppressing the pre-race version of every
+   * measurement it had already raised.
+   */
+  useEffect(() => {
+    pitExitSeen.current.clear();
+    recSeen.current.clear();
+  }, [raceStartedAt, strategyIp]);
   useEffect(() => {
     for (const [ip, d] of telem.teams) {
       if (!d?.pitExit || isSafetyCar(carRoles, ip)) continue;

@@ -378,6 +378,52 @@ section('the race screen does not hide anything behind a scroll');
   v.unmount();
 }
 
+section('the lights go out, and the notices forget the lobby');
+{
+  // The pit-stop notice is de-duplicated per car per LAP, and GT7's lap counter
+  // restarts with the race — which is what startRace's own comment says about
+  // the incident mark. A stop on lap 3 of the practice session must not silence
+  // the stop on lap 3 of the race: that notice is the one saying "confirm the
+  // tyre and the driver", and missing it leaves the stint log and the learner
+  // describing a tyre that is not on the car for the rest of the stint.
+  const v = await bootApp();
+  localStorage.setItem('gt7-my-team', IPS[0]);
+  await v.sendField();
+  click(tabButton(v.container, 'Course'));
+  await settle(30);
+
+  const boxOnLap = async (lap) => {
+    await act(async () => {
+      v.relay().deliver(packet(IPS[0], 0, { currentLap: lap, pitExit: true, speedKmh: 80 }));
+    });
+    await settle(60);
+  };
+  const notices = () => $$(v.container, '.toast').map((n) => n.textContent).join(' ~ ');
+
+  await boxOnLap(3);
+  assert('a stop in the lobby raises a notice',
+    $$(v.container, '.toast').length > 0, notices());
+
+  // Dismiss it, the way an engineer would after confirming the tyre.
+  const close = $(v.container, '.toast-close');
+  if (close) { click(close); await settle(30); }
+  assert('and it can be dismissed', $$(v.container, '.toast').length === 0, notices());
+
+  // The race starts. GT7's counter goes back to lap 1.
+  click($$(v.container, 'button').find((b) => /Start race|Démarrer la course/.test(b.textContent)));
+  await settle(30);
+  const card = $(v.container, '.dlg-card');
+  click($(card, '.dlg-btn--go'));
+  await act(async () => { await Promise.resolve(); });
+  await settle(60);
+
+  // The same lap number, a different race, a real stop.
+  await boxOnLap(3);
+  assert('the same lap number in the real race still raises one',
+    $$(v.container, '.toast').length > 0, notices());
+  v.unmount();
+}
+
 section('all three tabs render with a full field');
 {
   const v = await bootApp();
