@@ -1,6 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { CAR_PRESETS, isValidLapTimeStr as isValidLapTime } from "../logic/strategy";
-import { DEFAULT_LANG, t, compoundName } from "../i18n/strings";
+import { DEFAULT_LANG, t, compoundName, orderCompounds } from "../i18n/strings";
 
 
 const BUILT_IN_PRESETS = CAR_PRESETS;
@@ -154,7 +154,15 @@ export default function InputPanel({ inputs, onChange, onCalculate, liveDriven =
     }));
   };
 
-  const activeCompounds = inputs.compounds.filter((c) => c.tireLife > 0);
+  // Sorted for display only: the stored array keeps its own order, which the
+  // engine and the saved setup both rely on. Without this the sidebar you type
+  // lap times into read Hard-first while the leaderboard and the pickers read
+  // Soft-first — two orders for the same five buttons.
+  const shownCompounds = useMemo(() => orderCompounds(inputs.compounds), [inputs.compounds]);
+  const activeCompounds = useMemo(
+    () => shownCompounds.filter((c) => c.tireLife > 0),
+    [shownCompounds],
+  );
   const allPresets = [...BUILT_IN_PRESETS, ...savedPresets];
 
   return (
@@ -331,7 +339,7 @@ export default function InputPanel({ inputs, onChange, onCalculate, liveDriven =
               </tr>
             </thead>
             <tbody>
-              {inputs.compounds.map((comp) => {
+              {shownCompounds.map((comp) => {
                 const active = comp.tireLife > 0;
                 return (
                   <tr key={comp.id}>
@@ -507,7 +515,7 @@ export default function InputPanel({ inputs, onChange, onCalculate, liveDriven =
                   >×</button>
                 )}
               </div>
-              {inputs.compounds.length > 0 && (
+              {shownCompounds.length > 0 && (
                 <details className="driver-times-details">
                   <summary className="driver-times-summary">
                     {t("ip_lap_times", lang)} {Object.keys(driver.compounds || {}).length > 0 ? t("ip_custom", lang) : t("ip_uses_global", lang)}
@@ -527,7 +535,7 @@ export default function InputPanel({ inputs, onChange, onCalculate, liveDriven =
                             tireLife > 0 meant you could not enter a driver's wet
                             times until you had first given the wet tyre a life —
                             and in the rain that is exactly the wrong order. */}
-                        {inputs.compounds.map((comp) => {
+                        {shownCompounds.map((comp) => {
                           const dc = driver.compounds?.[comp.id] || {};
                           const placeholder = (key) => {
                             const m = { startLapTime: comp.startLapTime, halfLapTime: comp.halfLapTime, endLapTime: comp.endLapTime };

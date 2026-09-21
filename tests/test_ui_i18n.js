@@ -20,7 +20,7 @@ globalThis.WebSocket = class {
 globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
 
 const { default: App } = await import('../src/App.jsx');
-const { LANG_KEY, t, compoundName, compoundSequence } = await import('../src/i18n/strings.js');
+const { LANG_KEY, t, compoundName, compoundSequence, COMPOUND_ORDER, orderCompounds } = await import('../src/i18n/strings.js');
 const { findBestStrategies, TIRE_COMPOUNDS } = await import('../src/logic/strategy.js');
 const { buildRecommendations } = await import('../src/logic/recommendations.js');
 const en = (await import('../src/i18n/en.js')).default;
@@ -214,6 +214,35 @@ section('the engine-sourced strings reach the screen in the chosen language');
     $(v.container, '.driver-name-input')?.value === t('driver_n', 'fr', { n: 1 }),
     $(v.container, '.driver-name-input')?.value);
   v.unmount();
+}
+
+section('one tyre order, everywhere');
+{
+  // The sidebar you type lap times into read Hard-first while the leaderboard
+  // and the pickers read Soft-first: two orders for the same five buttons, and
+  // at 3am that is a wrong click.
+  assert('softest first, then the wets',
+    COMPOUND_ORDER.join() === 'S,M,H,IM,W', COMPOUND_ORDER.join());
+
+  const stored = [
+    { id: 'H' }, { id: 'M' }, { id: 'S' }, { id: 'IM' }, { id: 'W' },
+  ];
+  assert('a stored list is shown in that order',
+    orderCompounds(stored).map((c) => c.id).join() === 'S,M,H,IM,W',
+    orderCompounds(stored).map((c) => c.id).join());
+
+  // The engine and the saved setup both depend on the stored order, so the
+  // caller's own array must come back untouched.
+  assert('and the stored array is not reordered underneath them',
+    stored.map((c) => c.id).join() === 'H,M,S,IM,W', stored.map((c) => c.id).join());
+
+  // An id the order does not know about must not vanish from the sidebar.
+  const odd = orderCompounds([{ id: 'X' }, { id: 'S' }]);
+  assert('an unknown compound survives, at the end',
+    odd.length === 2 && odd[0].id === 'S' && odd[1].id === 'X',
+    odd.map((c) => c.id).join());
+
+  assert('and nothing in is nothing out', orderCompounds(null).length === 0);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
