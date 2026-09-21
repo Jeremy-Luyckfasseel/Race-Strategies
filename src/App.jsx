@@ -22,6 +22,8 @@ import { pitNowScenarios, comparePitNow, fullServiceLoss } from "./logic/pitNow"
 import { computeStrategy } from "./hooks/useStrategy";
 import LiveDashboard, { TrackMap } from "./components/LiveDashboard";
 import Dialog from "./components/Dialog";
+import Toasts from "./components/Toasts";
+import { useToasts } from "./hooks/useToasts";
 import { useDialog } from "./hooks/useDialog";
 import TelemetryLeaderboard from "./components/TelemetryLeaderboard";
 import TelemetryControls from "./components/TelemetryControls";
@@ -299,6 +301,10 @@ export default function App() {
   // Every confirmation the app asks goes through one card, so they all behave
   // the same way and none of them is the browser's grey box.
   const dialog = useDialog();
+  // Things that happened while you were looking somewhere else. The app
+  // already worked them out; on a screen this dense, being ON the screen is
+  // not the same as having been seen.
+  const toasts = useToasts();
   const detector = useCompoundDetector(racingTeams);
   const stintLog = useStintLog(racingTeams, teamCompounds, inputs.drivers, myTeamIp || null);
   const teamKeys = useMemo(() => [...telem.teams.keys()], [telem.teams]);
@@ -724,6 +730,75 @@ export default function App() {
     };
   }, [strategyIp, clock, clockNow, telem.lapCrossings, telem.teams, carRoles, inputs,
       engineInputs.compounds, teamCompounds, openTyreLaps, getTeamLabel]);
+
+  /**
+   * A car has finished its stop.
+   *
+   * For MY car this is the moment the compound and driver have to be recorded,
+   * or the stint log and the learner spend the next hour describing a tyre
+   * that is not on the car. For a rival it is free intel about what they
+   * fitted. Either way the prompt already exists on that car's dashboard, so
+   * the notice navigates rather than duplicating the pickers into a corner.
+   *
+   * Keyed per car and per stop, so the same edge cannot stack two cards, and
+   * sticky for my own car: a tyre has to be answered either way.
+   */
+  /**
+   * A new measurement disagrees with the setup.
+   *
+   * These already surface as Accept/Ignore cards, but those cards live at the
+   * top of two tabs and an engineer reading the map will not see one arrive.
+   * The toast says a measurement landed; accepting or ignoring it is still a
+   * decision made on the card, where the numbers are side by side.
+   */
+  const recSeen = useRef(new Set());
+  useEffect(() => {
+    for (const rec of learner.recommendations) {
+      // Keyed on the VALUE, not just the field: the same estimate drifting by
+      // a hair must not raise a second notice, but a real change should.
+      const key = `rec:${rec.key}:${JSON.stringify(rec.measured)}`;
+      if (recSeen.current.has(key)) continue;
+      recSeen.current.add(key);
+      toasts.push({
+        key: `rec:${rec.key}`,
+        kind: 'info',
+        title: t("toast_measured", lang, {
+          what: rec.labelKey ? t(rec.labelKey, lang, { ...(rec.labelVars || {}), compound: rec.compoundId ?? '' }) : rec.label,
+        }),
+        detail: t("toast_measured_detail", lang, {
+          measured: Array.isArray(rec.measured) ? rec.measured[0] : rec.measured,
+          current: Array.isArray(rec.current) ? rec.current[0] : rec.current,
+        }),
+        action: {
+          label: t("toast_go_plan", lang),
+          run: () => setActiveTab("race"),
+        },
+      });
+    }
+  }, [learner.recommendations, lang, toasts]);
+
+  const pitExitSeen = useRef(new Map());
+  useEffect(() => {
+    for (const [ip, d] of telem.teams) {
+      if (!d?.pitExit || isSafetyCar(carRoles, ip)) continue;
+      const lap = d.currentLap ?? 0;
+      if (pitExitSeen.current.get(ip) === lap) continue;
+      pitExitSeen.current.set(ip, lap);
+
+      const mine = ip === strategyIp;
+      toasts.push({
+        key: `pit:${ip}:${lap}`,
+        kind: mine ? 'act' : 'info',
+        sticky: mine,
+        title: t(mine ? "toast_pit_mine" : "toast_pit_rival", lang, { who: getTeamLabel(ip) }),
+        detail: t(mine ? "toast_pit_mine_detail" : "toast_pit_rival_detail", lang),
+        action: {
+          label: t("toast_go_car", lang),
+          run: () => { setActiveTab("race"); setTelemSelectedIp(ip); },
+        },
+      });
+    }
+  }, [telem.teams, carRoles, strategyIp, lang, getTeamLabel, toasts]);
 
   const scDeployedIp = useMemo(
     () => safetyCarDeployed(telem.teams, carRoles),
@@ -1286,8 +1361,11 @@ export default function App() {
       </main>
 
       <Dialog dialog={dialog.dialog} onClose={dialog.close} lang={lang} />
+      <Toasts toasts={toasts.toasts} onDismiss={toasts.dismiss} lang={lang} />
 
-      <footer className="app-footer">
+      {/* Hidden on the race screen: it is a credit line, and every pixel there
+          is one the map or the car panel could use. */}
+      <footer className={`app-footer${activeTab === "race" ? " app-footer--hidden" : ""}`}>
         {t("app_footer", lang)}
       </footer>
     </div>

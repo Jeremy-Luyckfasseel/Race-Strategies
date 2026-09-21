@@ -74,8 +74,11 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
 
   return (
     <div className="now-view">
+      {/* Outside the header: in the strip this is the first cell of the grid,
+          and inside the header it was a label wedged against three controls. */}
+      <span className="now-car">{label || '—'}</span>
+
       <div className="now-header">
-        <span className="now-car">{label || '—'}</span>
 
         {/* The lobby is open for hours before the race. Until the race is
             started nothing here is race data, and the plan runs on the
@@ -176,7 +179,14 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
 
           {racecraft.traffic && (
             <span className="now-rc-item is-warn">
-              {t('rc_traffic', lang, { who: racecraft.traffic.who, n: Math.round(racecraft.traffic.laps) })}
+              {/* Rounding put "in 0 laps" on a car half a lap up the road,
+                  which reads as a bug rather than as "right now". */}
+              {Math.round(racecraft.traffic.laps) < 1
+                ? t('rc_traffic_now', lang, { who: racecraft.traffic.who })
+                : t('rc_traffic', lang, {
+                    who: racecraft.traffic.who,
+                    n: Math.round(racecraft.traffic.laps),
+                  })}
               <span className="now-rc-dim">
                 {' '}
                 {t('rc_traffic_cost', lang, { n: racecraft.traffic.closingSecsPerLap.toFixed(1) })}
@@ -234,7 +244,14 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
             <div className="now-action-title">{t('now_next_action', lang)}</div>
             {na && !na.runToFlag ? (
               <div className="now-action-body">
-                <span className="now-box-lap">{t('now_box_lap', lang, { lap: na.pitLap })}</span>
+                <span
+                  className="now-box-lap"
+                  title={box && !na.runToFlag
+                    ? t('now_box_reason', lang, { reason: t(`reason_${box.reason}`, lang) })
+                    : undefined}
+                >
+                  {t('now_box_lap', lang, { lap: na.pitLap })}
+                </span>
                 {na.fuelToAddLiters > 0 && (
                   <span className="now-fuel">{t('now_add_fuel', lang, { n: round1(na.fuelToAddLiters) })}</span>
                 )}
@@ -244,11 +261,11 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
             ) : (
               <div className="now-action-body now-run-to-flag">{t('now_run_to_flag', lang)}</div>
             )}
-            {box && !na?.runToFlag && (
-              <div className={`now-box-reason now-box-reason--${box.reason}`}>
-                {t('now_box_reason', lang, { reason: t(`reason_${box.reason}`, lang) })} · {box.lap}
-              </div>
-            )}
+            {/* This used to be its own line reading "BOX: FUEL · 62" directly
+                under "Box lap 62" — the same number twice, three lines apart,
+                which is how a screen starts to feel like it is shouting. WHY
+                the car is coming in is worth knowing and the lap is not worth
+                repeating, so the reason is a tooltip on the lap itself. */}
           </div>
 
           {/* Shown only when the fuel will not reach the stop at this pace. */}

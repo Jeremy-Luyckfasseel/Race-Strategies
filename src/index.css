@@ -2166,51 +2166,192 @@ input[type="range"]::-moz-range-thumb {
    not grow — the columns below are what needs the height. */
 .race-strip {
   flex: 0 0 auto;
-  padding: 8px 20px 9px;
+  padding: 10px 20px 11px;
   border-bottom: 1px solid var(--rule-mid);
   background: var(--bg-overlay, transparent);
 }
-.race-strip .now-view { gap: 6px 24px; }
-.race-strip .now-header { margin-bottom: 2px; }
-/* The countdown is the biggest thing on the screen and does not need to be. */
-.race-strip .now-countdown-num { font-size: 1.9rem; }
-.race-strip .now-countdown-label { font-size: 0.62rem; }
-.race-strip .now-plan,
-.race-strip .now-action { padding: 0; }
+
+/*
+ * Laid out as a grid rather than a wrapping flex row.
+ *
+ * As flex-wrap it was a bag of differently-shaped blocks that fell where they
+ * fell: nothing lined up column to column, every cell set its own type size,
+ * and the result read as scattered even though each piece was fine on its own.
+ * Two rows now, with fixed tracks, so the eye can go to the same place twice:
+ *
+ *   row 1  car | stint | laps left | the call | ................ | race state
+ *   row 2  what a stop this lap would do, and the tyre crossover
+ *
+ * Everything inside uses ONE label size and ONE value size, declared below, so
+ * "big" means "this is the number" rather than "this block was written later".
+ */
 .race-strip .now-view {
   max-width: none;
   margin: 0;
-  flex-direction: row;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "car stint laps call state"
+    "rc  rc    rc   rc   rc";
   align-items: center;
-  gap: 10px 28px;
+  column-gap: 26px;
+  row-gap: 6px;
 }
-/* Full-width rows: the header, and anything that is an alert. */
-.race-strip .now-header,
+
+.race-strip .now-header   { grid-area: state; justify-self: end; margin: 0; }
+.race-strip .now-plan     { grid-area: stint; }
+.race-strip .now-countdown{ grid-area: laps; }
+.race-strip .now-action   { grid-area: call; min-width: 0; }
+
+/* Alerts break the grid on purpose: a safety car or a wet-tyre warning should
+   not have to fit a column, and should not be missable. */
 .race-strip .now-sc,
 .race-strip .now-cond-warn,
 .race-strip .now-waiting,
-.race-strip .now-empty { flex: 0 0 100%; }
-/* The big lap countdown reads as one line here, not a stacked block. */
+.race-strip .now-empty {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+}
+
+/* ── One label scale, one value scale ── */
+.race-strip .now-action-title,
+.race-strip .now-countdown-label,
+.race-strip .now-stint-label,
+.race-strip .now-rc-title {
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-muted);
+}
+
+/* The car's own name, top left: an identifier, not a heading. */
+.race-strip .now-car {
+  grid-area: car;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+/* The stint and its tyre read as one line under a label. */
+.race-strip .now-plan {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+}
+.race-strip .now-plan-seq { font-size: 0.72rem; }
+
+/* The ONE hero number on the strip. Nothing else competes with it. */
 .race-strip .now-countdown {
   display: flex;
   align-items: baseline;
+  gap: 7px;
+}
+.race-strip .now-countdown-num {
+  font-size: 1.75rem;
+  line-height: 1;
+  font-weight: 700;
+}
+.race-strip .now-countdown-label { max-width: 6.5em; line-height: 1.15; }
+
+/* The call itself: label above, one line of instruction below. */
+.race-strip .now-action { padding: 0; }
+.race-strip .now-action-body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 1px;
+}
+.race-strip .now-box-lap { font-size: 1.05rem; font-weight: 700; }
+.race-strip .now-fuel,
+.race-strip .now-tyres { font-size: 0.86rem; color: var(--text-secondary); }
+
+/* ── Row two: what a stop this lap would do ── */
+.race-strip .now-rc {
+  grid-area: rc;
+  border-left: none;
+  background: none;
+  padding: 4px 0 0;
+  border-top: 1px solid var(--rule);
+  border-radius: 0;
+  gap: 4px 18px;
+}
+/* A standing fact, not a call, so it rides along at the end of that row
+   rather than taking a row of the strip to itself. */
+.race-strip .now-crossover {
+  grid-area: rc;
+  justify-self: end;
+  align-self: center;
+  font-size: 0.7rem;
+  color: var(--text-ghost, var(--text-muted));
+  padding-top: 4px;
+}
+
+/* ── Race state, top right ──
+   The clock, the conditions switch and the freeze button were three controls
+   of three different heights with no space between them, so they read as one
+   smudged object. Same height, same radius, a real gap. */
+.race-strip .now-header {
+  display: flex;
+  align-items: stretch;
   gap: 8px;
 }
-.race-strip .now-countdown-num { font-size: 2.6rem; line-height: 1; }
-.race-strip .now-action { flex: 1 1 auto; min-width: 260px; }
-/* The crossover number is a standing fact, not a call — it led the strip
-   because it happens to render first. It goes under everything you act on. */
-/* A standing fact, not a call, so it rides along at the end of the racecraft
-   row rather than taking a row of the strip to itself. */
-.race-strip .now-crossover {
-  order: 9;
-  flex: 1 1 auto;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  align-self: center;
+.race-strip .now-clock,
+.race-strip .cond-switch,
+.race-strip .now-freeze,
+.race-strip .now-start {
+  height: 30px;
+  box-sizing: border-box;
+  border-radius: var(--radius-xs);
 }
-.race-strip .now-rc { flex: 0 1 auto; }
+.race-strip .now-clock {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--rule);
+}
+.race-strip .now-clock-block {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
+  line-height: 1.05;
+}
+.race-strip .now-clock-k {
+  font-size: 0.52rem;
+  letter-spacing: 0.1em;
+  color: var(--text-ghost, var(--text-muted));
+}
+.race-strip .now-clock-v { font-size: 0.86rem; }
+.race-strip .now-clock-clear {
+  align-self: center;
+  margin-left: 2px;
+  padding: 0 4px;
+  line-height: 1;
+  color: var(--text-ghost, var(--text-muted));
+}
+.race-strip .now-clock-clear:hover { color: var(--text-primary); }
+.race-strip .cond-switch { display: flex; align-items: stretch; }
+.race-strip .cond-btn { padding: 0 11px; display: flex; align-items: center; }
+.race-strip .now-freeze,
+.race-strip .now-start { padding: 0 13px; display: flex; align-items: center; }
+
+@media (max-width: 1250px) {
+  /* Below this the call and the race state cannot share a row honestly. */
+  .race-strip .now-view {
+    grid-template-columns: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      "car   stint laps"
+      "call  call  call"
+      "rc    rc    rc"
+      "state state state";
+  }
+  .race-strip .now-header { justify-self: start; }
+}
 
 /* ── The setup row ──
    Both bars are folded almost all race, so side by side they cost one row
@@ -4838,3 +4979,183 @@ input[type="range"]::-moz-range-thumb {
   border-left-width: 2px;
 }
 .telem-3col-data .tw-corner .tw-temp { font-size: 0.95rem; }
+
+.app-footer--hidden { display: none; }
+
+/* ---------------------------------------------------------------------------
+   The car panel, as one panel
+
+   Its two halves were written at different times and looked it: the left a
+   stack of bare bars, the right a set of bordered cards, each with its own
+   label style, spacing and type size. Side by side that reads as two screens
+   glued together rather than one instrument. This gives both halves the same
+   label, the same row rhythm and the same card treatment, so the division
+   between them is information (car vs. stint) and not a seam.
+   --------------------------------------------------------------------------- */
+
+.telem-3col-data .ld-col + .ld-col {
+  /* Alignment already separates the halves; a hard rule made it a seam. */
+  border-left: none;
+  padding-left: 14px;
+}
+
+/* One label, everywhere on the panel. */
+.telem-3col-data .ld-section-label,
+.telem-3col-data .ld-bar-label,
+.telem-3col-data .ld-time-lbl {
+  font-family: var(--font-display);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* One rhythm: every block on the panel is separated by the same gap, and
+   sections that used to draw their own boxes share one quiet card style. */
+.telem-3col-data .ld-col { display: flex; flex-direction: column; gap: 10px; }
+.telem-3col-data .ld-times,
+.telem-3col-data .tw-age,
+.telem-3col-data .ld-tire-section-header {
+  padding: 8px 10px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-xs);
+  border: none;
+  margin: 0;
+}
+.telem-3col-data .ld-time-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.telem-3col-data .ld-time-row + .ld-time-row { margin-top: 5px; }
+
+/* The fuel intel reads as a caption under the fuel bar, not as a third block
+   competing with it. */
+.telem-3col-data .ld-fuel-intel {
+  padding: 0 2px;
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+.telem-3col-data .ld-fuel-intel--dim { opacity: 0.75; }
+
+/* ---------------------------------------------------------------------------
+   Toasts — what happened while you were looking somewhere else
+
+   Bottom right, because the top of this screen is the plan and the left is the
+   field: both are read continuously, and a notice covering either is worse
+   than no notice. Bottom right holds nothing you steer by.
+   --------------------------------------------------------------------------- */
+
+.toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(360px, calc(100vw - 32px));
+  pointer-events: none;      /* the screen under it stays clickable */
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 10px 10px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--rule-bright, var(--text-muted));
+  border-radius: var(--radius-xs);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  animation: toast-in 0.18s ease-out;
+}
+/* One that needs answering — a tyre has to be recorded either way. */
+.toast--act { border-left-color: var(--accent); }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast { animation: none; }
+}
+
+.toast-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.toast-title {
+  font-family: var(--font-display);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+}
+.toast-detail { font-size: 0.72rem; line-height: 1.35; color: var(--text-secondary); }
+
+.toast-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.toast-go {
+  padding: 5px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.toast-go:hover { color: var(--text-primary); border-color: var(--rule-bright, var(--text-muted)); }
+.toast--act .toast-go { border-color: var(--accent); color: var(--accent); }
+.toast--act .toast-go:hover { background: var(--accent); color: #fff; }
+
+.toast-close {
+  padding: 2px 6px;
+  border: none;
+  background: none;
+  color: var(--text-ghost, var(--text-muted));
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.toast-close:hover { color: var(--text-primary); }
+
+/* The fuel warning was a full-width bordered box on its own row, which cost
+   50px of the strip to say one sentence. It is a real warning and keeps the
+   accent, but it belongs beside the consequences it changes, not above them. */
+.race-strip .now-verdict {
+  grid-area: rc;
+  justify-self: start;
+  align-self: center;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  padding: 3px 10px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--accent);
+  background: rgba(228, 0, 43, 0.08);
+}
+.race-strip .now-verdict-text { font-size: 0.72rem; letter-spacing: 0.06em; }
+.race-strip .now-verdict-margin { font-size: 0.68rem; }
+/* With a warning up, the racecraft line makes room for it on the same row. */
+.race-strip .now-view:has(.now-verdict) {
+  grid-template-areas:
+    "car stint laps call state"
+    "warn rc   rc   rc   rc";
+}
+.race-strip .now-view:has(.now-verdict) .now-verdict { grid-area: warn; }
+
+/* The clock's own labels were 0.52rem of --text-ghost on a dark panel: present
+   in the DOM, invisible on the screen, so the two times read as one number
+   with a space in it. */
+.race-strip .now-clock-k {
+  font-size: 0.55rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.race-strip .now-clock { gap: 16px; }
+.race-strip .now-clock-block--dim .now-clock-v { color: var(--text-secondary); }

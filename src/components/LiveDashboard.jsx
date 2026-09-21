@@ -709,9 +709,11 @@ export default function LiveDashboard({
                   >
                     {t('ld_fuel_laps', lang, { n: intel.fuelLapsLeft.toFixed(1) })}
                   </span>
-                  {intel.pitLap != null && (
-                    <span className="ld-fi-box">{t('ld_box_lap', lang, { lap: intel.pitLap })}</span>
-                  )}
+                  {/* The fuel-limited box lap used to sit here as "dry ~L95"
+                      AND three lines below as "BOX IN 26 laps on lap 95" — the
+                      same number twice on one panel. The row below wins: it
+                      leads with the laps remaining, which is what you act on.
+                      This line keeps the range and the burn rate behind it. */}
                 </>
               ) : measuring ? (
                 <span className="ld-fi-wait">
