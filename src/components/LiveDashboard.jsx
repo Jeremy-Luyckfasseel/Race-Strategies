@@ -579,7 +579,13 @@ export default function LiveDashboard({
   // What this car's own fuel trace says about when it has to come in. Works
   // for anyone on the LAN — it is their telemetry, not our setup.
   const intel = rivalSummary(fuelRecord);
-  const measuring = intel ? null : burnProgress(fuelRecord);
+  // Gated on CONFIDENT, not on `intel` existing. `rivalSummary` returns a
+  // figure as soon as it can compute one at all, so with one or two clean laps
+  // `intel` was truthy, `intel.confident` false, and `measuring` null — the
+  // render then fell through both branches and drew an empty line. The
+  // "measuring — 1 of 3 clean laps" message was unreachable for precisely the
+  // case it was written for.
+  const measuring = intel && intel.confident ? null : burnProgress(fuelRecord);
   // Laps until this car has to come in, which is the number an engineer acts
   // on — "box on lap 74" needs arithmetic in your head at 3am.
   const boxInLaps = intel && intel.confident && intel.pitLap != null && data.currentLap != null
