@@ -49,8 +49,11 @@ export default function TelemetryControls({
           {open ? t('tc_hide', lang) : t('tc_show', lang)}
         </button>
       </div>
+      {/* Wrapped so it can be lifted out of the flow: on the race screen the
+          panel hangs from the header as a dropdown rather than taking a row
+          across the middle of the one screen that has to show everything. */}
       {open && (
-        <>
+        <div className="tc-body">
           <div className="tc-row">
 
             {/* ── Connection ── */}
@@ -141,7 +144,7 @@ export default function TelemetryControls({
               ))}
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );

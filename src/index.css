@@ -247,11 +247,28 @@ body {
 }
 
 /* ── Main Grid ── */
+/* The race screen must fit the viewport exactly, so the shell is a flex
+   column from the root down and every band declares whether it is fixed or
+   takes the remainder. It used to be a stack of independent `min-height:
+   100vh` and `calc(100vh - 52px)` rules that each guessed at the others'
+   heights, and together overflowed by ~240px — you had to scroll to see the
+   plan, which on a pit wall means missing it. `align-items: start` was part of
+   it: a grid child sized to its content cannot inherit a height to fill. */
+.app-root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.app-header { flex-shrink: 0; }
+.app-footer { flex-shrink: 0; }
+
 .app-main {
   display: grid;
   grid-template-columns: var(--sidebar-width) 1fr;
   flex: 1;
-  align-items: start;
+  min-height: 0;
+  align-items: stretch;
 }
 
 /* Every tab but Strategy is race data, and the setup rail has no business
@@ -283,8 +300,20 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0;
-  min-height: calc(100vh - var(--header-height));
+  min-height: 0;
+  overflow-y: auto;            /* Strategy and Drivers scroll as before */
   background: var(--bg-base);
+}
+
+/* The race screen does not. Everything it shows is something you would miss
+   by not scrolling, so it is laid out to fit instead. */
+.results-area:has(.tab-content--race) {
+  padding: 0;
+  overflow: hidden;
+}
+.results-area:has(.tab-content--race) .tab-bar {
+  margin-bottom: 0;
+  padding: 0 20px;
 }
 
 .results-calculating {
@@ -2124,7 +2153,8 @@ input[type="range"]::-moz-range-thumb {
   padding: 0;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - var(--header-height) - 48px); /* 48px = tab bar */
+  flex: 1;
+  min-height: 0;               /* the shell above decides the height */
   overflow: hidden;
 }
 
@@ -2136,10 +2166,17 @@ input[type="range"]::-moz-range-thumb {
    not grow — the columns below are what needs the height. */
 .race-strip {
   flex: 0 0 auto;
-  padding: 12px 20px 14px;
+  padding: 8px 20px 9px;
   border-bottom: 1px solid var(--rule-mid);
   background: var(--bg-overlay, transparent);
 }
+.race-strip .now-view { gap: 6px 24px; }
+.race-strip .now-header { margin-bottom: 2px; }
+/* The countdown is the biggest thing on the screen and does not need to be. */
+.race-strip .now-countdown-num { font-size: 1.9rem; }
+.race-strip .now-countdown-label { font-size: 0.62rem; }
+.race-strip .now-plan,
+.race-strip .now-action { padding: 0; }
 .race-strip .now-view {
   max-width: none;
   margin: 0;
@@ -2164,7 +2201,16 @@ input[type="range"]::-moz-range-thumb {
 .race-strip .now-action { flex: 1 1 auto; min-width: 260px; }
 /* The crossover number is a standing fact, not a call — it led the strip
    because it happens to render first. It goes under everything you act on. */
-.race-strip .now-crossover { order: 9; flex: 0 0 100%; }
+/* A standing fact, not a call, so it rides along at the end of the racecraft
+   row rather than taking a row of the strip to itself. */
+.race-strip .now-crossover {
+  order: 9;
+  flex: 1 1 auto;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  align-self: center;
+}
+.race-strip .now-rc { flex: 0 1 auto; }
 
 /* ── The setup row ──
    Both bars are folded almost all race, so side by side they cost one row
@@ -2244,8 +2290,14 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* Right: data panel — 25% of full viewport */
+/* Wider, and the two halves side by side rather than stacked. Stacked they
+   came to 577px in a 515px column, so the tyre temperatures sat below the fold
+   — and on a pit wall, data you have to scroll for is data you will miss. Side
+   by side the column is only as tall as its taller half, which fits. The map
+   gives up the width and has plenty: it is mostly empty space around a
+   circuit. */
 .telem-3col-data {
-  width: max(260px, 25vw);
+  width: max(380px, 29vw);
   flex-shrink: 0;
   overflow-y: auto;
   overflow-x: hidden;
@@ -2286,12 +2338,26 @@ input[type="range"]::-moz-range-thumb {
   flex-direction: column;
   gap: 0;
 }
-.telem-3col-data .ld-col { width: 100%; }
-.telem-3col-data .ld-col + .ld-col {
-  border-top: 1px solid var(--rule);
-  padding-top: 10px;
-  margin-top: 8px;
+.telem-3col-data .ld-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 12px;
+  align-items: start;
 }
+.telem-3col-data .ld-col { width: auto; min-width: 0; }
+.telem-3col-data .ld-col + .ld-col {
+  border-top: none;
+  border-left: 1px solid var(--rule);
+  padding-top: 0;
+  padding-left: 12px;
+  margin-top: 0;
+}
+
+/* Two narrow halves need the big readouts to give a little. None of these
+   drops below the size the rest of the app uses for the same kind of number. */
+.telem-3col-data .ld-speed-val { font-size: 2.1rem; }
+.telem-3col-data .ld-gear-val  { font-size: 2.4rem; }
+.telem-3col-data .ld-time-val  { font-size: 1.05rem; }
 .telem-3col-data .ld-header {
   padding-bottom: 8px;
   margin-bottom: 4px;
@@ -4677,3 +4743,98 @@ input[type="range"]::-moz-range-thumb {
 
 /* In the race strip it is one more wrapped row, full width under the rest. */
 .race-strip .now-rc { flex: 0 0 100%; order: 8; }
+
+/* ---------------------------------------------------------------------------
+   Connections, in the header
+
+   It used to be a row across the middle of the race screen, between the plan
+   and the field, costing 48px of the one screen that has to show everything at
+   once — and it is needed about twice a weekend. It hangs off the header now,
+   next to the connection state it is about, and opens as a dropdown so it
+   takes no space in the layout at all.
+   --------------------------------------------------------------------------- */
+
+.header-telem { position: relative; }
+.header-telem .tc-panel { border: none; background: none; padding: 0; margin: 0; }
+
+.header-telem .tc-collapse-bar {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  padding: 4px 10px;
+  gap: 8px;
+  background: transparent;
+}
+.header-telem .tc-collapse-bar:hover { border-color: var(--rule-bright, var(--text-muted)); }
+
+/* Out of the flow: the layout below never moves when this opens. */
+.header-telem .tc-body {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 400;
+  width: min(620px, 90vw);
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.55);
+}
+
+/* ── The leaderboard, folded away as a rail ──
+   Hiding the field used to leave a full-width button where the board had been,
+   which is a row of height to say "there is a thing you are not looking at".
+   Folded it is a few pixels of width down the left edge instead. */
+.lb-rail {
+  flex: 0 0 auto;
+  width: 26px;
+  border: none;
+  border-right: 1px solid var(--rule-mid);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  transition: color var(--t-fast), background var(--t-fast);
+}
+.lb-rail:hover { color: var(--text-primary); background: var(--bg-overlay); }
+.lb-rail-text {
+  display: block;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  padding: 10px 0;
+  font-family: var(--font-display);
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+/* Its own hide button lives with it, at the foot of the column it closes. */
+.telem-3col-lb { display: flex; flex-direction: column; }
+.telem-3col-lb .advanced-lan-toggle {
+  margin: 4px 6px 6px;
+  width: auto;
+  flex: 0 0 auto;
+  font-size: 0.62rem;
+  padding: 5px 8px;
+}
+
+/* ── Tyre temperatures, compact ──
+   The 2×2 grid of cards is right on a screen of its own; inside the race
+   screen's third column it cost ~180px of a column that was already 120px
+   short, which pushed it below the fold — and data you have to scroll for on a
+   pit wall is data you will miss. Four readouts across one row instead. */
+.telem-3col-data .tw-grid {
+  grid-template-areas: "fl fr" "rl rr";
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto;
+  gap: 4px;
+}
+.telem-3col-data .tw-grid > .tw-center { display: none; }
+.telem-3col-data .tw-corner {
+  padding: 5px 7px;
+  gap: 2px;
+  border-left-width: 2px;
+}
+.telem-3col-data .tw-corner .tw-temp { font-size: 0.95rem; }

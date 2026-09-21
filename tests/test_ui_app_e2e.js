@@ -340,6 +340,44 @@ section('the race screen carries the plan strip and the field at once');
   v.unmount();
 }
 
+section('the race screen does not hide anything behind a scroll');
+{
+  // jsdom has no layout engine, so this cannot assert pixel heights. What it
+  // CAN hold is the structure the fit depends on: the setup panel out of the
+  // flow and into the header, no utility row between the plan and the field,
+  // and the folded leaderboard costing width rather than a row of height.
+  const v = await bootApp();
+  await v.sendField();
+  click(tabButton(v.container, 'Course'));
+  await settle(30);
+
+  assert('connections lives in the header, not between the plan and the field',
+    $(v.container, '.app-header .header-telem .tc-panel') !== null);
+  assert('and nothing of it is left in the race screen',
+    $(v.container, '.tab-content--race .tc-panel') === null);
+  assert('the utility row is gone entirely',
+    $(v.container, '.race-util') === null);
+
+  // Opening it must not push the layout down, so it renders as its own
+  // absolutely-positioned body rather than as a block in the header row.
+  click($(v.container, '.header-telem .tc-collapse-btn'));
+  await settle(30);
+  assert('opening it produces a detached panel body',
+    $(v.container, '.header-telem .tc-body') !== null);
+  click($(v.container, '.header-telem .tc-collapse-btn'));
+  await settle(30);
+
+  // Folding the field away leaves a rail, not a full-width bar.
+  assert('the field is showing to begin with', $(v.container, '.telem-3col-lb') !== null);
+  click($(v.container, '.telem-3col-lb .advanced-lan-toggle'));
+  await settle(30);
+  assert('folded, it is a rail beside the map',
+    $(v.container, '.lb-rail') !== null && $(v.container, '.telem-3col-lb') === null);
+  assert('and the rail brings it back',
+    (click($(v.container, '.lb-rail')), await settle(30), $(v.container, '.telem-3col-lb') !== null));
+  v.unmount();
+}
+
 section('all three tabs render with a full field');
 {
   const v = await bootApp();

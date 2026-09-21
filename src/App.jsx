@@ -909,6 +909,23 @@ export default function App() {
               {telem.connected ? t("app_telem_live", lang) : t("app_telem_offline", lang)}
             </div>
           )}
+          {/* Setup, not race data. It lived in a row across the middle of the
+              race screen, between the plan and the field, costing 48px of the
+              one screen that has to show everything at once — and it is needed
+              about twice a weekend. It hangs off the header now, beside the
+              connection state it is about. */}
+          <div className="header-telem">
+            <TelemetryControls
+              telem={telem}
+              ps5IPs={ps5IPs}
+              onSavePS5IPs={savePS5IPs}
+              telemUrl={telemUrl}
+              setTelemUrl={setTelemUrl}
+              teamLabels={teamLabels}
+              onTeamLabelChange={updateTeamLabel}
+              lang={lang}
+            />
+          </div>
           {best && (
             <button className="btn-header-ghost" onClick={() => window.print()}>
               {t("app_print", lang)}
@@ -1080,31 +1097,7 @@ export default function App() {
               />
               </div>
 
-              {/* Two folded setup bars, stacked, cost 50px of a screen whose
-                  whole job is the columns below. They share a row; either one
-                  takes the full width back when it is opened. */}
-              <div className="race-util">
-                <TelemetryControls
-                  telem={telem}
-                  ps5IPs={ps5IPs}
-                  onSavePS5IPs={savePS5IPs}
-                  telemUrl={telemUrl}
-                  setTelemUrl={setTelemUrl}
-                  teamLabels={teamLabels}
-                  onTeamLabelChange={updateTeamLabel}
-                  lang={lang}
-                />
-                {telem.teams.size > 0 && (
-                  <button
-                    className={`advanced-lan-toggle${showAdvancedLb ? " is-open" : ""}`}
-                    onClick={() => setShowAdvancedLb((v) => !v)}
-                  >
-                    {showAdvancedLb
-                      ? t("app_lb_hide", lang)
-                      : `${t("app_lb_show", lang)}${telem.teams.size > 1 ? ` (${telem.teams.size})` : ""}`}
-                  </button>
-                )}
-              </div>
+
               {telem.teams.size === 0 ? (
                 <div className="empty-state">
                   <div className="empty-text-block">
@@ -1120,10 +1113,29 @@ export default function App() {
                 </div>
               ) : (
                 <div className="telem-3col">
-                  {showAdvancedLb && (
+                  {showAdvancedLb ? (
                     <div className="telem-3col-lb">
                       <TelemetryLeaderboard {...lbProps} />
+                      <button
+                        className="advanced-lan-toggle is-open"
+                        onClick={() => setShowAdvancedLb(false)}
+                      >
+                        {t("app_lb_hide", lang)}
+                      </button>
                     </div>
+                  ) : telem.teams.size > 0 && (
+                    /* Folded away it is a rail down the left edge, so it costs
+                       a few pixels of width instead of a row of height. */
+                    <button
+                      className="lb-rail"
+                      onClick={() => setShowAdvancedLb(true)}
+                      title={t("app_lb_show", lang)}
+                    >
+                      <span className="lb-rail-text">
+                        {t("app_lb_show", lang)}
+                        {telem.teams.size > 1 ? ` (${telem.teams.size})` : ""}
+                      </span>
+                    </button>
                   )}
                   <div className="telem-3col-map">
                     <TrackMap
