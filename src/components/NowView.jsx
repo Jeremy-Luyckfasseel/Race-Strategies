@@ -144,63 +144,6 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
 
       {conditionsWarning && <div className="now-cond-warn">{t(conditionsWarning, lang)}</div>}
 
-      {/* What a stop this lap does to the RACE, as opposed to to the plan. The
-          plan is set by fuel and tyres, both counted in laps, so a scrap for
-          position barely moves it — but where you come out, and whether the
-          undercut lands, are decided by the same one stop. */}
-      {racecraft && (racecraft.position || racecraft.undercut || racecraft.traffic) && (
-        <div className="now-rc">
-          <span className="now-rc-title">{t('rc_title', lang)}</span>
-
-          {racecraft.position && (
-            <span className={`now-rc-item${racecraft.position.lost > 0 ? ' is-cost' : ' is-free'}`}>
-              {racecraft.position.lost > 0
-                ? t('rc_pos_drop', lang, { from: racecraft.position.from, to: racecraft.position.to })
-                : t('rc_pos_hold', lang, { n: racecraft.position.to })}
-              {/* The place is only half the answer. Dropping to P6 into clean
-                  air is a different race from dropping to P6 half a second off
-                  the car in front, and the position number cannot tell them
-                  apart — this is what says whether you rejoin into a fight. */}
-              <span className="now-rc-dim"> {neighbours(racecraft.position, lang)}</span>
-            </span>
-          )}
-
-          {racecraft.undercut && (
-            <span className={`now-rc-item${racecraft.undercut.works ? ' is-good' : ' is-dim'}`}>
-              {t(racecraft.undercut.works ? 'rc_uc_works' : 'rc_uc_fails', lang, { who: racecraft.undercut.who })}
-              <span className="now-rc-dim">
-                {' '}
-                {racecraft.undercut.works
-                  ? t('rc_uc_margin', lang, { n: racecraft.undercut.marginSecs.toFixed(1), laps: racecraft.undercut.laps })
-                  : t('rc_uc_short', lang, { n: Math.abs(racecraft.undercut.marginSecs).toFixed(1) })}
-              </span>
-            </span>
-          )}
-
-          {racecraft.traffic && (
-            <span className="now-rc-item is-warn">
-              {/* Rounding put "in 0 laps" on a car half a lap up the road,
-                  which reads as a bug rather than as "right now". */}
-              {Math.round(racecraft.traffic.laps) < 1
-                ? t('rc_traffic_now', lang, { who: racecraft.traffic.who })
-                : t('rc_traffic', lang, {
-                    who: racecraft.traffic.who,
-                    n: Math.round(racecraft.traffic.laps),
-                  })}
-              <span className="now-rc-dim">
-                {' '}
-                {t('rc_traffic_cost', lang, { n: racecraft.traffic.closingSecsPerLap.toFixed(1) })}
-              </span>
-            </span>
-          )}
-        </div>
-      )}
-
-      {crossoverSecs != null && (
-        <div className="now-crossover">
-          {t('cond_crossover', lang, { n: crossoverSecs.toFixed(1) })}
-        </div>
-      )}
 
       {/* Said last, in the smallest type, under a number that looks live: the
           countdown is the plan's, not the car's. It belongs at the top — and
@@ -278,7 +221,66 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
             </div>
           )}
 
+
         </>
+      )}
+
+      {/* What a stop this lap does to the RACE, as opposed to to the plan. The
+          plan is set by fuel and tyres, both counted in laps, so a scrap for
+          position barely moves it — but where you come out, and whether the
+          undercut lands, are decided by the same one stop. */}
+      {racecraft && (racecraft.position || racecraft.undercut || racecraft.traffic) && (
+        <div className="now-rc">
+          <span className="now-rc-title">{t('rc_title', lang)}</span>
+
+          {racecraft.position && (
+            <span className={`now-rc-item${racecraft.position.lost > 0 ? ' is-cost' : ' is-free'}`}>
+              {racecraft.position.lost > 0
+                ? t('rc_pos_drop', lang, { from: racecraft.position.from, to: racecraft.position.to })
+                : t('rc_pos_hold', lang, { n: racecraft.position.to })}
+              {/* The place is only half the answer. Dropping to P6 into clean
+                  air is a different race from dropping to P6 half a second off
+                  the car in front, and the position number cannot tell them
+                  apart — this is what says whether you rejoin into a fight. */}
+              <span className="now-rc-dim"> {neighbours(racecraft.position, lang)}</span>
+            </span>
+          )}
+
+          {racecraft.undercut && (
+            <span className={`now-rc-item${racecraft.undercut.works ? ' is-good' : ' is-dim'}`}>
+              {t(racecraft.undercut.works ? 'rc_uc_works' : 'rc_uc_fails', lang, { who: racecraft.undercut.who })}
+              <span className="now-rc-dim">
+                {' '}
+                {racecraft.undercut.works
+                  ? t('rc_uc_margin', lang, { n: racecraft.undercut.marginSecs.toFixed(1), laps: racecraft.undercut.laps })
+                  : t('rc_uc_short', lang, { n: Math.abs(racecraft.undercut.marginSecs).toFixed(1) })}
+              </span>
+            </span>
+          )}
+
+          {racecraft.traffic && (
+            <span className="now-rc-item is-warn">
+              {/* Rounding put "in 0 laps" on a car half a lap up the road,
+                  which reads as a bug rather than as "right now". */}
+              {Math.round(racecraft.traffic.laps) < 1
+                ? t('rc_traffic_now', lang, { who: racecraft.traffic.who })
+                : t('rc_traffic', lang, {
+                    who: racecraft.traffic.who,
+                    n: Math.round(racecraft.traffic.laps),
+                  })}
+              <span className="now-rc-dim">
+                {' '}
+                {t('rc_traffic_cost', lang, { n: racecraft.traffic.closingSecsPerLap.toFixed(1) })}
+              </span>
+            </span>
+          )}
+        </div>
+      )}
+
+      {crossoverSecs != null && (
+        <div className="now-crossover">
+          {t('cond_crossover', lang, { n: crossoverSecs.toFixed(1) })}
+        </div>
       )}
     </div>
   );
