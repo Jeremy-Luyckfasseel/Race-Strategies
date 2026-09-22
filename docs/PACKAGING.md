@@ -119,7 +119,7 @@ cause of a "stopped working" report.
 ## Notes / known rough edges (build is not yet run in CI)
 
 - The electron-builder config bundles all production `dependencies`; only `ws` is
-  needed at runtime by the relay (React/Recharts are already compiled into `dist/`).
+  needed at runtime by the relay (React is already compiled into `dist/`).
   Harmless, but the install is larger than strictly necessary — prune later if size
   matters.
 - The Windows installer build has **not** been produced/smoke-tested in this

@@ -1,11 +1,18 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { findBestStrategies, isValidLapTimeStr } from '../logic/strategy';
+import { compoundsFor } from '../logic/conditions';
 
 /**
  * Run findBestStrategies with validated, coerced inputs.
  * Returns { ranked, best } or null if inputs are invalid.
+ *
+ * Exported because it is the ONLY sanctioned way into the engine. Calling
+ * findBestStrategies directly skips the dry/wet compound filter and the
+ * lap-time validation that CLAUDE.md names as a hard guardrail — which is how
+ * the incident panel came to print a confident verdict built on parseLapTime's
+ * silent 120 s fallback at the exact moment the rest of the app had gone blank.
  */
-function compute(inputs) {
+export function computeStrategy(inputs) {
   const {
     raceDurationHours,
     tankSize,
@@ -24,6 +31,9 @@ function compute(inputs) {
     currentFuel,
     currentCompoundId,
     currentTireAgeLaps,
+    conditions,
+    pacePenaltySecs,
+    pacePenaltyLaps,
   } = inputs;
 
   // Basic validation
@@ -35,8 +45,10 @@ function compute(inputs) {
     return null;
   }
 
-  // Ensure compounds array has at least one active compound
-  const activeCompounds = (compounds || []).filter(c => c.tireLife > 0);
+  // Ensure compounds array has at least one active compound. In the wet the
+  // engine may only pick wet tyres, and in the dry only slicks — see
+  // conditions.js, which falls back rather than leaving nothing to run on.
+  const activeCompounds = compoundsFor(compounds, conditions);
   if (activeCompounds.length === 0) return null;
 
   // Reject a malformed lap time rather than let parseLapTime silently fall
@@ -66,6 +78,9 @@ function compute(inputs) {
     drivers: drivers || [],
     minDriverTimeSecs: Number(minDriverTimeSecs) || 0,
     mandatoryStops: Number(mandatoryStops) || 0,
+    pacePenaltySecs: Number(pacePenaltySecs) || 0,
+    // Null means it is never repaired; a number is how many laps it lasts.
+    pacePenaltyLaps: pacePenaltyLaps == null ? null : Number(pacePenaltyLaps),
     midRaceMode: !!midRaceMode,
     currentLap: midRaceMode ? Number(currentLap) || 0 : 0,
     currentFuel: midRaceMode && currentFuel !== '' && currentFuel !== null && !isNaN(currentFuel) ? Number(currentFuel) : null,
@@ -97,7 +112,7 @@ export function useStrategy(inputs) {
   useEffect(() => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      setResult(compute(inputs));
+      setResult(computeStrategy(inputs));
     }, 600);
     return () => clearTimeout(debounceRef.current);
   }, [inputs]);
@@ -107,7 +122,7 @@ export function useStrategy(inputs) {
     clearTimeout(debounceRef.current);
     setCalculating(true);
     requestAnimationFrame(() => {
-      setResult(compute(inputs));
+      setResult(computeStrategy(inputs));
       setCalculating(false);
     });
   }, [inputs]);

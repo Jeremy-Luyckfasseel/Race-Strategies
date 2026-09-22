@@ -3,7 +3,7 @@
  *
  * Nothing here is mocked. It spawns server/telemetry-server.js as a real
  * process, opens a real WebSocket to it exactly as the browser does, and
- * fires real Salsa20-encrypted GT7 packets at UDP 33740 from ten distinct
+ * fires real Salsa20-encrypted GT7 packets at the relay from ten distinct
  * loopback source addresses — so the relay sees ten separate consoles and
  * keys them apart the same way it would at an actual event.
  *
@@ -149,7 +149,12 @@ function buildPacket({
 // ── Simulated field ─────────────────────────────────────────────────────────
 
 const CARS = Array.from({ length: 10 }, (_, i) => ({
-  ip: `127.0.0.${i + 2}`,        // ten distinct source addresses
+  // Ten distinct source addresses, deliberately NOT 127.0.0.x: that is the
+  // range scripts/fake-field.mjs sends from, and a fake field left running in
+  // another terminal used to land in this relay and be decoded as these cars —
+  // failing "speed decodes correctly — got 171" against a packet the test
+  // never sent. The relay keys on source IP, so a different block is enough.
+  ip: `127.0.9.${i + 2}`,
   sock: null,
   lap: 1,
   speedKmh: 150,
@@ -159,9 +164,22 @@ const CARS = Array.from({ length: 10 }, (_, i) => ({
 const PIT_CAR = 2;   // does a genuine pit stop
 const SPIN_CAR = 5;  // spins and rejoins — must NOT read as a pit stop
 
+// Deliberately NOT GT7's real ports. The suite spawns its own relay, and on a
+// machine where the pit wall is already set up — `npm run telemetry` and the
+// fake field running in other windows — sharing 33740/20777 failed three tests
+// that were perfectly fine.
+const UDP = '34740';
+const HB  = '34739';
+const WS  = '21777';
+
 async function main() {
   section('relay startup');
-  const proc = spawn(process.execPath, [SERVER], { stdio: ['ignore', 'pipe', 'pipe'] });
+  // Its own ports, so a relay already running for a real session (or for the
+  // fake field) does not make this suite fail with EADDRINUSE.
+  const proc = spawn(process.execPath, [SERVER], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, GT7_UDP_PORT: UDP, GT7_HB_PORT: HB, GT7_WS_PORT: WS },
+  });
   let serverOut = '';
   proc.stdout.on('data', (d) => { serverOut += d.toString(); });
   proc.stderr.on('data', (d) => { serverOut += d.toString(); });
@@ -174,18 +192,18 @@ async function main() {
   try {
     await sleep(1200);
     if (/EADDRINUSE/.test(serverOut)) {
-      console.error('\n  ! ports 33740/20777 are already in use — is `npm run telemetry`');
-      console.error('    still running in another window? Stop it and re-run.\n');
+      console.error('\n  ! ports ' + UDP + '/' + WS + ' are already in use — something else');
+      console.error('    is on the ports this suite reserves for itself. Stop it and re-run.\n');
     }
     assert('relay process is running', proc.exitCode === null, serverOut);
-    assert('UDP listener is up', /UDP listening on :33740/.test(serverOut), serverOut);
+    assert('UDP listener is up', new RegExp('UDP listening on :' + UDP).test(serverOut), serverOut);
     assert('WebSocket server is up', /WebSocket server ready/.test(serverOut), serverOut);
 
     if (proc.exitCode !== null) throw new Error(`relay exited early:\n${serverOut}`);
 
     section('browser connects and registers the field');
     const received = [];
-    const ws = new WebSocket('ws://localhost:20777');
+    const ws = new WebSocket('ws://localhost:' + WS);
     await new Promise((resolve, reject) => {
       ws.on('open', resolve);
       ws.on('error', reject);
@@ -223,7 +241,7 @@ async function main() {
         racePos: CARS.indexOf(c) + 1,
         lastLapMs: c.lap > 1 ? 120_000 + CARS.indexOf(c) * 500 : 0,
       });
-      c.sock.send(buf, 33740, '127.0.0.1');
+      c.sock.send(buf, Number(UDP), '127.0.0.1');
     };
 
     section('whole field transmitting at 60 Hz');

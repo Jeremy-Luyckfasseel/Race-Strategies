@@ -41,7 +41,7 @@ const round3 = (x) => Math.round(x * 1000) / 1000;
 /** How far a recommendation's measured value has moved from a prior snapshot. */
 function measuredShift(rec, priorMeasured) {
   if (priorMeasured == null) return Infinity;
-  if (rec.kind === 'compound') {
+  if (rec.kind === 'compound' || rec.kind === 'driverCompound') {
     const a = rec.measured.map(parseLapTime);
     const b = priorMeasured.map(parseLapTime);
     return Math.max(...[0, 1, 2].map((i) => Math.abs(a[i] - b[i])));
@@ -140,6 +140,57 @@ export function buildRecommendations(estimates, inputs, dismissed = {}) {
     }
   }
 
+  // --- Per-driver lap-time curves ---
+  //
+  // Two drivers on the same tyre differ by more than most of what else is
+  // measured here, and the engine already lets a driver override the global
+  // compound times — but only if somebody types them in, from a stopwatch, for
+  // every driver and every compound. This proposes them from the laps those
+  // drivers actually drove.
+  //
+  // Compared against the DRIVER's own override, not the global time, so a
+  // driver whose pace matches the global curve is never nagged. And only
+  // against the driver's own laps: `byDriver` is fitted per driver, so one
+  // driver's pace can never be proposed as another's.
+  for (const driver of inputs.drivers || []) {
+    const learnedComps = estimates.byDriver && estimates.byDriver[driver.id];
+    if (!learnedComps) continue;
+    for (const comp of inputs.compounds || []) {
+      const learned = learnedComps[comp.id];
+      if (!learned || !learned.confident || !learned.startLapTime) continue;
+      const dc = driver.compounds?.[comp.id] || {};
+      const mea = [learned.startLapTime, learned.halfLapTime, learned.endLapTime];
+      // With nothing set for this driver on this compound the engine falls back
+      // to the global times, so that is what the measurement is really
+      // replacing and what the card should show as "yours".
+      const cur = dc.startLapTime
+        ? [dc.startLapTime, dc.halfLapTime, dc.endLapTime]
+        : [comp.startLapTime, comp.halfLapTime, comp.endLapTime];
+      const maxDiff = Math.max(...[0, 1, 2].map((i) => Math.abs(parseLapTime(cur[i]) - parseLapTime(mea[i]))));
+      if (maxDiff < RECOMMEND_CONFIG.minLapTimeDiff) continue;
+      consider(out, dismissed, {
+        key: `driver:${driver.id}:compound:${comp.id}`,
+        kind: 'driverCompound',
+        driverId: driver.id,
+        compoundId: comp.id,
+        label: `${driver.name || driver.id} on ${comp.name || comp.id}`,
+        labelKey: 'rec_driver_lap_times',
+        labelVars: { driver: driver.name || driver.id, compound: comp.id },
+        current: cur,
+        measured: mea,
+        unit: '',
+        delta: maxDiff,
+        reSurface: RECOMMEND_CONFIG.reSurfaceLapTime,
+        trust: {
+          sampleCount: learned.sampleCount,
+          volatility: learned.volatility,
+          confident: learned.confident,
+          highlyVolatile: learned.highlyVolatile,
+        },
+      });
+    }
+  }
+
   return out;
 }
 
@@ -162,6 +213,27 @@ export function applyRecommendation(inputs, rec) {
           c.id === rec.compoundId
             ? { ...c, startLapTime: rec.measured[0], halfLapTime: rec.measured[1], endLapTime: rec.measured[2] }
             : c
+        ),
+      };
+    case 'driverCompound':
+      // Writes the driver's OWN override, leaving the global compound times —
+      // and every other driver — untouched.
+      return {
+        ...inputs,
+        drivers: (inputs.drivers || []).map((d) =>
+          d.id === rec.driverId
+            ? {
+                ...d,
+                compounds: {
+                  ...(d.compounds || {}),
+                  [rec.compoundId]: {
+                    startLapTime: rec.measured[0],
+                    halfLapTime: rec.measured[1],
+                    endLapTime: rec.measured[2],
+                  },
+                },
+              }
+            : d
         ),
       };
     default:

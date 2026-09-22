@@ -171,5 +171,130 @@ section('Accept applies to a NEW inputs object and yields a valid strategy');
   assert('accepted inputs produce a valid ranked strategy', Array.isArray(ranked) && ranked.length > 0);
 }
 
+
+// ---------------------------------------------------------------------------
+// Per-driver lap-time curves
+//
+// The engine already lets a driver override the global compound times, but
+// only if somebody types them in from a stopwatch for every driver and every
+// compound. These cover proposing them from the laps each driver drove.
+// ---------------------------------------------------------------------------
+
+const TWO_DRIVERS = {
+  ...INPUTS,
+  drivers: [
+    { id: 'ana', name: 'Ana', compounds: {} },
+    { id: 'bo', name: 'Bo', compounds: {} },
+  ],
+};
+
+/** A confident per-driver fit, on top of the existing global fixtures. */
+function withDrivers(byDriver) {
+  return { ...confidentEstimates(), byDriver };
+}
+
+const ANA_M = {
+  tireLife: 30,
+  startLapTime: '1:57.000', halfLapTime: '1:58.000', endLapTime: '1:59.500',
+  sampleCount: 40, volatility: 0.05, confident: true, highlyVolatile: false,
+};
+const BO_M = {
+  tireLife: 30,
+  startLapTime: '2:02.000', halfLapTime: '2:04.000', endLapTime: '2:07.500',
+  sampleCount: 26, volatility: 0.06, confident: true, highlyVolatile: false,
+};
+
+section('A driver is proposed their own measured pace');
+{
+  const recs = buildRecommendations(withDrivers({ ana: { M: ANA_M }, bo: { M: BO_M } }), TWO_DRIVERS, {});
+  const ana = recs.find((r) => r.key === 'driver:ana:compound:M');
+  const bo = recs.find((r) => r.key === 'driver:bo:compound:M');
+
+  assert('both drivers are proposed', !!ana && !!bo);
+  assert('each carries their own measurement',
+    ana.measured[0] === '1:57.000' && bo.measured[0] === '2:02.000');
+  assert('and is tagged with the driver it belongs to',
+    ana.driverId === 'ana' && bo.driverId === 'bo' && ana.compoundId === 'M');
+  assert('the label names the driver, for the UI to translate',
+    ana.labelKey === 'rec_driver_lap_times' && ana.labelVars.driver === 'Ana');
+
+  // With nothing set for this driver yet the engine falls back to the global
+  // times, so that is what the card must show as the thing being replaced.
+  assert('compared against the global time while the driver has no override',
+    ana.current[0] === '2:00', JSON.stringify(ana.current));
+}
+
+section('A driver whose measured pace matches what is set is not nagged');
+{
+  const settled = {
+    ...TWO_DRIVERS,
+    drivers: [
+      { id: 'ana', name: 'Ana', compounds: { M: { startLapTime: '1:57.000', halfLapTime: '1:58.000', endLapTime: '1:59.500' } } },
+      { id: 'bo', name: 'Bo', compounds: {} },
+    ],
+  };
+  const recs = buildRecommendations(withDrivers({ ana: { M: ANA_M }, bo: { M: BO_M } }), settled, {});
+  assert('the driver already on their measured pace is left alone',
+    !recs.some((r) => r.key === 'driver:ana:compound:M'));
+  assert('the one who is not is still proposed',
+    recs.some((r) => r.key === 'driver:bo:compound:M'));
+}
+
+section('A driver with too little running proposes nothing');
+{
+  const shy = { ...BO_M, confident: false, sampleCount: 3 };
+  const recs = buildRecommendations(withDrivers({ ana: { M: ANA_M }, bo: { M: shy } }), TWO_DRIVERS, {});
+  assert('no proposal from an unconfident driver fit',
+    !recs.some((r) => r.key === 'driver:bo:compound:M'));
+  assert('which does not stop the confident one', recs.some((r) => r.key === 'driver:ana:compound:M'));
+}
+
+section('Accepting one driver changes only that driver');
+{
+  const recs = buildRecommendations(withDrivers({ ana: { M: ANA_M }, bo: { M: BO_M } }), TWO_DRIVERS, {});
+  const ana = recs.find((r) => r.key === 'driver:ana:compound:M');
+  const next = applyRecommendation(TWO_DRIVERS, ana);
+
+  assert('inputs are not mutated', TWO_DRIVERS.drivers[0].compounds.M === undefined);
+  assert("the driver's own override is written",
+    next.drivers[0].compounds.M.startLapTime === '1:57.000'
+    && next.drivers[0].compounds.M.endLapTime === '1:59.500');
+  assert('the other driver is untouched',
+    Object.keys(next.drivers[1].compounds).length === 0);
+  assert('and so is the global compound time',
+    next.compounds.find((c) => c.id === 'M').startLapTime === '2:00');
+
+  const ranked = findBestStrategies(next);
+  assert('the result still plans a race', Array.isArray(ranked) && ranked.length > 0);
+}
+
+section('Ignoring a driver proposal holds until their pace really moves');
+{
+  const est = withDrivers({ ana: { M: ANA_M }, bo: { M: BO_M } });
+  const first = buildRecommendations(est, TWO_DRIVERS, {}).find((r) => r.key === 'driver:ana:compound:M');
+  const dismissed = { [first.key]: dismissSnapshot(first) };
+
+  assert('the same measurement does not come back',
+    !buildRecommendations(est, TWO_DRIVERS, dismissed).some((r) => r.key === first.key));
+
+  // A tenth is inside the re-surface gate; four seconds is not.
+  const nudged = withDrivers({ ana: { M: { ...ANA_M, startLapTime: '1:57.050' } }, bo: { M: BO_M } });
+  assert('nor does a hair of movement',
+    !buildRecommendations(nudged, TWO_DRIVERS, dismissed).some((r) => r.key === first.key));
+
+  const moved = withDrivers({ ana: { M: { ...ANA_M, startLapTime: '2:01.000' } }, bo: { M: BO_M } });
+  assert('but a real change does',
+    buildRecommendations(moved, TWO_DRIVERS, dismissed).some((r) => r.key === first.key));
+}
+
+section('No per-driver fit, no per-driver proposals');
+{
+  // Everything that came before this feature still behaves the same.
+  const recs = buildRecommendations(confidentEstimates(), TWO_DRIVERS, {});
+  assert('estimates with no byDriver produce none',
+    !recs.some((r) => r.kind === 'driverCompound'));
+  assert('while the global proposals still arrive', recs.length > 0);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

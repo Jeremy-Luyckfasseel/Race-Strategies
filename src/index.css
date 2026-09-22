@@ -247,17 +247,36 @@ body {
 }
 
 /* ── Main Grid ── */
+/* The race screen must fit the viewport exactly, so the shell is a flex
+   column from the root down and every band declares whether it is fixed or
+   takes the remainder. It used to be a stack of independent `min-height:
+   100vh` and `calc(100vh - 52px)` rules that each guessed at the others'
+   heights, and together overflowed by ~240px — you had to scroll to see the
+   plan, which on a pit wall means missing it. `align-items: start` was part of
+   it: a grid child sized to its content cannot inherit a height to fill. */
+.app-root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.app-header { flex-shrink: 0; }
+.app-footer { flex-shrink: 0; }
+
 .app-main {
   display: grid;
   grid-template-columns: var(--sidebar-width) 1fr;
   flex: 1;
-  align-items: start;
+  min-height: 0;
+  align-items: stretch;
 }
 
-.app-main--telemetry {
+/* Every tab but Strategy is race data, and the setup rail has no business
+   taking a third of the width there. */
+.app-main--full {
   grid-template-columns: 1fr;
 }
-.app-main--telemetry .sidebar { display: none; }
+.app-main--full .sidebar { display: none; }
 
 /* ── Sidebar ── */
 .sidebar {
@@ -281,8 +300,20 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0;
-  min-height: calc(100vh - var(--header-height));
+  min-height: 0;
+  overflow-y: auto;            /* Strategy and Drivers scroll as before */
   background: var(--bg-base);
+}
+
+/* The race screen does not. Everything it shows is something you would miss
+   by not scrolling, so it is laid out to fit instead. */
+.results-area:has(.tab-content--race) {
+  padding: 0;
+  overflow: hidden;
+}
+.results-area:has(.tab-content--race) .tab-bar {
+  margin-bottom: 0;
+  padding: 0 20px;
 }
 
 .results-calculating {
@@ -656,6 +687,12 @@ input[type="range"]::-moz-range-thumb {
 .calculate-btn {
   margin: 14px 16px 4px;
   width: calc(100% - 32px);
+  /* Sticks to the bottom of the scrolling sidebar: during a race this gets
+     pressed constantly and used to sit below every collapsed section. */
+  position: sticky;
+  bottom: 8px;
+  z-index: 2;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
 }
 
 .btn-secondary {
@@ -702,7 +739,11 @@ input[type="range"]::-moz-range-thumb {
 /* ── Compound Input Table ── */
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
+/* Fixed layout keeps the six columns inside the rail: the lap-time inputs
+   were sizing themselves off their content and pushing the mandatory toggle
+   4px past the edge, which turned the whole panel into a scroller. */
 .compound-table {
+  table-layout: fixed;
   width: 100%;
   border-collapse: collapse;
   font-size: 0.8rem;
@@ -995,14 +1036,26 @@ input[type="range"]::-moz-range-thumb {
 }
 .tc-hint code { font-family: var(--font-data); color: var(--text-secondary); }
 
-.tc-ip-list { display: flex; flex-direction: column; gap: 4px; }
+/* One row per console stacked vertically: at a ten-car event that was a
+   column of ten inputs and a lot of dead space beside it. They wrap now. */
+.tc-ip-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+  gap: 4px 10px;
+  align-items: start;
+}
+
+.tc-group-ips { flex: 1 1 380px; }
+
+.tc-ip-list .tc-add-btn { grid-column: 1 / -1; justify-self: start; }
 
 .tc-ip-row { display: flex; gap: 4px; align-items: center; }
 
 .tc-ip-input {
   font-family: var(--font-data) !important;
   font-size: 0.74rem !important;
-  width: 160px;
+  width: 100%;
+  min-width: 0;
 }
 
 .tc-ip-remove {
@@ -1375,14 +1428,17 @@ input[type="range"]::-moz-range-thumb {
 
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* One row of six. At three columns each cell was ~400px with the number
+     hugging the left of it, so two thirds of the strip was empty and it cost
+     two rows of height. */
+  grid-template-columns: repeat(6, 1fr);
   border: 1px solid var(--rule-mid);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
 
 .kpi-card {
-  padding: 20px 18px 18px;
+  padding: 16px 14px 14px;
   border-right: 1px solid var(--rule-mid);
   border-bottom: 1px solid var(--rule-mid);
   background: var(--bg-card);
@@ -1390,12 +1446,12 @@ input[type="range"]::-moz-range-thumb {
   transition: background var(--t-fast);
 }
 
-.kpi-card:nth-child(3n)        { border-right: none; }
-.kpi-card:nth-last-child(-n+3) { border-bottom: none; }
+.kpi-card:nth-child(6n)      { border-right: none; }
+.kpi-card                    { border-bottom: none; }
 
 .kpi-value {
   font-family: var(--font-data);
-  font-size: 2rem;
+  font-size: 1.7rem;
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1;
@@ -1691,8 +1747,149 @@ input[type="range"]::-moz-range-thumb {
   font-size: 0.74rem;
 }
 
-.recharts-surface { overflow: visible; }
-.recharts-text { font-family: var(--font-data) !important; }
+.tl-wrap {
+  position: relative;
+  padding: 4px 0 2px;
+}
+
+/* The race bar. Segments are absolutely placed by lap percentage, so the
+   whole thing is fluid without measuring anything. */
+.tl-track {
+  position: relative;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+}
+
+.tl-window {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 255, 255, 0.05) 0 3px,
+    transparent 3px 7px
+  );
+  border-right: 1px dashed rgba(255, 255, 255, 0.18);
+}
+
+.tl-seg {
+  /* Queried by its own label below: only the segment knows how wide it is. */
+  container-type: inline-size;
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+  opacity: 0.85;
+  cursor: default;
+  transition: opacity var(--t-fast), transform var(--t-fast);
+}
+
+.tl-seg + .tl-seg { border-left: 1px solid var(--bg-base); }
+
+.tl-seg:hover,
+.tl-seg.tl-seg-open { opacity: 1; }
+
+.tl-seg:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 1px;
+}
+
+.tl-seg-warn {
+  opacity: 0.45;
+  box-shadow: inset 0 0 0 1.5px var(--danger);
+}
+
+.tl-seg-label {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 0 4px;
+  font-family: var(--font-data);
+  font-size: 0.62rem;
+  color: var(--bg-base);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.tl-seg-num { font-weight: 700; }
+.tl-seg-laps { opacity: 0.75; }
+
+/* Hidden by default and shown once the segment is wide enough to hold it —
+   the lap count needs more room than the stint number, so it goes first. A
+   browser without container queries shows both, which is the old behaviour
+   at its most generous rather than a blank bar. */
+@supports (container-type: inline-size) {
+  .tl-seg-label { display: none; }
+  @container (min-width: 22px) {
+    .tl-seg-label { display: flex; }
+    .tl-seg-laps  { display: none; }
+  }
+  @container (min-width: 44px) {
+    .tl-seg-laps { display: inline; }
+  }
+}
+
+/* Pit stops on their own line, so a marker never covers a stint. */
+.tl-pits {
+  position: relative;
+  height: 15px;
+  margin-top: 3px;
+}
+
+.tl-pit {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.tl-pit-tick {
+  width: 1px;
+  height: 5px;
+  background: var(--warning);
+}
+
+.tl-pit-lap {
+  font-family: var(--font-data);
+  font-size: 0.56rem;
+  color: var(--warning);
+  line-height: 1.2;
+}
+
+.tl-ruler {
+  position: relative;
+  height: 14px;
+  margin-top: 2px;
+  border-top: 1px solid var(--rule);
+}
+
+.tl-tick {
+  position: absolute;
+  top: 2px;
+  transform: translateX(-50%);
+  font-family: var(--font-data);
+  font-size: 0.56rem;
+  color: var(--text-muted);
+}
+
+.tl-tick:first-child { transform: none; }
+.tl-tick:last-child { transform: translateX(-100%); }
+
+.tl-tooltip-anchor {
+  position: absolute;
+  bottom: calc(100% - 6px);
+  z-index: 5;
+  pointer-events: none;
+}
+
+.tl-tooltip { white-space: nowrap; }
 
 /* ============================================================
    Stint Table
@@ -1708,16 +1905,19 @@ input[type="range"]::-moz-range-thumb {
   margin-bottom: 14px;
 }
 
-.stint-table {
+.stint-table,
+.tyre-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.82rem;
   min-width: 640px;
 }
 
-.stint-table thead tr { border-bottom: 1px solid var(--rule-bright); }
+.stint-table thead tr,
+.tyre-table thead tr { border-bottom: 1px solid var(--rule-bright); }
 
-.stint-table th {
+.stint-table th,
+.tyre-table th {
   padding: 6px 12px 10px;
   text-align: left;
   font-family: var(--font-display);
@@ -1729,7 +1929,8 @@ input[type="range"]::-moz-range-thumb {
   white-space: nowrap;
 }
 
-.stint-table td {
+.stint-table td,
+.tyre-table td {
   padding: 10px 12px;
   border-bottom: 1px solid var(--rule);
   color: var(--text-primary);
@@ -1737,9 +1938,12 @@ input[type="range"]::-moz-range-thumb {
   font-family: var(--font-ui);
 }
 
-.stint-table tbody tr { transition: background var(--t-fast); }
-.stint-table tbody tr:hover { background: rgba(255,255,255,0.02); }
-.stint-table tbody tr:last-child td { border-bottom: none; }
+.stint-table tbody tr,
+.tyre-table tbody tr { transition: background var(--t-fast); }
+.stint-table tbody tr:hover,
+.tyre-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+.stint-table tbody tr:last-child td,
+.tyre-table tbody tr:last-child td { border-bottom: none; }
 
 .row-warning { background: rgba(229,53,53,0.04) !important; }
 .row-warning td { color: rgba(229,53,53,0.85) !important; }
@@ -1804,6 +2008,14 @@ input[type="range"]::-moz-range-thumb {
 /* ============================================================
    Responsive
    ============================================================ */
+
+@media (max-width: 1200px) {
+  .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+  .kpi-card                    { border-bottom: 1px solid var(--rule-mid); }
+  .kpi-card:nth-child(6n)      { border-right: 1px solid var(--rule-mid); }
+  .kpi-card:nth-child(3n)        { border-right: none; }
+  .kpi-card:nth-last-child(-n+3) { border-bottom: none; }
+}
 
 @media (max-width: 960px) {
   :root { --sidebar-width: 360px; }
@@ -1937,12 +2149,232 @@ input[type="range"]::-moz-range-thumb {
    Telemetry full-screen layout
    ============================================================ */
 
-.tab-content--telemetry {
+.tab-content--race {
   padding: 0;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - var(--header-height) - 48px); /* 48px = tab bar */
+  flex: 1;
+  min-height: 0;               /* the shell above decides the height */
   overflow: hidden;
+}
+
+/* ── The race strip ──
+   The plan and the field used to be two tabs, so you read the call on one
+   screen and watched the car obey it on another. The strip is the same
+   NowView laid out as a band: everything you act on across the top, the
+   field, the map and the car underneath it. It does not scroll and it does
+   not grow — the columns below are what needs the height. */
+.race-strip {
+  flex: 0 0 auto;
+  padding: 10px 20px 11px;
+  border-bottom: 1px solid var(--rule-mid);
+  background: var(--bg-overlay, transparent);
+}
+
+/*
+ * Laid out as a grid rather than a wrapping flex row.
+ *
+ * As flex-wrap it was a bag of differently-shaped blocks that fell where they
+ * fell: nothing lined up column to column, every cell set its own type size,
+ * and the result read as scattered even though each piece was fine on its own.
+ * Two rows now, with fixed tracks, so the eye can go to the same place twice:
+ *
+ *   row 1  car | stint | laps left | the call | ................ | race state
+ *   row 2  what a stop this lap would do, and the tyre crossover
+ *
+ * Everything inside uses ONE label size and ONE value size, declared below, so
+ * "big" means "this is the number" rather than "this block was written later".
+ */
+.race-strip .now-view {
+  max-width: none;
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "car stint laps call state"
+    "rc  rc    rc   rc   rc";
+  align-items: center;
+  column-gap: 26px;
+  row-gap: 6px;
+}
+
+.race-strip .now-header   { grid-area: state; justify-self: end; margin: 0; }
+.race-strip .now-plan     { grid-area: stint; }
+.race-strip .now-countdown{ grid-area: laps; }
+.race-strip .now-action   { grid-area: call; min-width: 0; }
+
+/* Alerts break the grid on purpose: a safety car or a wet-tyre warning should
+   not have to fit a column, and should not be missable. */
+.race-strip .now-sc,
+.race-strip .now-cond-warn,
+.race-strip .now-waiting,
+.race-strip .now-empty {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+}
+
+/* ── One label scale, one value scale ── */
+.race-strip .now-action-title,
+.race-strip .now-countdown-label,
+.race-strip .now-stint-label,
+.race-strip .now-rc-title {
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-muted);
+}
+
+/* The car's own name, top left: an identifier, not a heading. */
+.race-strip .now-car {
+  grid-area: car;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+/* The stint and its tyre read as one line under a label. */
+.race-strip .now-plan {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+}
+.race-strip .now-plan-seq { font-size: 0.72rem; }
+
+/* The ONE hero number on the strip. Nothing else competes with it. */
+.race-strip .now-countdown {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+.race-strip .now-countdown-num {
+  font-size: 1.75rem;
+  line-height: 1;
+  font-weight: 700;
+}
+.race-strip .now-countdown-label { max-width: 6.5em; line-height: 1.15; }
+
+/* The call itself: label above, one line of instruction below. */
+.race-strip .now-action { padding: 0; }
+.race-strip .now-action-body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 1px;
+}
+.race-strip .now-box-lap { font-size: 1.05rem; font-weight: 700; }
+.race-strip .now-fuel,
+.race-strip .now-tyres { font-size: 0.86rem; color: var(--text-secondary); }
+
+/* ── Row two: what a stop this lap would do ── */
+.race-strip .now-rc {
+  grid-area: rc;
+  border-left: none;
+  background: none;
+  padding: 4px 0 0;
+  border-top: 1px solid var(--rule);
+  border-radius: 0;
+  gap: 4px 18px;
+}
+/* A standing fact, not a call, so it rides along at the end of that row
+   rather than taking a row of the strip to itself. */
+.race-strip .now-crossover {
+  grid-area: rc;
+  justify-self: end;
+  align-self: center;
+  font-size: 0.7rem;
+  color: var(--text-ghost, var(--text-muted));
+  padding-top: 4px;
+}
+
+/* ── Race state, top right ──
+   The clock, the conditions switch and the freeze button were three controls
+   of three different heights with no space between them, so they read as one
+   smudged object. Same height, same radius, a real gap. */
+.race-strip .now-header {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.race-strip .now-clock,
+.race-strip .cond-switch,
+.race-strip .now-freeze,
+.race-strip .now-start {
+  height: 30px;
+  box-sizing: border-box;
+  border-radius: var(--radius-xs);
+}
+.race-strip .now-clock {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--rule);
+}
+.race-strip .now-clock-block {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
+  line-height: 1.05;
+}
+.race-strip .now-clock-k {
+  font-size: 0.52rem;
+  letter-spacing: 0.1em;
+  color: var(--text-ghost, var(--text-muted));
+}
+.race-strip .now-clock-v { font-size: 0.86rem; }
+.race-strip .now-clock-clear {
+  align-self: center;
+  margin-left: 2px;
+  padding: 0 4px;
+  line-height: 1;
+  color: var(--text-ghost, var(--text-muted));
+}
+.race-strip .now-clock-clear:hover { color: var(--text-primary); }
+.race-strip .cond-switch { display: flex; align-items: stretch; }
+.race-strip .cond-btn { padding: 0 11px; display: flex; align-items: center; }
+.race-strip .now-freeze,
+.race-strip .now-start { padding: 0 13px; display: flex; align-items: center; }
+
+@media (max-width: 1250px) {
+  /* Below this the call and the race state cannot share a row honestly. */
+  .race-strip .now-view {
+    grid-template-columns: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      "car   stint laps"
+      "call  call  call"
+      "rc    rc    rc"
+      "state state state";
+  }
+  .race-strip .now-header { justify-self: start; }
+}
+
+/* ── The setup row ──
+   Both bars are folded almost all race, so side by side they cost one row
+   instead of two. Whichever is opened takes the width back by wrapping. */
+.race-util {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0 12px;
+  padding: 8px 20px 0;
+}
+.race-util .tc-panel { flex: 1 1 340px; margin-bottom: 8px; }
+.race-util .advanced-lan-toggle { width: auto; flex: 0 0 auto; margin-bottom: 8px; }
+/* Opening the CONNECTIONS panel unfolds a form; it takes the row back. The
+   toggle's own "open" means the leaderboard is showing, not that the button
+   grew, so it keeps its width. */
+.race-util:has(.tc-row) .tc-panel { flex-basis: 100%; }
+
+@media (max-width: 1100px) {
+  /* Below this the strip costs more height than the map can spare. */
+  .tab-content--race { height: auto; overflow: visible; }
+  .tab-content--race .telem-3col { flex-wrap: wrap; overflow: visible; }
 }
 
 /* ── 3-column telemetry layout ── */
@@ -1999,8 +2431,14 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* Right: data panel — 25% of full viewport */
+/* Wider, and the two halves side by side rather than stacked. Stacked they
+   came to 577px in a 515px column, so the tyre temperatures sat below the fold
+   — and on a pit wall, data you have to scroll for is data you will miss. Side
+   by side the column is only as tall as its taller half, which fits. The map
+   gives up the width and has plenty: it is mostly empty space around a
+   circuit. */
 .telem-3col-data {
-  width: max(260px, 25vw);
+  width: max(380px, 29vw);
   flex-shrink: 0;
   overflow-y: auto;
   overflow-x: hidden;
@@ -2041,12 +2479,26 @@ input[type="range"]::-moz-range-thumb {
   flex-direction: column;
   gap: 0;
 }
-.telem-3col-data .ld-col { width: 100%; }
-.telem-3col-data .ld-col + .ld-col {
-  border-top: 1px solid var(--rule);
-  padding-top: 10px;
-  margin-top: 8px;
+.telem-3col-data .ld-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 12px;
+  align-items: start;
 }
+.telem-3col-data .ld-col { width: auto; min-width: 0; }
+.telem-3col-data .ld-col + .ld-col {
+  border-top: none;
+  border-left: 1px solid var(--rule);
+  padding-top: 0;
+  padding-left: 12px;
+  margin-top: 0;
+}
+
+/* Two narrow halves need the big readouts to give a little. None of these
+   drops below the size the rest of the app uses for the same kind of number. */
+.telem-3col-data .ld-speed-val { font-size: 2.1rem; }
+.telem-3col-data .ld-gear-val  { font-size: 2.4rem; }
+.telem-3col-data .ld-time-val  { font-size: 1.05rem; }
 .telem-3col-data .ld-header {
   padding-bottom: 8px;
   margin-bottom: 4px;
@@ -2222,6 +2674,41 @@ input[type="range"]::-moz-range-thumb {
   transition: opacity var(--t-fast), color var(--t-fast);
 }
 .lb-mine-btn:hover { opacity: 1; color: #FFD700; }
+
+/* Marking a car as mine is the single most important action in the app -- the
+   drivers, the stint log and the whole plan hang off it -- and at 45% opacity
+   in the muted text colour it was, in practice, invisible. Until something is
+   claimed, every star is lit and the board says what to do with them. */
+.lb-wrap--unclaimed .lb-mine-btn {
+  opacity: 1;
+  color: var(--warning);
+  animation: lb-claim-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes lb-claim-pulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lb-wrap--unclaimed .lb-mine-btn { animation: none; opacity: 1; }
+}
+
+.lb-claim-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--rule);
+  background: rgba(255, 200, 0, 0.06);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lb-claim-hint-star { color: var(--warning); font-size: 0.8rem; }
 .lb-mine-btn.is-mine { opacity: 1; color: #FFD700; }
 
 .lb-rename-btn {
@@ -2327,6 +2814,59 @@ input[type="range"]::-moz-range-thumb {
   letter-spacing: 0.13em;
   color: var(--text-muted);
 }
+.lb-gap-laps { color: var(--text-muted); }
+
+/* Laps until a car has to box, next to the lap times where the eye already is. */
+.ld-box-row { border-top: 1px solid var(--rule); margin-top: 4px; padding-top: 5px; }
+.ld-box-val { color: var(--warning); }
+.lb-box-on { opacity: 0.55; }
+
+/* The lap a car must box on, read off its own fuel trace. Amber because it is
+   a prediction, not a measurement, and should not read like a lap time. */
+.lb-box-lap,
+.lb-meta-box {
+  font-family: var(--font-data);
+  font-size: 0.56rem;
+  color: var(--warning);
+  white-space: nowrap;
+}
+
+.lb-meta-box { margin-left: 4px; }
+
+/* Fuel intelligence under the fuel bar on the car dashboard. */
+.ld-fuel-intel {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 2px 0 0 46px;
+  font-family: var(--font-data);
+  font-size: 0.62rem;
+}
+
+.ld-fuel-intel--dim { opacity: 0.6; }
+
+.ld-fi-laps { color: var(--text-primary); }
+.ld-fi-box  { color: var(--warning); }
+.ld-fi-burn { color: var(--text-muted); letter-spacing: 0.04em; }
+.ld-fi-wait { color: var(--text-muted); font-style: italic; }
+
+/* What previous sets of this compound gave. */
+.tw-outlook {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 5px;
+  font-family: var(--font-data);
+  font-size: 0.6rem;
+}
+
+.tw-outlook-main { color: var(--text-primary); }
+.tw-outlook-left { color: var(--success); }
+.tw-outlook-left.is-beyond { color: var(--warning); }
+.tw-outlook-dim { color: var(--text-muted); }
+.tyre-live { color: var(--success); font-size: 0.9em; }
+
 .lb-gap {
   font-family: var(--font-data);
   font-size: 0.64rem;
@@ -2863,7 +3403,12 @@ input[type="range"]::-moz-range-thumb {
   margin-bottom: 6px;
   animation: confirm-pulse 1.2s ease-in-out infinite;
 }
+/* The compound buttons take their colour from a .cp-* class. The DRIVER
+   buttons reuse this class and have none, so they inherited a near-black and
+   sat at 0.45 opacity — invisible on the panel. A readable default here costs
+   the compounds nothing: their own class still wins. */
 .ld-cp-btn {
+  color: var(--text-secondary);
   font-family: var(--font-display);
   font-size: 0.65rem;
   font-weight: 800;
@@ -2876,7 +3421,12 @@ input[type="range"]::-moz-range-thumb {
   transition: opacity var(--t-fast), border-color var(--t-fast);
   background: none;
 }
-.ld-cp-btn:hover  { opacity: 0.75; }
+.ld-cp-btn:hover  { opacity: 0.9; }
+/* Names are words, not one-letter codes, so they need to be legible before
+   they are picked — you are choosing between them, not confirming one. */
+.ld-driver-picker .ld-cp-btn { opacity: 0.8; color: var(--text-secondary); }
+.ld-driver-picker .ld-cp-btn:hover { opacity: 1; color: var(--text-primary); }
+.ld-driver-picker .ld-cp-btn.active { opacity: 1; color: var(--text-primary); }
 .ld-cp-btn.active { opacity: 1; border-color: currentColor; }
 .cp-hard  { color: #B4B4B4; }
 .cp-med   { color: #FFC832; }
@@ -3007,11 +3557,16 @@ input[type="range"]::-moz-range-thumb {
   /* ÉCART at 46px gave the number 34px of content, which fits "+3.2s" and
      clips "+12.4s" — i.e. most of a real field. 56px holds "+119.9s", the
      widest an interval gets before the car is simply a lap down. */
-  grid-template-columns: 28px 1fr 56px 38px;
+  grid-template-columns: 28px 1fr 56px 46px;
 }
 /* 0.44rem measured 7.04px in the running app — too small to read. */
 .telem-3col-lb .lb-hcol  { font-size: 0.58rem; padding: 4px 6px; }
 .telem-3col-lb .lbc      { padding: 6px 6px; }
+/* The tyre button is min-width 34px. In a 38px column with 6px of padding
+   either side it had 26px to live in, so it was clipped by 8px and the panel
+   hid the overflow. The column carries it now, and the button gives a little. */
+.telem-3col-lb .lbc-tyre { padding-right: 8px; }
+.telem-3col-lb .lb-tyre  { min-width: 30px; padding: 3px 4px; }
 
 /* In this narrow column the ★ and ✎ were squeezing the team name to literally
    zero width — every row showed a colour and nothing else. The pencil goes
@@ -3204,7 +3759,6 @@ input[type="range"]::-moz-range-thumb {
    "Now" view — glanceable in-race surface for the engineer (Phase 2, Task 2.1)
    --------------------------------------------------------------------------- */
 
-.tab-content--now { display: block; }
 
 .now-view {
   max-width: 880px;
@@ -3306,7 +3860,9 @@ input[type="range"]::-moz-range-thumb {
   color: var(--text-primary);
 }
 .now-box-lap { font-weight: 700; }
-.now-fuel { color: var(--accent); }
+/* The lap number is the instruction; the litres are a detail. Red here put a
+   routine number in the same colour the UI uses for trouble. */
+.now-fuel { color: var(--text-primary); }
 .now-tyres { font-size: 1rem; color: var(--text-secondary); }
 .now-run-to-flag { color: var(--text-secondary); }
 
@@ -3343,11 +3899,381 @@ input[type="range"]::-moz-range-thumb {
 .now-verdict--ok .now-verdict-text { color: var(--text-secondary); }
 
 .now-empty,
-.now-waiting {
-  text-align: center;
+/* Race clock — only present once the race has actually been started. */
+/* ── Incident ── */
+.ld-incident-btn {
+  background: transparent;
+  border: 1px solid var(--rule-bright);
+  border-radius: var(--radius-xs);
   color: var(--text-muted);
+  padding: 2px 9px;
   font-family: var(--font-display);
-  padding: 20px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ld-incident-btn:hover { color: var(--text-primary); border-color: var(--text-muted); }
+
+.ld-incident-btn.is-active {
+  background: var(--danger);
+  border-color: transparent;
+  color: #fff;
+}
+
+.ld-incident-x { margin-left: 6px; opacity: 0.8; }
+
+.ld-incident {
+  margin-top: 6px;
+  padding: 7px 10px;
+  border-left: 3px solid var(--danger);
+  background: rgba(228, 0, 43, 0.07);
+  border-radius: var(--radius-xs);
+}
+
+.ld-inc-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--font-data);
+  font-size: 0.64rem;
+}
+
+.ld-inc-once { color: var(--text-muted); }
+.ld-inc-rate { color: var(--danger); font-weight: 700; }
+.ld-inc-wait { color: var(--text-muted); font-style: italic; }
+
+.ld-inc-manual {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  color: var(--text-muted);
+}
+
+.ld-inc-manual input {
+  width: 52px;
+  padding: 1px 4px;
+  font-family: var(--font-data);
+  font-size: 0.64rem;
+  background: transparent;
+  border: 1px solid var(--rule-bright);
+  border-radius: 2px;
+  color: var(--text-primary);
+}
+
+.ld-inc-call {
+  margin-top: 5px;
+  font-family: var(--font-display);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+}
+
+.ld-inc-call--pit_now { color: var(--danger); }
+.ld-inc-call--wait { color: var(--success); }
+.ld-inc-call--tied { color: var(--text-muted); }
+
+.ld-inc-options {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.ld-inc-opt {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  opacity: 0.6;
+}
+
+.ld-inc-opt.is-best {
+  opacity: 1;
+  border-color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ld-inc-opt-k {
+  font-family: var(--font-display);
+  font-size: 0.55rem;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+
+.ld-inc-opt-v {
+  font-family: var(--font-data);
+  font-size: 0.82rem;
+  color: var(--text-primary);
+}
+
+.ld-inc-apply {
+  margin-top: 7px;
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--rule-bright);
+  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  font-family: var(--font-display);
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.ld-inc-apply:hover { color: var(--text-primary); border-color: var(--text-muted); }
+.ld-inc-apply.is-applied { background: var(--danger); border-color: transparent; color: #fff; }
+.ld-inc-margin { margin-left: 8px; font-family: var(--font-data); font-size: 0.62rem; color: var(--text-muted); font-weight: 400; }
+
+/* A rival who has quietly lost pace. */
+.lb-damaged-pill {
+  margin-left: 4px;
+  padding: 1px 4px 0;
+  border-radius: 2px;
+  background: rgba(228, 0, 43, 0.18);
+  color: var(--danger);
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+/* ── Safety car ── */
+.lb-row-sc {
+  grid-template-columns: 40px 1fr 66px 80px 80px 50px 84px;
+  border-left: 3px solid rgba(255, 255, 255, 0.55);
+  border-top: 1px solid var(--rule-bright);
+  background: rgba(255, 255, 255, 0.03);
+  opacity: 0.75;
+}
+
+.lb-row-sc.is-deployed {
+  opacity: 1;
+  background: rgba(255, 200, 0, 0.09);
+  border-left-color: var(--warning);
+}
+
+.lb-sc-badge {
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+.lb-sc-state {
+  font-family: var(--font-display);
+  font-size: 0.56rem;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.lb-sc-state.is-deployed { color: var(--warning); font-weight: 800; }
+
+.lb-role-clear {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 5px 0 0;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.lb-role-clear:hover { color: var(--text-primary); }
+
+.lb-role-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.lb-role-btn {
+  background: transparent;
+  border: 1px solid var(--rule-bright);
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
+  padding: 3px 9px;
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.lb-role-btn.is-on { background: var(--text-secondary); color: var(--bg-base); border-color: transparent; }
+.lb-role-btn.lb-role-sc.is-on { background: var(--warning); color: var(--bg-base); }
+
+/* The banner that outranks everything else on the race screen. */
+.now-sc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 12px;
+  margin: 6px 0 0;
+  padding: 9px 14px;
+  border: 1px solid var(--warning);
+  border-left-width: 4px;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 200, 0, 0.1);
+}
+
+.now-sc-title {
+  font-family: var(--font-display);
+  font-size: 0.86rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  color: var(--warning);
+}
+
+.now-sc-call { font-family: var(--font-ui); font-size: 0.8rem; color: var(--text-primary); }
+.now-sc-dim { font-family: var(--font-data); font-size: 0.66rem; color: var(--text-muted); }
+
+/* Dry / wet switch. */
+.cond-switch {
+  display: inline-flex;
+  border: 1px solid var(--rule-bright);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.cond-btn {
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  padding: 5px 11px;
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+
+.cond-btn + .cond-btn { border-left: 1px solid var(--rule-bright); }
+.cond-btn:hover { color: var(--text-secondary); }
+.cond-dry.is-on { background: var(--text-secondary); color: var(--bg-base); }
+.cond-wet.is-on { background: var(--W, #14BBCE); color: var(--bg-base); }
+
+.now-cond-warn {
+  margin: 6px 0 0;
+  padding: 6px 12px;
+  border-left: 3px solid var(--warning);
+  background: rgba(255, 200, 0, 0.06);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.now-crossover {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-family: var(--font-data);
+  font-size: 0.68rem;
+}
+
+.now-start {
+  margin-left: auto;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  padding: 6px 16px;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.now-start:hover { filter: brightness(1.12); }
+
+.now-clock {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 6px 4px 12px;
+  border: 1px solid var(--rule-bright);
+  border-radius: var(--radius-sm);
+}
+
+.now-clock-block { display: flex; flex-direction: column; line-height: 1.1; }
+.now-clock-block--dim { opacity: 0.55; }
+
+.now-clock-k {
+  font-family: var(--font-display);
+  font-size: 0.52rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.now-clock-v {
+  font-family: var(--font-data);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.now-clock-v.is-over { color: var(--accent); font-size: 0.8rem; }
+
+.now-clock-clear {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.now-clock-clear:hover { color: var(--text-primary); }
+
+.now-waiting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--rule-bright);
+  border-left: 3px solid var(--warning);
+  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.now-waiting-action {
+  margin-left: auto;
+  padding: 3px 10px;
+  font-size: 0.68rem;
+}
+
+/* Without a car feeding it, every number below is the plan's projection. */
+.now-waiting::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warning);
+  flex-shrink: 0;
 }
 
 /* Advanced / LAN event — multi-team leaderboard toggle (Phase 2, Task 2.2).
@@ -3370,7 +4296,14 @@ input[type="range"]::-moz-range-thumb {
   transition: color var(--t-fast), border-color var(--t-fast);
 }
 .advanced-lan-toggle:hover { color: var(--text-primary); border-color: var(--rule-bright, var(--text-muted)); }
-.advanced-lan-toggle.is-open { color: var(--accent); border-color: var(--accent); }
+/* Open state used to paint the whole bar in the accent, which in this palette
+   is also the danger colour — a full-width red-bordered strip reads as an
+   error, not as an expanded section. The accent now marks the left edge. */
+.advanced-lan-toggle.is-open {
+  color: var(--text-primary);
+  border-color: var(--rule-bright);
+  border-left: 3px solid var(--accent);
+}
 
 /* ---------------------------------------------------------------------------
    First-run onboarding overlay (Phase 3, Task 3.3)
@@ -3747,3 +4680,482 @@ input[type="range"]::-moz-range-thumb {
 }
 .tg-sync-input:focus { outline: none; border-color: var(--accent); }
 .tg-sync-input::placeholder { color: var(--text-muted); }
+
+/* Empty state with something to do about it. */
+.empty-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 16px 20px;
+}
+
+.empty-action .empty-text { margin: 0; }
+
+/* ---------------------------------------------------------------------------
+   Race-clock banner on the Strategy tab
+   Without it the tab reads "6:57:42" for the 8-hour race you typed in, and
+   looks broken. It is correct — the clock has been running for an hour — but
+   a total that does not match your input is a bug until something says why.
+   --------------------------------------------------------------------------- */
+.clock-banner {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-xs);
+  background: var(--bg-overlay);
+}
+.clock-banner-title {
+  font-family: var(--font-display);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-primary);
+}
+.clock-banner-time {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--accent);
+}
+.clock-banner-car  { font-family: var(--font-mono); font-size: 0.74rem; color: var(--text-secondary); }
+.clock-banner-hint { font-size: 0.72rem; color: var(--text-muted); flex: 1 1 auto; }
+.clock-banner-clear {
+  padding: 4px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+}
+.clock-banner-clear:hover { color: var(--text-primary); border-color: var(--rule-bright, var(--text-muted)); }
+
+/* ---------------------------------------------------------------------------
+   Dialog — the card the app asks its questions on
+
+   Replaces window.confirm/alert, which drew a grey operating-system box with
+   the page's origin printed above it: the only thing in the app that did not
+   look like the app. It also blocked the main thread while open, and the relay
+   is pushing packets at 20 Hz behind it.
+
+   Same backdrop, card and display type as the onboarding overlay, so there is
+   one overlay language rather than two.
+   --------------------------------------------------------------------------- */
+
+.dlg-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;            /* above the onboarding overlay, never behind it */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(3, 5, 10, 0.88);
+  backdrop-filter: blur(3px);
+  padding: 24px;
+}
+
+.dlg-card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  padding: 24px 26px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* An accent edge for the ones that throw work away. */
+.dlg-card--danger { border-left: 3px solid var(--accent); }
+
+.dlg-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-primary);
+}
+
+/* The question. */
+.dlg-lead {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+/* What it costs — the paragraph that names the data about to be reset. */
+.dlg-body {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  padding: 9px 12px;
+  background: var(--bg-field);
+  border-radius: var(--radius-xs);
+}
+
+.dlg-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.dlg-btn {
+  padding: 8px 18px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--rule);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+}
+.dlg-btn:hover { color: var(--text-primary); border-color: var(--rule-bright, var(--text-muted)); }
+.dlg-btn:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; }
+
+.dlg-btn--go {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+.dlg-btn--danger {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.dlg-btn--danger:hover { color: #fff; filter: brightness(1.12); }
+
+/* ---------------------------------------------------------------------------
+   Racecraft — what a stop THIS LAP does to the race, not to the plan
+
+   The plan is set by fuel range and tyre life, both counted in laps, so racing
+   somebody barely moves it. Where you come out, whether stopping first gets
+   you past them, and what traffic you are about to reach are decided by the
+   same one stop — and none of the three is readable off a gap column.
+   --------------------------------------------------------------------------- */
+
+.now-rc {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 8px 12px;
+  border-left: 2px solid var(--rule-mid);
+  background: var(--bg-overlay);
+  border-radius: var(--radius-xs);
+}
+
+.now-rc-title {
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  flex: 0 0 auto;
+}
+
+.now-rc-item {
+  font-family: var(--font-data);
+  font-size: 0.82rem;
+  color: var(--text-primary);
+}
+/* Places lost is a cost; keeping the place is free. The undercut landing is
+   the one thing here you act on, so it is the only one that gets the accent. */
+.now-rc-item.is-cost { color: var(--text-primary); }
+.now-rc-item.is-free { color: var(--text-secondary); }
+.now-rc-item.is-good { color: var(--accent); font-weight: 600; }
+.now-rc-item.is-dim  { color: var(--text-muted); }
+.now-rc-item.is-warn { color: var(--text-secondary); }
+
+.now-rc-dim { color: var(--text-muted); font-size: 0.74rem; }
+
+/* In the race strip it is one more wrapped row, full width under the rest. */
+.race-strip .now-rc { flex: 0 0 100%; order: 8; }
+
+/* ---------------------------------------------------------------------------
+   Connections, in the header
+
+   It used to be a row across the middle of the race screen, between the plan
+   and the field, costing 48px of the one screen that has to show everything at
+   once — and it is needed about twice a weekend. It hangs off the header now,
+   next to the connection state it is about, and opens as a dropdown so it
+   takes no space in the layout at all.
+   --------------------------------------------------------------------------- */
+
+.header-telem { position: relative; }
+.header-telem .tc-panel { border: none; background: none; padding: 0; margin: 0; }
+
+.header-telem .tc-collapse-bar {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  padding: 4px 10px;
+  gap: 8px;
+  background: transparent;
+}
+.header-telem .tc-collapse-bar:hover { border-color: var(--rule-bright, var(--text-muted)); }
+
+/* Out of the flow: the layout below never moves when this opens. */
+.header-telem .tc-body {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 400;
+  width: min(620px, 90vw);
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.55);
+}
+
+/* ── The leaderboard, folded away as a rail ──
+   Hiding the field used to leave a full-width button where the board had been,
+   which is a row of height to say "there is a thing you are not looking at".
+   Folded it is a few pixels of width down the left edge instead. */
+.lb-rail {
+  flex: 0 0 auto;
+  width: 26px;
+  border: none;
+  border-right: 1px solid var(--rule-mid);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  transition: color var(--t-fast), background var(--t-fast);
+}
+.lb-rail:hover { color: var(--text-primary); background: var(--bg-overlay); }
+.lb-rail-text {
+  display: block;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  padding: 10px 0;
+  font-family: var(--font-display);
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+/* Its own hide button lives with it, at the foot of the column it closes. */
+.telem-3col-lb { display: flex; flex-direction: column; }
+.telem-3col-lb .advanced-lan-toggle {
+  margin: 4px 6px 6px;
+  width: auto;
+  flex: 0 0 auto;
+  font-size: 0.62rem;
+  padding: 5px 8px;
+}
+
+/* ── Tyre temperatures, compact ──
+   The 2×2 grid of cards is right on a screen of its own; inside the race
+   screen's third column it cost ~180px of a column that was already 120px
+   short, which pushed it below the fold — and data you have to scroll for on a
+   pit wall is data you will miss. Four readouts across one row instead. */
+.telem-3col-data .tw-grid {
+  grid-template-areas: "fl fr" "rl rr";
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto;
+  gap: 4px;
+}
+.telem-3col-data .tw-grid > .tw-center { display: none; }
+.telem-3col-data .tw-corner {
+  padding: 5px 7px;
+  gap: 2px;
+  border-left-width: 2px;
+}
+.telem-3col-data .tw-corner .tw-temp { font-size: 0.95rem; }
+
+.app-footer--hidden { display: none; }
+
+/* ---------------------------------------------------------------------------
+   The car panel, as one panel
+
+   Its two halves were written at different times and looked it: the left a
+   stack of bare bars, the right a set of bordered cards, each with its own
+   label style, spacing and type size. Side by side that reads as two screens
+   glued together rather than one instrument. This gives both halves the same
+   label, the same row rhythm and the same card treatment, so the division
+   between them is information (car vs. stint) and not a seam.
+   --------------------------------------------------------------------------- */
+
+.telem-3col-data .ld-col + .ld-col {
+  /* Alignment already separates the halves; a hard rule made it a seam. */
+  border-left: none;
+  padding-left: 14px;
+}
+
+/* One label, everywhere on the panel. */
+.telem-3col-data .ld-section-label,
+.telem-3col-data .ld-bar-label,
+.telem-3col-data .ld-time-lbl {
+  font-family: var(--font-display);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* One rhythm: every block on the panel is separated by the same gap, and
+   sections that used to draw their own boxes share one quiet card style. */
+.telem-3col-data .ld-col { display: flex; flex-direction: column; gap: 10px; }
+.telem-3col-data .ld-times,
+.telem-3col-data .tw-age,
+.telem-3col-data .ld-tire-section-header {
+  padding: 8px 10px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-xs);
+  border: none;
+  margin: 0;
+}
+.telem-3col-data .ld-time-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.telem-3col-data .ld-time-row + .ld-time-row { margin-top: 5px; }
+
+/* The fuel intel reads as a caption under the fuel bar, not as a third block
+   competing with it. */
+.telem-3col-data .ld-fuel-intel {
+  padding: 0 2px;
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+.telem-3col-data .ld-fuel-intel--dim { opacity: 0.75; }
+
+/* ---------------------------------------------------------------------------
+   Toasts — what happened while you were looking somewhere else
+
+   Bottom right, because the top of this screen is the plan and the left is the
+   field: both are read continuously, and a notice covering either is worse
+   than no notice. Bottom right holds nothing you steer by.
+   --------------------------------------------------------------------------- */
+
+.toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(360px, calc(100vw - 32px));
+  pointer-events: none;      /* the screen under it stays clickable */
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 10px 10px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--rule-bright, var(--text-muted));
+  border-radius: var(--radius-xs);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  animation: toast-in 0.18s ease-out;
+}
+/* One that needs answering — a tyre has to be recorded either way. */
+.toast--act { border-left-color: var(--accent); }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast { animation: none; }
+}
+
+.toast-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.toast-title {
+  font-family: var(--font-display);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+}
+.toast-detail { font-size: 0.72rem; line-height: 1.35; color: var(--text-secondary); }
+
+.toast-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.toast-go {
+  padding: 5px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.toast-go:hover { color: var(--text-primary); border-color: var(--rule-bright, var(--text-muted)); }
+.toast--act .toast-go { border-color: var(--accent); color: var(--accent); }
+.toast--act .toast-go:hover { background: var(--accent); color: #fff; }
+
+.toast-close {
+  padding: 2px 6px;
+  border: none;
+  background: none;
+  color: var(--text-ghost, var(--text-muted));
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.toast-close:hover { color: var(--text-primary); }
+
+/* The fuel warning was a full-width bordered box on its own row, which cost
+   50px of the strip to say one sentence. It is a real warning and keeps the
+   accent, but it belongs beside the consequences it changes, not above them. */
+.race-strip .now-verdict {
+  grid-area: rc;
+  justify-self: start;
+  align-self: center;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  padding: 3px 10px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--accent);
+  background: rgba(228, 0, 43, 0.08);
+}
+.race-strip .now-verdict-text { font-size: 0.72rem; letter-spacing: 0.06em; }
+.race-strip .now-verdict-margin { font-size: 0.68rem; }
+/* With a warning up, the racecraft line makes room for it on the same row. */
+.race-strip .now-view:has(.now-verdict) {
+  grid-template-areas:
+    "car stint laps call state"
+    "warn rc   rc   rc   rc";
+}
+.race-strip .now-view:has(.now-verdict) .now-verdict { grid-area: warn; }
+
+/* The clock's own labels were 0.52rem of --text-ghost on a dark panel: present
+   in the DOM, invisible on the screen, so the two times read as one number
+   with a space in it. */
+.race-strip .now-clock-k {
+  font-size: 0.55rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.race-strip .now-clock { gap: 16px; }
+.race-strip .now-clock-block--dim .now-clock-v { color: var(--text-secondary); }

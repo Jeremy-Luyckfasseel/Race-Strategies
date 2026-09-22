@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { DEFAULT_LANG, t } from '../i18n/strings';
+import { DEFAULT_LANG, t, COMPOUND_ORDER } from '../i18n/strings';
+import { rivalSummary, burnProgress } from '../logic/rivalIntel';
+import { currentSetOutlook } from '../logic/tyreHistory';
+import { PIT_NOW, WAIT } from '../logic/pitNow';
 
 const CANVAS_W = 420, CANVAS_H = 190, PAD = 16;
 
@@ -10,6 +13,13 @@ function formatMs(ms) {
   const m = Math.floor(ms / 60000);
   const s = Math.floor((ms % 60000) / 1000);
   return `${m}:${String(s).padStart(2, '0')}.${String(ms % 1000).padStart(3, '0')}`;
+}
+
+/** Seconds as something read at a glance: "47s", "2m10". */
+function formatGain(secs) {
+  const s = Math.round(Math.abs(Number(secs) || 0));
+  if (s < 60) return `${s}s`;
+  return `${Math.floor(s / 60)}m${String(s % 60).padStart(2, '0')}`;
 }
 
 function gearLabel(g) {
@@ -56,20 +66,28 @@ function tyreLifeColor(used) {
  * the stint began, which is exact, rather than a radius reading that never
  * moved.
  */
-function TyreAge({ laps, life, lang }) {
+function TyreAge({ laps, life, outlook, lang }) {
   if (laps == null) return null;
   const known = life > 0;
   const used = known ? laps / life : null;
   const colour = tyreLifeColor(used);
   return (
     <div className="tw-age">
+      {/* This said "TYRE LIFE / estimated", which pointed the word "estimated"
+          at the one number here that is exact: laps since the car left the
+          pits, counted, not modelled. What is a guess is the LIFE it is
+          measured against — the figure you typed in the sidebar — so that is
+          what is labelled now. Reading "estimated" over a counted lap made the
+          whole block look untrustworthy. */}
       <span className="ld-section-label">
-        {t('ld_tyre_life', lang)} <span className="ld-dim">{t('ld_estimated', lang)}</span>
+        {t('ld_tyre_life', lang)}{' '}
+        <span className="ld-dim">
+          {known ? t('ld_estimated', lang, { n: life }) : t('ld_no_life_set', lang)}
+        </span>
       </span>
       <div className="tw-age-body">
         <span className="tw-age-val" style={{ color: colour }}>
           {laps}
-          {known && <span className="ld-dim"> / {life}</span>}
           <span className="tw-age-unit">{t('ld_laps', lang)}</span>
         </span>
         {known && (
@@ -81,6 +99,29 @@ function TyreAge({ laps, life, lang }) {
           </div>
         )}
       </div>
+
+      {/* What previous sets of this compound actually gave, read back from the
+          stint log. Silent until there is a finished set to compare against. */}
+      {outlook && (
+        <div className="tw-outlook">
+          <span className="tw-outlook-main">
+            {t('ld_typical', lang, { n: outlook.typicalLaps })}
+          </span>
+          <span className={`tw-outlook-left${outlook.beyondPrevious ? ' is-beyond' : ''}`}>
+            {outlook.beyondPrevious
+              ? t('ld_beyond', lang)
+              : t('ld_set_left', lang, { n: outlook.lapsLeft })}
+          </span>
+          {outlook.falloffMs != null && (
+            <span className="tw-outlook-dim">
+              {t('ld_falloff', lang, { n: (outlook.falloffMs / 1000).toFixed(1) })}
+            </span>
+          )}
+          <span className="tw-outlook-dim">
+            {t('ld_prev_sets', lang)} {outlook.previousLaps.join(', ')}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -120,7 +161,7 @@ function TireCorner({ temp, pos }) {
   );
 }
 
-const COMPOUNDS = ['H', 'M', 'S', 'IM', 'W'];
+
 const COMPOUND_CLS = { H: 'cp-hard', M: 'cp-med', S: 'cp-soft', IM: 'cp-inter', W: 'cp-wet' };
 
 // ── TrackMap — SVG output, RAF recording loop ──────────────────────────────
@@ -177,7 +218,7 @@ function CarDots({ live, map }) {
     // larger dot — not by a different colour, or it would stop matching its
     // leaderboard row. Cars in the pits stay on the map, dimmed, so you can
     // see who is boxed rather than having them blink out of existence.
-    const mkDot = (isOwn, color, label) => {
+    const mkDot = (isOwn, color, label, lapped) => {
       const g = document.createElementNS(NS, 'g');
       if (isOwn) {
         const ring = document.createElementNS(NS, 'circle');
@@ -191,9 +232,11 @@ function CarDots({ live, map }) {
       }
 
       const dot = document.createElementNS(NS, 'circle');
-      dot.setAttribute('r', isOwn ? '4.5' : '4');
+      // A car a lap or more away is not in your race this lap: smaller and
+      // faded, so the dots that are still full weight are the ones to look at.
+      dot.setAttribute('r', isOwn ? '4.5' : lapped ? '3' : '4');
       dot.setAttribute('fill', color);
-      if (!isOwn) dot.setAttribute('fill-opacity', '0.85');
+      if (!isOwn) dot.setAttribute('fill-opacity', lapped ? '0.45' : '0.85');
       dot.setAttribute('stroke', 'rgba(0,0,0,0.55)');
       dot.setAttribute('stroke-width', '0.75');
       g.appendChild(dot);
@@ -202,7 +245,8 @@ function CarDots({ live, map }) {
       txt.setAttribute('text-anchor', 'middle');
       txt.setAttribute('y', isOwn ? '-10' : '-7');
       txt.setAttribute('fill', color);
-      txt.setAttribute('font-size', isOwn ? '8.5' : '7.5');
+      if (lapped) txt.setAttribute('fill-opacity', '0.6');
+      txt.setAttribute('font-size', isOwn ? '8.5' : lapped ? '6.5' : '7.5');
       txt.setAttribute('font-weight', isOwn ? '800' : '700');
       txt.setAttribute('font-family', 'Barlow Condensed, sans-serif');
       // Dark outline painted behind the glyphs so short tags stay readable
@@ -231,6 +275,15 @@ function CarDots({ live, map }) {
         // Keep boxed cars on the map (dimmed) instead of dropping them — where
         // a rival is sitting in the pit lane is exactly what a pit wall wants.
         const active = cars.filter(c => c.posX != null);
+
+        // Label boxes already drawn this frame. A tag that would land on top
+        // of one is moved under its dot instead of over it, and only dropped
+        // when both positions are taken — hiding first lost tags that had a
+        // perfectly good spot free right below them.
+        // ponytail: O(n^2) over the field; fine to ~30 cars, revisit past that.
+        const placed = [];
+        const LABEL_W = 15;   // half-width of a 2-3 character tag, px
+        const LABEL_H = 9;    // line height, px
 
         // Cull smoothed entries for cars no longer active
         const activeIds = new Set(active.map(c => c.id));
@@ -314,12 +367,30 @@ function CarDots({ live, map }) {
           // Rebuild inner elements only when what they draw actually changes —
           // which car this slot holds, whether it is mine, or its name after a
           // rename. Its colour is fixed for the session, so it is not a factor.
-          const shape = `${c.id}|${c.isOwn ? 1 : 0}|${c.label}`;
+          const shape = `${c.id}|${c.isOwn ? 1 : 0}|${c.label}|${c.lapped ? 1 : 0}`;
           if (child._carShape !== shape) {
             child._carShape = shape;
             while (child.firstChild) child.removeChild(child.firstChild);
-            const fresh = mkDot(c.isOwn, color, c.label);
+            const fresh = mkDot(c.isOwn, color, c.label, c.lapped);
             while (fresh.firstChild) child.appendChild(fresh.firstChild);
+          }
+
+          const tag = child.lastChild;
+          if (tag) {
+            const above = c.isOwn ? -10 : -7;
+            const below = c.isOwn ? 15 : 13;
+            const free = (dy) => !placed.some(
+              (p) => Math.abs(p.x - scx) < LABEL_W && Math.abs(p.y - (scy + dy)) < LABEL_H,
+            );
+            // Mine is never dropped: it is the one tag that has to be there.
+            const dy = free(above) ? above : free(below) ? below : (c.isOwn ? above : null);
+            if (dy == null) {
+              tag.setAttribute('opacity', '0');
+            } else {
+              placed.push({ x: scx, y: scy + dy });
+              tag.setAttribute('y', String(dy));
+              tag.setAttribute('opacity', '1');
+            }
           }
 
           // Pit state flips often, so dim in place rather than rebuilding.
@@ -470,8 +541,13 @@ export function TrackMap({ currentLap, cars, mapRef, onReset, lang = DEFAULT_LAN
             </g>
           )}
           <CarDots live={live} map={mapRef} />
+          {/* With cars already on screen the prompt moves out of the middle —
+              it used to sit underneath the dots, with both unreadable. */}
           {empty && (
-            <text x={CANVAS_W / 2} y={CANVAS_H / 2} textAnchor="middle" dominantBaseline="middle"
+            <text
+              x={CANVAS_W / 2}
+              y={cars?.length ? CANVAS_H * 0.12 : CANVAS_H / 2}
+              textAnchor="middle" dominantBaseline="middle"
               fill="rgba(255,255,255,0.15)" fontSize="13" fontWeight="600"
               fontFamily="Barlow Condensed, sans-serif">
               {t('ld_drive_a_lap', lang)}
@@ -488,7 +564,8 @@ export function TrackMap({ currentLap, cars, mapRef, onReset, lang = DEFAULT_LAN
 export default function LiveDashboard({
   data, label, compound, pendingConfirmation, onCompoundChange,
   drivers, currentDriverId, pendingDriver, onDriverChange,
-  tyreLaps = null, tyreLife = null, lang = DEFAULT_LANG,
+  tyreLaps = null, tyreLife = null, fuelRecord = null, stintEntry = null,
+  incident = null, onIncident, onClearIncident, onIncidentLoss, onApplyPace, lang = DEFAULT_LANG,
 }) {
   const [showVitals, setShowVitals] = useState(false);
 
@@ -499,6 +576,22 @@ export default function LiveDashboard({
   const warnPct     = data.rpmWarning > 0 ? (data.rpmWarning / rpmMax) * 100 : 80;
   const rpmColor    = rpmPct >= warnPct ? (rpmPct >= 95 ? 'var(--danger)' : 'var(--warning)') : 'var(--success)';
   const throttlePct = Math.round(((data.throttle ?? 0) / 255) * 100);
+  // What this car's own fuel trace says about when it has to come in. Works
+  // for anyone on the LAN — it is their telemetry, not our setup.
+  const intel = rivalSummary(fuelRecord);
+  // Gated on CONFIDENT, not on `intel` existing. `rivalSummary` returns a
+  // figure as soon as it can compute one at all, so with one or two clean laps
+  // `intel` was truthy, `intel.confident` false, and `measuring` null — the
+  // render then fell through both branches and drew an empty line. The
+  // "measuring — 1 of 3 clean laps" message was unreachable for precisely the
+  // case it was written for.
+  const measuring = intel && intel.confident ? null : burnProgress(fuelRecord);
+  // Laps until this car has to come in, which is the number an engineer acts
+  // on — "box on lap 74" needs arithmetic in your head at 3am.
+  const boxInLaps = intel && intel.confident && intel.pitLap != null && data.currentLap != null
+    ? Math.max(0, intel.pitLap - data.currentLap)
+    : null;
+  const setOutlook = currentSetOutlook(stintEntry, compound, data.currentLap);
   const brakePct    = Math.round(((data.brake    ?? 0) / 255) * 100);
 
   return (
@@ -513,6 +606,8 @@ export default function LiveDashboard({
                 <span className="ld-meta-k">{t('ld_lap', lang)}</span>
                 <span className="ld-meta-v">
                   {data.currentLap}
+                  {/* A timed endurance race has no lap total and GT7 reports
+                      none, so there is usually nothing to put here. */}
                   {data.totalLaps > 0 && <span className="ld-dim">/{data.totalLaps}</span>}
                 </span>
               </span>
@@ -525,6 +620,22 @@ export default function LiveDashboard({
                   {data.totalCars > 0 && <span className="ld-dim">/{data.totalCars}</span>}
                 </span>
               </span>
+            )}
+            {onIncident && (
+              incident ? (
+                <button
+                  className="ld-incident-btn is-active"
+                  onClick={onClearIncident}
+                  title={t('inc_clear', lang)}
+                >
+                  {t('inc_active', lang, { lap: incident.lap })}
+                  <span className="ld-incident-x">×</span>
+                </button>
+              ) : (
+                <button className="ld-incident-btn" onClick={onIncident} title={t('inc_title', lang)}>
+                  {t('inc_button', lang)}
+                </button>
+              )
             )}
             {data.paused && <span className="ld-badge ld-badge-paused">{t('ld_paused', lang)}</span>}
             <span className={`ld-badge ${data.onTrack ? 'ld-badge-track' : 'ld-badge-pit'}`}>
@@ -587,6 +698,134 @@ export default function LiveDashboard({
               <span className="ld-bar-val">{data.fuelLiters?.toFixed(1)} L</span>
             </div>
 
+            {/* Read off their own fuel trace: how long it lasts, and therefore
+                the lap they are committed to boxing on. */}
+            <div className="ld-fuel-intel">
+              {intel && intel.confident ? (
+                <>
+                  {/* Range first, then the lap the TANK commits them to. That
+                      second number is not the plan's box lap — the plan may
+                      call them in earlier for tyres — so it says "dry", not
+                      "box", or the two read as the same thing disagreeing.
+                      The burn rate is the input to both rather than a decision
+                      of its own, so it is the tooltip and not a third chip. */}
+                  <span
+                    className="ld-fi-laps"
+                    title={t('ld_burn', lang, { n: intel.burnPerLap.toFixed(2) })}
+                  >
+                    {t('ld_fuel_laps', lang, { n: intel.fuelLapsLeft.toFixed(1) })}
+                  </span>
+                  {/* The fuel-limited box lap used to sit here as "dry ~L95"
+                      AND three lines below as "BOX IN 26 laps on lap 95" — the
+                      same number twice on one panel. The row below wins: it
+                      leads with the laps remaining, which is what you act on.
+                      This line keeps the range and the burn rate behind it. */}
+                </>
+              ) : measuring ? (
+                <span className="ld-fi-wait">
+                  {t('ld_estimating', lang, { n: measuring.have, need: measuring.need })}
+                </span>
+              ) : null}
+            </div>
+
+            {/* What the incident actually cost: the one-off, the ongoing rate,
+                and the three-way call that follows from them. */}
+            {incident && (
+              <div className="ld-incident">
+                <div className="ld-inc-line">
+                  {incident.oneOffSecs != null && (
+                    <span className="ld-inc-once">
+                      {t('inc_one_off', lang, { n: incident.oneOffSecs.toFixed(1) })}
+                    </span>
+                  )}
+                  {incident.lossSecs != null ? (
+                    <span className="ld-inc-rate">
+                      {t('inc_per_lap', lang, { n: incident.lossSecs.toFixed(1) })}
+                    </span>
+                  ) : (
+                    <span className="ld-inc-wait">{t('inc_measuring', lang)}</span>
+                  )}
+                  <label className="ld-inc-manual">
+                    <input
+                      type="number" min="0" step="0.1"
+                      value={incident.manualSecs ?? ''}
+                      placeholder={t('inc_manual_ph', lang)}
+                      onChange={(e) => onIncidentLoss?.(e.target.value)}
+                    />
+                    {t('inc_manual', lang)}
+                  </label>
+                </div>
+
+                {/* Both futures run through the real engine, so "does coming
+                    in actually cost a stop" is answered rather than assumed. */}
+                {incident.compare && (
+                  <>
+                    <div className="ld-inc-options">
+                      <div className={`ld-inc-opt${incident.compare.best === PIT_NOW ? ' is-best' : ''}`}>
+                        <span className="ld-inc-opt-k">{t('inc_box_now', lang)}</span>
+                        <span className="ld-inc-opt-v">
+                          {t('inc_laps', lang, { n: incident.compare.pitLaps })}
+                        </span>
+                      </div>
+                      <div className={`ld-inc-opt${incident.compare.best === WAIT ? ' is-best' : ''}`}>
+                        <span className="ld-inc-opt-k">
+                          {incident.nextStopLap != null
+                            ? t('inc_wait', lang, { lap: incident.nextStopLap })
+                            : t('inc_wait_flag', lang)}
+                        </span>
+                        <span className="ld-inc-opt-v">
+                          {t('inc_laps', lang, { n: incident.compare.waitLaps })}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className={`ld-inc-call ld-inc-call--${incident.compare.best ?? 'tied'}`}>
+                      {incident.compare.tied
+                        ? t('inc_tied', lang)
+                        : (incident.compare.best === PIT_NOW
+                          ? t('inc_box_now', lang)
+                          : (incident.nextStopLap != null
+                            ? t('inc_wait', lang, { lap: incident.nextStopLap })
+                            : t('inc_wait_flag', lang)))}
+                      {!incident.compare.tied && (
+                        <span className="ld-inc-margin">
+                          {t('inc_ahead_time', lang, {
+                            n: formatGain(incident.compare.advantageSecs),
+                          })}
+                        </span>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {/* Propose, never impose: the plan only moves on a click, the
+                    same way the learner's numbers do. */}
+                {incident.lossSecs != null && onApplyPace && (
+                  <button
+                    className={`ld-inc-apply${incident.applied ? ' is-applied' : ''}`}
+                    onClick={() => onApplyPace(incident.applied ? 0 : incident.lossSecs, incident.nextStopLap)}
+                  >
+                    {incident.applied ? t('inc_applied', lang) : t('inc_apply', lang)}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* "+10.2 L → 2 laps" reads as "that fill buys two laps". It does
+                not: the 2 is how long ago the stop was. Said in words, because
+                an arrow between two numbers will always be read as a rate. */}
+            {intel && intel.lastStopFuel != null && intel.lastStopStintLaps != null && (
+              <div className="ld-fuel-intel ld-fuel-intel--dim">
+                <span className="ld-fi-burn">{t('ld_last_stop', lang)}</span>
+                <span className="ld-fi-laps">
+                  {t('ld_took_on', lang, {
+                    n: intel.lastStopFuel.toFixed(1),
+                    laps: intel.lastStopStintLaps,
+                  })}
+                </span>
+              </div>
+            )}
+
             <button className="ld-vitals-toggle" onClick={() => setShowVitals(v => !v)}>
               {showVitals ? t('ld_hide_engine', lang) : t('ld_show_engine', lang)}
             </button>
@@ -632,6 +871,17 @@ export default function LiveDashboard({
                 <span className="ld-time-lbl">{t('ld_best_lap', lang)}</span>
                 <span className="ld-time-val ld-mono ld-gold">{formatMs(data.bestLapMs)}</span>
               </div>
+              {/* Next to the lap times, because that is where the eye already
+                  is when deciding whether this car is about to come in. */}
+              {boxInLaps != null && (
+                <div className="ld-time-row ld-box-row">
+                  <span className="ld-time-lbl">{t('ld_box_in', lang)}</span>
+                  <span className="ld-time-val ld-mono ld-box-val">
+                    {t('ld_box_in_laps', lang, { n: boxInLaps })}
+                    <span className="ld-dim"> {t('ld_box_on', lang, { lap: intel.pitLap })}</span>
+                  </span>
+                </div>
+              )}
             </div>
 
             {(data.tireTemp || compound || drivers?.length) && (
@@ -664,7 +914,7 @@ export default function LiveDashboard({
                 <div className="ld-tire-section-header">
                   <span className="ld-section-label">{t('ld_tyres', lang)}</span>
                   <div className={`ld-compound-picker${pendingConfirmation ? ' ld-compound-picker--pending' : !compound ? ' ld-compound-picker--alert' : ''}`}>
-                    {COMPOUNDS.map(id => (
+                    {COMPOUND_ORDER.map(id => (
                       <button
                         key={id}
                         className={`ld-cp-btn ${COMPOUND_CLS[id]}${compound === id ? ' active' : ''}`}
@@ -675,7 +925,7 @@ export default function LiveDashboard({
                     ))}
                   </div>
                 </div>
-                <TyreAge laps={tyreLaps} life={tyreLife} lang={lang} />
+                <TyreAge laps={tyreLaps} life={tyreLife} outlook={setOutlook} lang={lang} />
 
                 <div className="tw-grid">
                   <div className="tw-cell tw-fl">

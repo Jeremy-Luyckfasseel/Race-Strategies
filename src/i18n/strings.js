@@ -55,6 +55,33 @@ export function t(key, lang = DEFAULT_LANG, vars) {
  * Display name for a tyre compound id. The engine works in ids (H/M/S/IM/W) and
  * carries English names for logs and tests; what the screen shows comes from here.
  */
+/**
+ * The order tyres are shown in, everywhere: softest to hardest, then the wets.
+ *
+ * It is a display concern, not the engine's — `inputs.compounds` keeps its own
+ * order — but it has to be the SAME everywhere or the leaderboard, the picker
+ * and the timeline legend each teach a different muscle memory, and at 3am you
+ * click the wrong one.
+ */
+export const COMPOUND_ORDER = ['S', 'M', 'H', 'IM', 'W'];
+
+/**
+ * A compound list in display order, without touching the caller's array.
+ *
+ * `inputs.compounds` keeps whatever order it was saved in — the engine and the
+ * stored setup both depend on it — so anything that RENDERS the list sorts a
+ * copy through here instead. Ids the order does not know about keep their
+ * relative position at the end rather than vanishing.
+ */
+export function orderCompounds(list) {
+  if (!Array.isArray(list)) return [];
+  const rank = (id) => {
+    const i = COMPOUND_ORDER.indexOf(id);
+    return i === -1 ? COMPOUND_ORDER.length : i;
+  };
+  return [...list].sort((a, b) => rank(a?.id) - rank(b?.id));
+}
+
 export function compoundName(id, lang = DEFAULT_LANG) {
   return id ? t(`compound_${id}`, lang) : '';
 }

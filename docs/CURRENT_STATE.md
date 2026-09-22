@@ -4,7 +4,8 @@
 > the real source (not from assumptions). Companion to `CLAUDE.md`. Update this
 > file as the code changes — the phase plans in `docs/plans/` assume it is accurate.
 
-Last verified against: `src/`, `server/`, `tests/` at the time of writing.
+Last verified against `src/`, `server/` and `tests/` on the `fix/ui-pass` branch,
+2026-09-22 — module map, test list and loose ends all re-read from the source.
 
 ---
 
@@ -16,10 +17,11 @@ endurance race and ranks them by laps completed, then race time. It also has a
 **live telemetry** tab that reads real-time data from one or more PS5s running
 GT7 via a standalone Node UDP→WebSocket relay.
 
-Four tabs: **Course** (the live single-team "Now" view — default landing),
-**Stratégie** (the calculator), **Télémétrie** (live dashboard + track map +
-the multi-team leaderboard, which now reveals itself automatically once a
-second car appears), and **Pilotes** (per-driver drive-time totals + the
+Three tabs: **Course** (the in-race screen and default landing — the plan
+strip across the top, and under it the multi-team leaderboard, the track map
+and the selected car's dashboard; the leaderboard reveals itself automatically
+once a second car appears), **Stratégie** (the calculator, the only tab that
+carries the setup sidebar), and **Pilotes** (per-driver drive-time totals + the
 per-stint log — duration, tyre, avg/best/worst lap — built from pit-exit/entry
 events; see `stintLog.js`/`useStintLog.js` below). **Every user-facing string now
 goes through the i18n layer** (`src/i18n/strings.js` + `en.js`/`fr.js`): English is
@@ -33,14 +35,26 @@ That includes what comes out of the pure engine: `src/logic/` keeps its English
 warnings and learner recommendations all follow the switch. Guarded by
 `tests/test_ui_i18n.js`, which also fails if the two tables drift apart.
 
-**The telemetry→engine learning path now exists (Phase 1).** A pure learner
-(`src/logic/telemetryLearner.js`) derives fuel burn, the fuel-weight penalty, and
-per-compound degradation from live packets and **proposes** them as
-recommendations the engineer accepts or ignores (`src/logic/recommendations.js`,
-`src/hooks/useTelemetryLearner.js`) — telemetry never silently overwrites the
-active inputs (DECISION 7). The older mid-race auto-fill (live `currentLap` /
-`fuelLiters` into the mid-race inputs when mid-race mode is on and a team is
-selected) still runs alongside. Manual inputs remain the source of truth.
+**The telemetry→engine learning path.** A pure learner
+(`src/logic/telemetryLearner.js`) derives fuel burn, the fuel-weight penalty and
+degradation curves **per compound and per driver** from live packets, and
+**proposes** them as recommendations the engineer accepts or ignores
+(`src/logic/recommendations.js`, `src/hooks/useTelemetryLearner.js`) — telemetry
+never silently overwrites the active inputs (DECISION 7). Manual inputs remain
+the source of truth. What it measures is persisted per car
+(`src/logic/learnerStore.js`), so a reload mid-race costs at most the lap in
+progress rather than the whole session.
+
+The mid-race inputs are no longer written by an effect. `engineInputs` in
+`App.jsx` is the single reconciler: the user's setup, the race clock, and where
+the **★ car** actually is. The effect it replaced was keyed on the car you were
+*looking at*, so clicking a rival's row rebuilt your plan from their fuel.
+
+**What a stop this lap would do to the race** — where you rejoin and between
+whom, whether an undercut lands, what traffic you are about to reach — is
+`src/logic/racecraft.js`, shown on the plan strip. It deliberately models no
+cost for attacking or defending: there is no data to calibrate that from, and
+what a fight really costs the plan is fuel, which is already measured.
 
 ---
 
@@ -50,51 +64,83 @@ selected) still runs alongside. Manual inputs remain the source of truth.
 
 | File | Role |
 |------|------|
-| `strategy.js` | The engine (~700 lines). Exports `findBestStrategies`, `simulateStrategy` (internal), `calcPitStopTime`, `parseLapTime`, `isValidLapTimeStr`, `formatLapTime`, `formatRaceTime`, `TIRE_COMPOUNDS`, `CAR_PRESETS`. |
-| `telemetryLearner.js` | **Phase 1.** `createLearner({tankSize, compounds, tireLife, compoundId})` → `{ingest, ingestAll, setCompound, getEstimates}`. Learns `litersPerLap` (tank-delta), the global fuel-weight penalty + per-compound 3-point degradation (joint block least-squares), with per-estimate trust payloads. Emits the engine's input shape. `LEARNER_CONFIG`. |
-| `recommendations.js` | **Phase 1.** `buildRecommendations(estimates, inputs, dismissed)` (confident + meaningfully-differs gating, no re-nag after ignore), `applyRecommendation(inputs, rec)` (new object, only path a learned value enters inputs), `dismissSnapshot`, `RECOMMEND_CONFIG`. |
-| `raceState.js` | **Phase 2.** Live "Now" decision logic: `currentStint`, `nextAction`, `fuelMarginLaps`, `liftAndCoastVerdict`, `fuelExhaustionLap`, `pitNowTrigger` (earliest-of + reason), `medianRecent` smoothing, `RACE_STATE_CONFIG`. |
-| `connection.js` | **Phase 3.** Auto-connect helpers: `backoffDelay` (capped exponential), `isSessionActive` (onTrack AND moving), `pickAutoConnectIp` (auto-pick only a single PS5), `RECONNECT_CONFIG`. |
-| `compoundDetector.js` | Doc-only stub. States that GT7 UDP does **not** expose tire compound; compound must be set by the user. No runnable code. |
-| `gaps.js` | `trackLapCrossings(prev, packets)` + `lapInterval`/`formatInterval` — leaderboard intervals derived from start/finish crossings. Replaces a column that subtracted the two cars' last LAP TIMES (a pace difference, not a gap: two cars 30 s apart at equal pace showed nothing). Refreshes once per lap per car; going continuous would need projecting cars onto the recorded centreline. A car's first sighting is marked `witnessed: false` — on joining mid-race we know only which lap a car is on, not when it began, so second-level intervals wait for a lap change we actually saw (a lap *difference* is reported immediately, since it comes from GT7's own counter). |
-| `racePersistence.js` | What a race is made of on disk. `RACE_KEYS` / `SNAPSHOT_KEYS`, `buildSnapshot`/`validateSnapshot`/`applySnapshot` for export-import, `clearRace` for a new race (keeps the circuit map — it describes the track, not the race), `loadInputs` (merged over defaults, falls back on anything unparseable or lacking a compound table). localStorage is the store: the payload is tens of KB, the track map is self-bounding, and synchronous writes are durable immediately. |
-| `pitDetect.js` | `detectPitEdges(prev, speedKmh, now, cfg)` — the relay's pit entry/exit state machine (imported by `server/telemetry-server.js`, the one module shared across that boundary). A stop must be sustained for `PIT_MIN_STOP_MS` before it counts, so a spin no longer fires a phantom pit stop. Still speed-only: a car parked on track past the dwell reads as a stop. |
-| `teams.js` | Multi-car display helpers: `stableCarId` (what a car is reported as — prefers a hostname learned from a LAN scan over a bare IP, so a DHCP lease change does not spawn a new car; imported by the relay, which still heartbeats the IP), `applyFlush` (one buffer flush — merge, crossings, order, prune — kept pure and out of the hook so the 20 Hz hot path is node-testable, and exercised directly by `test_multicar_integration.js`), `resolveActiveCars` (splits `strategyIp` — my car, owning drivers/stint log/learner/auto-fill — from `displayIp`, the car being inspected, so clicking a rival never repoints my strategy), the 16-colour `TEAM_PALETTE` + `teamColor(orderIndex)` (shared by the leaderboard and the track map so a car's colour matches in both and never changes as it gains places), append-only `withTeamOrder`, `coalescePacket` (carries one-shot pit edges across a flush window), `isStalePacket`/`dropStaleTeams` + `TEAM_STALE_MS`. |
-| `stintLog.js` | Pure stint-log state machine backing the Pilotes tab: `emptyEntry`, `openStint`, `closeStint` (folds the running lap sum/count into a duration + average, keeps no per-lap array), `reopenStint` (pit-exit's entry point — archives an already-open `current` first if its closing pit-entry packet was never seen, rather than overwriting and losing it), `recordLap` (best/worst tracking) and `recordLapIfClean` (same, but skips the out-lap and any lap paused/off-track when it completed), `setCompound` (fills once, never overwrites), `assignDriver`. |
+| `strategy.js` | The engine (~700 lines). `findBestStrategies`, `simulateStrategy`, `calcPitStopTime`, `parseLapTime`, `isValidLapTimeStr`, `formatLapTime`, `formatRaceTime`, `TIRE_COMPOUNDS`, `CAR_PRESETS`. Also takes `pacePenaltySecs` + `pacePenaltyLaps` — a flat per-lap cost for a **bounded** number of laps, because damage ends at the next stop. |
+| `telemetryLearner.js` | `createLearner({tankSize, compounds, compoundId, driverId, restore})` → `{ingest, ingestAll, setCompound, setDriver, getEstimates, snapshot}`. Learns `litersPerLap`, the global fuel-weight penalty and a 3-point degradation curve **per compound and per driver**. The penalty regression blocks by *driver-on-compound*, not compound: two drivers on one tyre are not one curve, and the mismatch had nowhere to go but the fuel column. |
+| `learnerStore.js` | Keeping what the learner measured across a reload. `readStore`/`restoreFor`/`writeFor`, `LEARNER_KEY`, `MAX_LAPS_PER_CAR`. Only measured laps are stored, never fits, so a restore costs at most the in-progress lap and a change to the fitting code applies to restored data. |
+| `recommendations.js` | `buildRecommendations` / `applyRecommendation` / `dismissSnapshot`. Four kinds: laps-per-tank, fuel-weight penalty, per-compound curves, and per-**driver** curves. Accepting one is the only path a learned value enters `inputs`. |
+| `racecraft.js` | The three questions about other cars. `positionIfPitNow` (where I rejoin, who is either side, and how far off in seconds), `undercut` (box first and pass in the pit lane — only the *difference* between the two stops counts against you, not the whole stop), `trafficAhead` (the backmarker I am about to reach), `freshTyreGainSecs`. Deliberately models no cost for attacking or defending: there is no data to calibrate it from. |
+| `gaps.js` | Leaderboard intervals from start/finish crossings: `trackLapCrossings`, `lapInterval`, `liveInterval`, `lapProgress`, `lapsOnMe`, `formatInterval`. The ±1-lap case is resolved against the leader's previous crossing and says **nothing** when it cannot yet be told — a one-lap counter difference is the normal state of every close fight for part of every lap. `lapsOnMe` judges on track position, so a car that has just pitted is not called lapped. |
+| `rivalIntel.js` | Any car's fuel read off its own trace: `trackFuelUse`, `burnPerLap` (median of clean laps), `fuelLapsLeft`, `predictedPitLap`, `rivalSummary`, `burnProgress`. No input from us and nothing assumed about their car. |
+| `tyreHistory.js` | The stint log read back per compound: sets run, laps each, best/avg, measured fall-off. `currentSetOutlook` uses the **median** of previous *finished* sets, so one stint cut short by a spin is not the expectation. Silent on a first set. |
+| `pitNow.js` | **Box now or wait**, answered by the engine rather than by arithmetic. Builds two futures and runs both through `findBestStrategies`, comparing laps first and race time second. `fullServiceLoss` returns **null** for an unknown fuel reading — an unknown tank is not an empty one. |
+| `incident.js` | Not a damage button — anything that makes the plan wrong. `measuredLossSecs` / `effectiveLossSecs`. The lap it happened on is costed as a one-off, never averaged into the per-lap rate. |
+| `paceTrack.js` | A ten-lap rolling window per car. Powers incident measurement and `detectPaceDrop`, which finds a **step** rather than a slope and requires it sustained across three laps, so a pit stop's in- and out-lap do not read as damage. |
+| `carRoles.js` | Not every car on the LAN is racing. `splitByRole`, `isSafetyCar`, `safetyCarDeployed`, `fieldSlowdown`, `pitLossUnderSafetyCar`. A safety car is out of the standings and the gap chain but still shown and watched. |
+| `conditions.js` | Dry/wet as a **filter over which compounds the engine may pick**, not a second simulation. `compoundsFor`, `conditionsUnavailable`, `crossoverSecsPerLap`, `tyreOnlyPitLoss`. |
+| `raceClock.js` | `RACE_START_KEY`, `raceProgress`, `applyRaceClock`, `formatClock`. The lobby is open for hours and that driving is practice, so the race has an explicit start stamp; the plan then follows the clock rather than a field someone retypes. Remaining is quantised to the minute so the search runs once a minute. Pure: the caller passes `now`. |
+| `raceState.js` | The live "Now" decisions: `currentStint`, `nextAction`, `fuelMarginLaps`, `liftAndCoastVerdict`, `fuelExhaustionLap`, `pitNowTrigger`, `medianRecent`. |
+| `racePersistence.js` | What a race is made of on disk. `RACE_KEYS` / `SNAPSHOT_KEYS`, `buildSnapshot`/`validateSnapshot`/`applySnapshot`, `clearRace`, `loadInputs`. The circuit map deliberately survives a new race; what the learner measured does not. |
+| `stintLog.js` | The Pilotes stint-log state machine: `openStint`, `closeStint`, `reopenStint` (archives an already-open stint rather than overwriting it), `recordLap`/`recordLapIfClean`, `setCompound`, `assignDriver`. Keeps aggregates, never a per-lap array. |
+| `teams.js` | Multi-car display: `stableCarId` (hostname over IP, so a DHCP lease change is not a new car), `applyFlush` (one 20 Hz buffer flush, kept pure and node-testable), `resolveActiveCars` (**`strategyIp` vs `displayIp`**), `teamColor` + the 16-colour palette, `withTeamOrder`, `coalescePacket`, `dropStaleTeams`. |
+| `pitDetect.js` | `detectPitEdges` — the relay's pit state machine, and the one module shared across that boundary. A stop must be sustained for `PIT_MIN_STOP_MS`, so a spin no longer fires a phantom stop. Speed-only: a car parked on track past the dwell still reads as a stop. |
+| `connection.js` | `backoffDelay`, `isSessionActive`, `pickAutoConnectIp`. |
+| `sessionAnalysis.js` | Recorded session → strategy inputs, single- and multi-driver merge. |
+| `compoundDetector.js` | Doc-only stub. GT7 UDP does **not** expose tyre compound; it is user-set. No runnable code. |
 
 ### React hooks — `src/hooks/`
 
 | File | Role |
 |------|------|
-| `useStrategy.js` | Wraps `findBestStrategies`. 600 ms debounce on input change + immediate `calculate()`. Validates/coerces inputs in `compute()`, including rejecting a malformed lap-time string (`isValidLapTimeStr`) on any active compound or driver override — returns `null` rather than silently computing with `parseLapTime`'s 120s fallback. Returns `{ result: {ranked, best} \| null, calculating, calculate }`. |
-| `useTelemetry.js` | WebSocket client to the relay. Returns `{ connected, reconnecting, teams: Map<ip,packet>, teamOrder, serverIPs, connect, disconnect, sendIPs, scan, scanning, scanResults }`. Each team packet is stamped with `ts: Date.now()`. **Packets are buffered in a ref and flushed to state at 20 Hz** — one setState per packet meant ~600 re-renders/sec at 10 cars, since each packet is its own WebSocket event and React cannot batch across them. On each flush, cars silent longer than `TEAM_STALE_MS` are pruned. `coalescePacket` carries the relay's one-shot `pitDetected`/`pitExit` edges forward so an edge that lands mid-window is not overwritten before it is flushed. `teamOrder` is append-only first-seen order and picks each car's display colour. **Phase 3: auto-reconnect** with capped exponential backoff (re-sends last IPs), suppressed after an explicit `disconnect()`. |
-| `useCompoundDetector.js` | Watches each team packet's `pitExit` flag. Adds the IP to a `pendingIps` Set so the UI can prompt for a one-tap compound confirmation. `confirmCompound(ip)` / `stopDetecting(ip)` clear it. Dedupes by `${ip}-${currentLap}`. |
-| `useTrackMap.js` | App-level `requestAnimationFrame` loop that records GPS (`posX`/`posZ`) into segments + an occupancy grid, persisted to `localStorage` (`gt7_track_map_v1`). Detects the pit lane from a sustained slow zone and fires `onPitEntry`. Returns `{ mapRef, resetMap }`. |
-| `useTelemetryLearner.js` | **Phase 1.** Runs `createLearner` against the selected car's live packets (resets only when the car changes), throttles `getEstimates()` to once per new lap, pushes the confirmed compound in, and manages ignore/dismiss state. Returns `{ estimates, recommendations, ignore, clearDismiss }`. Never writes to `inputs`. |
-| `useStintLog.js` | Thin React adapter over `stintLog.js`: subscribes to `teams`, dedupes pit-entry/exit/lap-completion per team (same `${ip}-${lap}` pattern as `useCompoundDetector`), persists the log to `localStorage` (`gt7-stint-log`). Opens the first stint on the first on-track packet (defaults to the first configured driver — no pit to prompt on yet), then a new stint on every pit exit via `reopenStint` (driver left `null` until `assignDriver(ip, driverId)` is called) and closes it on the next pit entry via `closeStint`. Lap folding goes through `recordLapIfClean`. Returns `{ logs: Map<ip,{history,current}>, pendingDriverIps, assignDriver, resetAll }`. |
+| `useStrategy.js` | Wraps `findBestStrategies`. 600 ms debounce + immediate `calculate()`. Exports `computeStrategy`, the only sanctioned engine entry — it carries the wet-compound filter and the lap-time validation, and returns `null` rather than computing on a malformed lap time. |
+| `useTelemetry.js` | WebSocket client to the relay. Packets are buffered in a ref and flushed at 20 Hz — one setState per packet meant ~600 re-renders/sec at ten cars. Prunes cars silent past `TEAM_STALE_MS`; carries one-shot pit edges across a flush window; auto-reconnects with capped backoff. |
+| `useCompoundDetector.js` | Watches each packet's `pitExit`; returns `pendingIps` + `confirmCompound`/`stopDetecting`. Dedupes by `${ip}-${lap}`. |
+| `useStintLog.js` | Adapter over `stintLog.js`. Opens a stint on pit exit (driver `null` until named), closes it on the next pit entry, persists to `gt7-stint-log`. |
+| `useTelemetryLearner.js` | Runs the learner against the ★ car's packets, pushes in the confirmed compound **and driver**, recomputes once per lap, and persists to `localStorage` on the same edge. Restores per car on selection. Never writes to `inputs`. |
+| `useTrackMap.js` | rAF loop recording GPS from **every** connected car into a shared 3 m grid — ten cars on one line cost nothing over one and complete the circuit ~10× faster. Each car extends its own segment. Only `strategyIp`'s pit entry fires `onPitEntry`. |
+| `useDialog.js` | The app's own confirm/alert. `ask()` resolves true/false, `tell()` on acknowledgement. Replaces `window.confirm`, which also **blocks the main thread** while the relay is pushing at 20 Hz. |
+| `useToasts.js` | Notices for what happened while you were looking elsewhere. Idempotent by `key`, capped, sticky ones wait for an answer. |
 
 ### Components — `src/components/`
 
 | File | Role |
 |------|------|
-| `InputPanel.jsx` | The whole sidebar form. Collapsible sections: car presets (localStorage), race, pit timing, fuel, fuel-weight penalty, compound table (per-compound life + 3 lap times + mandatory flag), mid-race mode, drivers (per-driver per-compound lap-time overrides). Also renders the mid-race "auto-fill from PS5" team picker. |
-| `ResultsSummary.jsx` | KPI strip + driver summary chips + top-6 strategy comparison cards. |
-| `StrategyTimeline.jsx` | Recharts horizontal bar chart of stints + pit windows. |
+| `InputPanel.jsx` | The setup sidebar, shown on the Stratégie tab only. Car presets, race, pit timing, fuel, the compound table (life + three lap times + must-use) and per-driver overrides — both rendered through `orderCompounds()` so the tyres read softest-first like everywhere else, without reordering the stored array the engine depends on. |
+| `ResultsSummary.jsx` | KPI strip, driver chips, top-6 comparison cards. `deltaLabel` signs itself from the number rather than a hardcoded `+`. |
+| `StrategyTimeline.jsx` | The race as one horizontal bar. Hand-drawn with CSS percentages after the Recharts version was found rendering no bars at all; the label fits by a **container query** on the segment, because whether "S7 12" fits is a question about pixels and a percentage of the race cannot answer it. |
 | `StintTable.jsx` | Lap-by-lap stint detail; red rows for warnings. |
-| `LiveDashboard.jsx` | Single-team widget: gear/speed, RPM/throttle/brake/fuel bars, per-corner tire temp + wear, compound picker, and the SVG `TrackMap` (exported named). |
-| `TelemetryControls.jsx` | Server URL + connect/disconnect, PS5 IP list editor, LAN scan button + results. Team naming lives in the leaderboard, not here — the auto-scan still seeds a label from a resolved hostname. |
-| `TelemetryLeaderboard.jsx` | Multi-team table sorted by race position: lap/gap, last/best lap, compound picker, fuel bar, pit/track status. Colours each row via `teamColor(teamOrder.indexOf(ip))` so a car's colour is fixed for the session and matches its dot on the track map. Revealed automatically once a second car connects. **Also the team-management surface:** a ★ per row marks *my* team (persisted to `gt7-my-team`), and ✎ / double-click renames any team inline. |
-| `NowView.jsx` | **Phase 2.** The glanceable in-race "Now" view (dumb renderer over `raceState.js`): current plan, big stint countdown, next action (box lap + fuel + tyres + next compound), lift-and-coast/push verdict + pit reason, and a "freeze plan" toggle. |
-| `LearnerRecommendations.jsx` | **Phase 1.** Propose-and-accept cards (Accept / Ignore + sample-size/volatility trust line) for the learner's confident, meaningfully-different estimates. |
-| `Onboarding.jsx` | **Phase 3.** First-run overlay: firewall explainer → auto-scan → detected PS5 → optional car preset → into the Now view. Gated by a `gt7-onboarded` localStorage flag. |
-| `DriversTab.jsx` | Pilotes tab: driver time totals (reusing `ResultsSummary`'s `.driver-chip` styling, flagged when a driver is under `minDriverTimeSecs`) and a per-stint log table (driver, tyre, laps, duration, avg/best/worst lap) for the selected team, including the in-progress stint. |
+| `NowView.jsx` | The plan strip across the top of the Course tab, laid out as a **grid**: car, stint, laps left, the next call, race state — then what a stop this lap would do underneath. One label size, one value size, one hero number. |
+| `LiveDashboard.jsx` | The selected car: gear/speed, RPM/throttle/brake/fuel, fuel intel, tyre **temperature** per corner (the radius-derived wear was removed — it never moved on real hardware), laps-on-set against the configured life, compound + driver pickers, the incident panel and the box-now comparison. Exports `TrackMap`. |
+| `TelemetryLeaderboard.jsx` | The field by race position: lap/gap, last/best, compound, fuel, pit status, laps-until-box per car, ★ to mark my team and ✎ to rename. |
+| `TelemetryControls.jsx` | Relay URL, PS5 list, LAN scan. Lives in the **header** as a dropdown, not in a tab. |
+| `DriversTab.jsx` | Per-driver drive time against `minDriverTimeSecs`, and the per-stint log. |
+| `LearnerRecommendations.jsx` | Propose-and-accept cards with a trust line. |
+| `Dialog.jsx` | The card the app asks its questions on. Escape and the backdrop cancel, Enter confirms, focus lands on the confirming button. |
+| `Toasts.jsx` | Bottom right — the top of this screen is the plan and the left is the field. Notices **navigate** rather than act: a tyre picked by mis-tapping a corner card is a wrong compound in the stint log for the rest of the stint. |
+| `Onboarding.jsx` | First-run overlay, gated by `gt7-onboarded`. |
+| `TeamPanel.jsx` | Group/race/session organisation. |
+
+### i18n — `src/i18n/`
+
+`strings.js` (`t`, `LANGS`, `loadLang`, `compoundName`, `compoundShort`,
+`compoundSequence`, `COMPOUND_ORDER`, `orderCompounds`) over `en.js` / `fr.js`.
+English is the source of truth and the fallback; `DEFAULT_LANG` is `'fr'`.
+`lang` is a plain prop — no context, no module global. `tests/test_ui_i18n.js`
+fails if the tables drift apart.
 
 ### Root — `src/App.jsx`
 
-Owns **all** state (no Redux/Context):
-`inputs`, `selectedIndex`, `telemSelectedIp`, `activeTab`, `ps5IPs`,
-`telemUrl`, `teamLabels`, `teamCompounds`. Wires the hooks together, holds
-`DEFAULT_INPUTS`, and contains the only telemetry→strategy auto-fill effect.
+Owns **all** state (no Redux/Context). Three tabs — **Stratégie** (the only one
+with the sidebar), **Course** (the in-race screen and the default landing) and
+**Pilotes**.
+
+The one piece worth knowing: **`engineInputs`** is the single reconciler between
+the user's setup, the race clock and where the ★ car actually is. Shortening
+`raceDurationHours` without also setting `midRaceMode` left the engine planning
+the remaining hours *from lap 1, on a full tank, on fresh tyres* — so from about
+half distance the Now view said "run to the flag" for the rest of the race. It
+replaced an effect keyed on `telemSelectedIp` — the car you are *looking at* —
+which rebuilt your plan from a rival's fuel. One writer (the user, via
+InputPanel), one deriver (this).
 
 ### Server — `server/telemetry-server.js`
 
@@ -143,15 +189,35 @@ The UI suites add a small DOM harness (`tests/helpers/`): jsdom, React's own `ac
 | `test_teams.js` | 45 assertions. `src/logic/teams.js` — the 16-colour palette, `teamColor` fallbacks, append-only `withTeamOrder`, `isStalePacket`/`dropStaleTeams` (same-reference returns when nothing changed), and the key multi-car invariant: a car keeps its colour when another car drops out. |
 | `test_stint_log.js` | 29 assertions. `src/logic/stintLog.js` — the Drivers-tab stint-log state machine: stint open/close, per-lap average/best/worst folding without retaining individual lap times, compound sync, driver (re)assignment, `reopenStint`'s defensive archive-before-overwrite (a missed pit-entry packet must not lose the prior stint), `recordLapIfClean`'s out-lap/paused/off-track exclusion. |
 
-`npm test` runs all twenty-three suites above (every row except `test.js`) in
-sequence — 2 407 assertions total, all pure node; they print `✓/✗` lines and
-exit non-zero on failure. **These are the guardrail — keep every assertion
-green.** 767 of the 2 407 are hand-written; 1 640 are bulk-generated invariant
-sweeps (see `test_invariants.js` above) — worth knowing which is which when
-judging how much a passing `npm test` actually proves. (Assertion counts
-inside loop-based checks scale with how many stints/strategies an input
-produces, so they shift slightly whenever engine behaviour changes — this is
-expected, not a discrepancy to chase.)
+`npm test` runs all **42 suites** in sequence — **~2 990 assertions**, all
+pure node, printing `✓/✗` and exiting non-zero on failure. **These are the
+guardrail — keep every assertion green, and judge a run by its EXIT CODE, not
+by reading the output.** Roughly 1 350 are hand-written; 1 643 are the bulk
+invariant sweep in `test_invariants.js` — worth knowing which is which when
+judging how much a passing `npm test` proves. (Counts inside loop-based checks
+scale with how many stints an input produces, so they shift slightly whenever
+engine behaviour changes. That is expected.)
+
+**Newer suites, roughly in the order they were added:**
+
+| File | Role |
+|------|------|
+| `test_race_clock.js` / `test_ui_race_clock.js` | The start stamp and what follows: remaining quantised to the minute, the plan sized to what is left, the Stratégie tab's banner explaining why its total is not the one you typed, and clearing the start from that banner. |
+| `test_conditions.js` | Dry/wet as a compound filter, the fallback when no wet tyre is configured, and the crossover figure. |
+| `test_car_roles.js` / `test_ui_safety_car.js` | A safety car out of the standings and the gap chain, renumbering behind it without a hole, deployment detection, and the reduced pit loss. |
+| `test_rival_intel.js` | Burn rate from a car's own trace, the predicted box lap, and the refusal to guess before enough clean laps. |
+| `test_tyre_history.js` | Per-compound history, median-of-finished-sets outlook, silence on a first set. |
+| `test_incident.js` / `test_pit_now.js` | The measured loss, and box-now vs wait run through the real engine. Includes the guard that an unknown fuel reading is **not** an empty tank. |
+| `test_racecraft.js` / `test_ui_racecraft.js` | Where I rejoin and between whom, the undercut, and the traffic I am about to reach — plus the two failures the live field caught: a position disagreeing with the leaderboard, and a delta that escaped the field ("P4 → P13" in a ten-car race). |
+| `test_learner_store.js` | The learner surviving a reload: the round trip, the cap, and that a restored learner is still on the **same tyre** — a rebuilt learner with no stint origin files a twenty-lap-old set as fresh, which is worse than losing the data. |
+| `test_ui_timeline.js` | The bar renders segments at all — written after the Recharts version drew none. |
+| `test_ui_trackmap_record.js` | The circuit recorded from every car into one shared grid, each car extending its own segment. |
+| `test_ui_race_plan.js` | Four hours into an eight-hour race: the plan built on the car that exists, not a fresh one. Polls for the plan rather than sleeping past a debounce. |
+| `test_ui_i18n.js` | The two string tables at parity, and one tyre order everywhere. |
+| `test_ui_panels.js` | The four dashboard panels nothing rendered: incident, box-now, fuel intel, tyre outlook. Found a real bug — the fuel line gated on `intel` existing rather than `intel.confident`, so its "measuring" message was unreachable for the case it was written for. |
+| `test_ui_toasts.js` | One event not stacking two cards, my car's notice not timing out while a rival's does, the stack dropping the oldest, a refreshed notice getting a fresh countdown, and that acting on one **navigates**. |
+| `test_ui_setup.js` | The sidebar and the comparison cards — tyres softest-first without reordering storage, wets enterable before they have a life, and the delta badge signing itself. |
+
 
 ---
 
@@ -408,35 +474,32 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
 
 ## 5. Half-finished / dead / loose ends
 
-- **`compoundDetector.js`** is a comment-only file (the real logic lives in the
-  `useCompoundDetector` hook). Intentional, but easy to mistake for dead code.
-- **Telemetry→engine learning path exists (Phase 1, done).** The differentiator
-  (auto-derive fuel burn / fuel-weight / degradation) is implemented as a
-  propose-and-accept flow (`telemetryLearner.js` + `recommendations.js` +
-  `useTelemetryLearner.js` + `LearnerRecommendations.jsx`). The legacy
-  `currentLap` + `fuelLiters` mid-race auto-fill still runs alongside.
-- **Auto-connect / auto-reconnect exist (Phase 3, done).** App auto-connects on
-  launch, auto-scans, auto-picks a single PS5, and reconnects with capped backoff
-  (`connection.js` + `useTelemetry.js` + `App.jsx`). Manual override still works.
+- **`compoundDetector.js`** is a comment-only file (the live logic is in
+  `useCompoundDetector`). Intentional, but easy to mistake for dead code.
 - **`tireWear` is radius-derived and was never shown to work.** Track testing
   found it does not move, matching the suspicion that GT7 reports a fixed spec
-  radius; `current / max-seen` is then exactly 100% for ever. **It is no longer
-  displayed.** The relay still computes it (harmless, and `npm run diag:tyres`
-  prints the raw radii so the question can be settled on real hardware), but
-  the dashboard now shows tyre *temperature* per corner — which GT7 genuinely
-  sends — plus a modelled tyre life counted in laps-on-set against the
-  compound's configured `tireLife`, per DECISIONS.md item 4.
+  radius. **It is no longer displayed.** The relay still computes it (harmless,
+  and `npm run diag:tyres` prints raw radii so the question can be settled on
+  real hardware); the dashboard shows tyre *temperature*, which GT7 genuinely
+  sends, plus a modelled tyre life in laps-on-set.
+- **Compound is user-set and always will be.** GT7's UDP stream carries no
+  compound id. Everything downstream — the stint log, the tyre history, the
+  learner's per-compound curves — is only as right as the taps after each stop.
+  This is the single biggest source of wrong data in a real race.
+- **Pit detection is speed-only.** A car parked on track past the dwell reads as
+  a stop.
 - **Salsa20 key is version-sensitive.** A GT7 update can change it and silently
   break decoding.
-- **Packaging scaffolded (Phase 3, build not yet run).** Electron
-  (`electron/main.cjs` + electron-builder config in `package.json`) bundles the UI
-  + relay into a Windows installer; steps in `docs/PACKAGING.md`. The installer
-  itself has not been built/smoke-tested yet — `npm run dist` on Windows. The dev
-  workflow (`npm run dev` / `telemetry` / `test`) is unchanged.
-- **Multi-team scaffolding is present** (leaderboard, `Map<ip,packet>`, scan)
-  even though the MVP is single-team. The build plan says keep it but
-  de-emphasize it (Phase 2.2), not delete it.
-- A stray `bash.exe.stackdump` sits in the repo root (untracked, ignorable).
+- **Never run against a real PS5 in this form.** Every verification in this
+  branch is against `scripts/fake-field.mjs` — real Salsa20 packets from
+  loopback addresses, but a simulation whose physics I wrote. The relay's byte
+  offsets and crypto are exercised end-to-end by `test_relay_e2e.js`; the
+  *plausibility of the numbers* on real hardware is not.
+- **Packaging scaffolded, installer never built.** `npm run dist` on Windows;
+  steps in `docs/PACKAGING.md`.
+- **Multi-team scaffolding is load-bearing** for display (leaderboard, track
+  map, LAN scan) even though strategy is single-team. Do not delete it.
+
 
 ---
 
@@ -445,8 +508,14 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
 ```
 npm run dev          # Vite dev server :5173
 npm run build        # production build → /dist
-npm run lint         # ESLint flat config
-npm test             # all twenty-three suites in tests/ (see §2 Tests table) — 2 407 assertions
+npm run lint         # ESLint flat config — zero errors, 3 deliberate warnings
+npm test             # all 42 suites (~2 990 assertions). Judge by EXIT CODE.
 npm run test:smoke   # quick 1h race test
-npm run telemetry    # start the UDP→WS relay (separate process)
+npm run telemetry    # the UDP→WS relay (separate process)
+npm run demo         # ten fake PS5s, for testing with no hardware in the room
 ```
+
+A full pit wall is three terminals: `telemetry`, `dev`, `demo`. All three can
+stay up while `npm test` runs — the relay suite uses its own ports (34740 /
+21777) and its own `127.0.9.x` source addresses precisely so they do not
+collide. See the header of `scripts/fake-field.mjs` for the `PIT_*` knobs.

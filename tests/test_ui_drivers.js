@@ -57,9 +57,27 @@ section('no team marked yet');
     activeIp: null, onReset: () => {},
   }));
   assert('the tab explains how to claim a team',
-    /★/.test(v.container.textContent) && /Télémétrie/.test(v.container.textContent),
+    /★/.test(v.container.textContent) && /Course/.test(v.container.textContent),
     v.container.textContent.slice(0, 140));
   assert('no stint table is drawn', $(v.container, '.stint-table') === null);
+  assert('and offers no Reset, because there is nothing to reset',
+    !$$(v.container, 'button').some((b) => /Réinitialiser|Reset/.test(b.textContent)));
+  v.unmount();
+}
+
+section('the empty state can take you there');
+{
+  let went = 0;
+  const v = render(React.createElement(DriversTab, {
+    logs: new Map(), drivers: DRIVERS, minDriverTimeSecs: 3600,
+    activeIp: null, onReset: () => {}, onGoToTelemetry: () => { went += 1; },
+  }));
+  const btn = $$(v.container, 'button').find((b) => /Course/.test(b.textContent));
+  assert('a button goes to the telemetry tab', !!btn, v.container.textContent.slice(0, 120));
+  if (btn) {
+    click(btn);
+    assert('and clicking it asks the app to switch', went === 1);
+  }
   v.unmount();
 }
 
@@ -245,16 +263,28 @@ section('the tyre panel reports what GT7 actually sends');
   v.unmount();
 }
 
-section('tyre life is counted in laps, and labelled as an estimate');
+section('tyre life is counted in laps, and the GUESS is the one labelled');
 {
+  // This block used to read "TYRE LIFE / estimated" over the lap count. The lap
+  // count is the one exact number here — laps since the car left the pits,
+  // counted, not modelled — and calling it an estimate made the whole panel
+  // look untrustworthy. What is actually a guess is the life it is measured
+  // against, which is the figure typed into the sidebar.
   const v = dash({ tyreLaps: 8, tyreLife: 25 });
   const age = $(v.container, '.tw-age');
   assert('the age block is shown', age !== null);
-  assert('it reads laps used against the configured life',
-    /8\s*\/\s*25/.test(textOf(age)), textOf(age));
+  assert('it reads the laps run on this set', /8/.test(textOf(age)), textOf(age));
+  assert('against the configured life', /25/.test(textOf(age)), textOf(age));
   assert('in laps, not percent', /tours/i.test(textOf(age)) && !/%/.test(textOf(age)), textOf(age));
-  assert('and says plainly that it is an estimate',
-    /estim/i.test(textOf(age)), textOf(age));
+
+  // The word must sit on the configured figure, never on the counted one.
+  // Scoped to the tyre block: there are several section labels on the panel
+  // and the first one belongs to the driver picker.
+  const label = textOf($(age, '.ld-section-label'));
+  assert('the configured life is the part flagged as yours',
+    /25/.test(label) && /configur/i.test(label), label);
+  assert('and the counted laps are not called an estimate',
+    !/estim/i.test(textOf($(v.container, '.tw-age-val'))), textOf($(v.container, '.tw-age-val')));
 
   const fill = $(v.container, '.tw-age-fill');
   assert('the bar is filled to the fraction used',
@@ -278,7 +308,9 @@ section('tyre life degrades visibly and never overflows');
   assert('running past the configured life caps the bar at full',
     $(over.container, '.tw-age-fill').style.width === '100%',
     $(over.container, '.tw-age-fill').style.width);
-  assert('and still reports the true lap count', /40\s*\/\s*25/.test(textOf($(over.container, '.tw-age'))));
+  assert('and still reports the true lap count, uncapped',
+    /40/.test(textOf($(over.container, '.tw-age-val'))),
+    textOf($(over.container, '.tw-age-val')));
   over.unmount();
 }
 

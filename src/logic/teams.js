@@ -12,6 +12,8 @@
  * Zero React dependency.
  */
 
+import { trackFuelUse } from './rivalIntel.js';
+import { trackLapTimes } from './paceTrack.js';
 import { trackLapCrossings } from './gaps.js';
 
 /**
@@ -100,17 +102,34 @@ export function stableCarId(registered, scannedHostname, sourceIp) {
  * Every field of the returned state reuses the incoming reference when nothing
  * about it changed, so callers can compare by identity and skip re-rendering.
  *
- * @param state {{teams: Map, order: string[], crossings: Map}}
+ * @param state {{teams: Map, order: string[], crossings: Map, fuel: Map, pace: Map}}
  * @param pending Map<ip, packet> — buffered arrivals, newest per car
  * @param now epoch ms, for staleness
  */
+/** Drop entries for cars that are no longer present, by identity when unchanged. */
+function pruneTo(map, teams) {
+  if (!map || map.size === 0) return map;
+  let next = null;
+  for (const id of map.keys()) {
+    if (teams.has(id)) continue;
+    if (!next) next = new Map(map);
+    next.delete(id);
+  }
+  return next || map;
+}
+
 export function applyFlush(state, pending, now, staleMs = TEAM_STALE_MS) {
-  let { teams, order, crossings } = state;
+  let { teams, order, crossings, fuel, pace } = state;
 
   if (pending.size > 0) {
     // Read crossings before merging, while each packet's own arrival stamp is
     // still distinguishable from the flush time.
     crossings = trackLapCrossings(crossings, pending);
+    // Every car's fuel, which is what tells you when a rival must box.
+    fuel = trackFuelUse(fuel || new Map(), pending);
+    // A short window of completed laps, for measuring what an incident cost
+    // and for spotting a rival who has quietly lost pace.
+    pace = trackLapTimes(pace || new Map(), pending);
 
     teams = new Map(teams);
     for (const [ip, packet] of pending) {
@@ -119,8 +138,22 @@ export function applyFlush(state, pending, now, staleMs = TEAM_STALE_MS) {
     }
   }
 
+  const before = teams;
   teams = dropStaleTeams(teams, now, staleMs);
-  return { teams, order, crossings };
+
+  // Everything keyed by car has to be evicted with it. Keeping the fuel record
+  // meant a console that quit to the lobby on 12 L and rejoined for the race on
+  // a full tank read as 88 litres going in: the board announced a stop that
+  // never happened, and committed the rival to a stint they were not on. The
+  // stale burn window and lap times were just as wrong, measured against a
+  // different session.
+  if (teams !== before) {
+    crossings = pruneTo(crossings, teams);
+    fuel = pruneTo(fuel, teams);
+    pace = pruneTo(pace, teams);
+  }
+
+  return { teams, order, crossings, fuel: fuel || new Map(), pace: pace || new Map() };
 }
 
 /**

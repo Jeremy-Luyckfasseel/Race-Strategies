@@ -159,7 +159,7 @@ section('a ten-car field arrives and is shown');
   const v = await bootApp();
   await v.sendField();
 
-  click(tabButton(v.container, 'Télémétrie'));
+  click(tabButton(v.container, 'Course'));
   await settle(30);
 
   const rows = $$(v.container, '.lb-row');
@@ -180,7 +180,7 @@ section('claiming a team with ★ reaches everything downstream');
 {
   const v = await bootApp();
   await v.sendField();
-  click(tabButton(v.container, 'Télémétrie'));
+  click(tabButton(v.container, 'Course'));
   await settle(30);
 
   const MINE = 4;
@@ -206,7 +206,7 @@ section('naming a team reaches the map too');
 {
   const v = await bootApp();
   await v.sendField();
-  click(tabButton(v.container, 'Télémétrie'));
+  click(tabButton(v.container, 'Course'));
   await settle(30);
 
   const row = $$(v.container, '.lb-row')[2];
@@ -238,7 +238,7 @@ section('a car that goes quiet leaves the board');
 {
   const v = await bootApp();
   await v.sendField();
-  click(tabButton(v.container, 'Télémétrie'));
+  click(tabButton(v.container, 'Course'));
   await settle(30);
   assert('ten cars to start', $$(v.container, '.lb-row').length === 10);
 
@@ -258,7 +258,7 @@ section('the Pilotes tab follows the starred car, not the selected one');
 {
   const v = await bootApp();
   await v.sendField();
-  click(tabButton(v.container, 'Télémétrie'));
+  click(tabButton(v.container, 'Course'));
   await settle(30);
 
   // Claim car 4, then click car 7's row to inspect it.
@@ -285,7 +285,7 @@ section('a pit stop for my car prompts only for my car');
 {
   const v = await bootApp();
   await v.sendField();
-  click(tabButton(v.container, 'Télémétrie'));
+  click(tabButton(v.container, 'Course'));
   await settle(30);
   click($($$(v.container, '.lb-row')[4], '.lb-mine-btn'));
   await settle(30);
@@ -308,11 +308,127 @@ section('a pit stop for my car prompts only for my car');
   v.unmount();
 }
 
-section('all four tabs render with a full field');
+section('the race screen carries the plan strip and the field at once');
+{
+  // The plan and the car used to be two tabs: you read the call on one screen
+  // and watched the car obey it on another. This asserts they share a screen.
+  const v = await bootApp();
+  await v.sendField();
+  click(tabButton(v.container, 'Course'));
+  await settle(30);
+
+  assert('the plan strip is on the race screen',
+    $(v.container, '.race-strip .now-view') !== null);
+  assert('so is the track map',
+    $(v.container, '.telem-3col-map .track-map') !== null);
+  assert('so is the selected car',
+    $(v.container, '.telem-3col-data') !== null);
+  assert('and there is no separate telemetry tab left to switch to',
+    tabButton(v.container, 'Télémétrie') === undefined);
+
+  assert('and so is the field, on the same screen',
+    $(v.container, '.telem-3col-lb .lb-row') !== null);
+
+  // Folding the field away is a layout change, and the strip must not be
+  // part of it — it is the one thing on this screen that is always wanted.
+  click($$(v.container, '.advanced-lan-toggle')[0]);
+  await settle(30);
+  assert('folding the field away leaves the strip alone',
+    $(v.container, '.telem-3col-lb') === null
+    && $(v.container, '.race-strip .now-view') !== null
+    && $(v.container, '.telem-3col-map .track-map') !== null);
+  v.unmount();
+}
+
+section('the race screen does not hide anything behind a scroll');
+{
+  // jsdom has no layout engine, so this cannot assert pixel heights. What it
+  // CAN hold is the structure the fit depends on: the setup panel out of the
+  // flow and into the header, no utility row between the plan and the field,
+  // and the folded leaderboard costing width rather than a row of height.
+  const v = await bootApp();
+  await v.sendField();
+  click(tabButton(v.container, 'Course'));
+  await settle(30);
+
+  assert('connections lives in the header, not between the plan and the field',
+    $(v.container, '.app-header .header-telem .tc-panel') !== null);
+  assert('and nothing of it is left in the race screen',
+    $(v.container, '.tab-content--race .tc-panel') === null);
+  assert('the utility row is gone entirely',
+    $(v.container, '.race-util') === null);
+
+  // Opening it must not push the layout down, so it renders as its own
+  // absolutely-positioned body rather than as a block in the header row.
+  click($(v.container, '.header-telem .tc-collapse-btn'));
+  await settle(30);
+  assert('opening it produces a detached panel body',
+    $(v.container, '.header-telem .tc-body') !== null);
+  click($(v.container, '.header-telem .tc-collapse-btn'));
+  await settle(30);
+
+  // Folding the field away leaves a rail, not a full-width bar.
+  assert('the field is showing to begin with', $(v.container, '.telem-3col-lb') !== null);
+  click($(v.container, '.telem-3col-lb .advanced-lan-toggle'));
+  await settle(30);
+  assert('folded, it is a rail beside the map',
+    $(v.container, '.lb-rail') !== null && $(v.container, '.telem-3col-lb') === null);
+  assert('and the rail brings it back',
+    (click($(v.container, '.lb-rail')), await settle(30), $(v.container, '.telem-3col-lb') !== null));
+  v.unmount();
+}
+
+section('the lights go out, and the notices forget the lobby');
+{
+  // The pit-stop notice is de-duplicated per car per LAP, and GT7's lap counter
+  // restarts with the race — which is what startRace's own comment says about
+  // the incident mark. A stop on lap 3 of the practice session must not silence
+  // the stop on lap 3 of the race: that notice is the one saying "confirm the
+  // tyre and the driver", and missing it leaves the stint log and the learner
+  // describing a tyre that is not on the car for the rest of the stint.
+  const v = await bootApp();
+  localStorage.setItem('gt7-my-team', IPS[0]);
+  await v.sendField();
+  click(tabButton(v.container, 'Course'));
+  await settle(30);
+
+  const boxOnLap = async (lap) => {
+    await act(async () => {
+      v.relay().deliver(packet(IPS[0], 0, { currentLap: lap, pitExit: true, speedKmh: 80 }));
+    });
+    await settle(60);
+  };
+  const notices = () => $$(v.container, '.toast').map((n) => n.textContent).join(' ~ ');
+
+  await boxOnLap(3);
+  assert('a stop in the lobby raises a notice',
+    $$(v.container, '.toast').length > 0, notices());
+
+  // Dismiss it, the way an engineer would after confirming the tyre.
+  const close = $(v.container, '.toast-close');
+  if (close) { click(close); await settle(30); }
+  assert('and it can be dismissed', $$(v.container, '.toast').length === 0, notices());
+
+  // The race starts. GT7's counter goes back to lap 1.
+  click($$(v.container, 'button').find((b) => /Start race|Démarrer la course/.test(b.textContent)));
+  await settle(30);
+  const card = $(v.container, '.dlg-card');
+  click($(card, '.dlg-btn--go'));
+  await act(async () => { await Promise.resolve(); });
+  await settle(60);
+
+  // The same lap number, a different race, a real stop.
+  await boxOnLap(3);
+  assert('the same lap number in the real race still raises one',
+    $$(v.container, '.toast').length > 0, notices());
+  v.unmount();
+}
+
+section('all three tabs render with a full field');
 {
   const v = await bootApp();
   await v.sendField();
-  for (const tab of ['Course', 'Stratégie', 'Télémétrie', 'Pilotes']) {
+  for (const tab of ['Course', 'Stratégie', 'Pilotes']) {
     click(tabButton(v.container, tab));
     await settle(30);
     assert(`the ${tab} tab renders without blowing up`,

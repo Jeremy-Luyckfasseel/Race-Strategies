@@ -330,6 +330,112 @@ section('Per-compound segmentation (Task 1.2) — two compounds, distinct curves
   assert('S stint ages stay within its life', Math.max(...sLaps.map((l) => l.stintAge)) < TRUTH_S.tireLife);
 }
 
+
+// ===========================================================================
+// Per-driver curves
+//
+// Two drivers on the same tyre differ by more than most of what else is
+// measured in this file, and the engine already lets a driver override the
+// global compound times. The only thing missing was knowing who drove each
+// lap. These assert the split is real: each driver's curve comes from their
+// own laps, and neither is the average of the two.
+// ===========================================================================
+
+// Ana is quick and easy on the tyre; Bo is slower and chews it.
+const DRIVER_A = { start: 119.0, half: 120.0, end: 121.5 };
+const DRIVER_B = { start: 122.0, half: 124.0, end: 127.5 };
+
+section('who drove the lap');
+{
+  const L = createLearner({ tankSize: TRUTH.tankSize, tireLife: TRUTH.tireLife, compoundId: 'M' });
+
+  // Two laps before anyone is named at the wheel.
+  L.ingest(frame(1, 60));
+  L.ingestAll(genStint(1, 60, 2, DRIVER_A, TRUTH.tireLife));
+  L.setDriver('ana');
+  L.ingestAll(genStint(3, 60 - 2 * TRUTH.litersPerLap, 4, DRIVER_A, TRUTH.tireLife));
+
+  const named = L._laps.filter((l) => l.driverId === 'ana');
+  const unnamed = L._laps.filter((l) => l.driverId === null);
+  assert('laps driven before a driver was named are not back-dated to them',
+    unnamed.length === 2, `${unnamed.length} unattributed`);
+  assert('and the laps after it are theirs', named.length === 4, `${named.length} attributed`);
+  assert('unattributed laps still count for the car',
+    L.getEstimates().compounds.M.sampleCount >= 4);
+}
+
+section('two drivers, one compound');
+{
+  const L = createLearner({ tankSize: TRUTH.tankSize, tireLife: TRUTH.tireLife, compoundId: 'M' });
+
+  // Ana: a light-fuel seed stint then a full-tank one. Two fuel ranges over
+  // overlapping tyre ages is what makes the (global) penalty identifiable.
+  L.setDriver('ana');
+  L.ingest(frame(1, 60));
+  L.ingestAll(genStint(1, 60, 16, DRIVER_A, TRUTH.tireLife));
+  L.ingest(frame(17, TRUTH.tankSize, null, { pitExit: true }));
+  L.ingestAll(genStint(17, TRUTH.tankSize, 28, DRIVER_A, TRUTH.tireLife));
+
+  // Bo takes over at the next stop, same tyre, same car.
+  L.ingest(frame(45, TRUTH.tankSize, null, { pitExit: true }));
+  L.setDriver('bo');
+  L.ingestAll(genStint(45, TRUTH.tankSize, 28, DRIVER_B, TRUTH.tireLife));
+
+  const e = L.getEstimates();
+  const A = e.byDriver.ana.M;
+  const B = e.byDriver.bo.M;
+
+  assert('each driver gets their own curve', !!A && !!B);
+  assert('both are confident after a full stint each',
+    A.confident === true && B.confident === true,
+    `ana=${A.sampleCount} laps, bo=${B.sampleCount} laps`);
+
+  // The point of the whole feature: the numbers are the drivers', not the car's.
+  assert("Ana's curve recovers Ana's pace",
+    Math.abs(A.deg.start - DRIVER_A.start) < TOL_TIGHT.lapTime
+    && Math.abs(A.deg.end - DRIVER_A.end) < TOL_TIGHT.lapTime,
+    JSON.stringify(A.deg));
+  assert("Bo's curve recovers Bo's pace",
+    Math.abs(B.deg.start - DRIVER_B.start) < TOL_TIGHT.lapTime
+    && Math.abs(B.deg.end - DRIVER_B.end) < TOL_TIGHT.lapTime,
+    JSON.stringify(B.deg));
+
+  // If either had been fitted over the whole car's laps they would both land
+  // near the middle, which is exactly the answer that helps nobody.
+  const mid = (DRIVER_A.end + DRIVER_B.end) / 2;
+  assert('neither is the average of the two',
+    Math.abs(A.deg.end - mid) > 1 && Math.abs(B.deg.end - mid) > 1,
+    `A.end=${A.deg.end.toFixed(2)} B.end=${B.deg.end.toFixed(2)} mid=${mid}`);
+
+  assert('a driver is separated by more than the tolerance that measures them',
+    B.deg.end - A.deg.end > 4, `${(B.deg.end - A.deg.end).toFixed(2)}s apart`);
+
+  // The car's own curve still exists and still uses everything.
+  assert('the global compound curve still sees every lap',
+    e.compounds.M.sampleCount > A.sampleCount && e.compounds.M.sampleCount > B.sampleCount,
+    `global=${e.compounds.M.sampleCount} ana=${A.sampleCount} bo=${B.sampleCount}`);
+}
+
+section('a driver who has barely driven proposes nothing');
+{
+  const L = createLearner({ tankSize: TRUTH.tankSize, tireLife: TRUTH.tireLife, compoundId: 'M' });
+  L.setDriver('ana');
+  L.ingest(frame(1, 60));
+  L.ingestAll(genStint(1, 60, 16, DRIVER_A, TRUTH.tireLife));
+  L.ingest(frame(17, TRUTH.tankSize, null, { pitExit: true }));
+  L.ingestAll(genStint(17, TRUTH.tankSize, 28, DRIVER_A, TRUTH.tireLife));
+
+  // Bo does three laps and hands back — nowhere near a curve.
+  L.ingest(frame(45, TRUTH.tankSize, null, { pitExit: true }));
+  L.setDriver('bo');
+  L.ingestAll(genStint(45, TRUTH.tankSize, 3, DRIVER_B, TRUTH.tireLife));
+
+  const e = L.getEstimates();
+  assert('the driver with a full stint is confident', e.byDriver.ana.M.confident === true);
+  assert('the one with three laps is not', e.byDriver.bo.M.confident === false,
+    `${e.byDriver.bo.M.sampleCount} laps`);
+}
+
 // ===========================================================================
 // Summary
 // ===========================================================================
