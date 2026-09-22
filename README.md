@@ -298,6 +298,33 @@ npm install
 npm run dev        # → http://localhost:5173
 ```
 
+A full pit wall is **three terminals**:
+
+```bash
+npm run telemetry   # 1 — the UDP → WebSocket relay (talks to the PS5s)
+npm run dev         # 2 — the app
+npm run demo        # 3 — ten fake PS5s, when there is no hardware in the room
+```
+
+All three can stay running while `npm test` does: the relay suite uses its own
+ports and its own loopback addresses so it never collides with a live session.
+
+### Moving to another machine
+
+The **code** travels through git. Your **setup does not** — team names, PS5
+addresses, the starred car, the stint log, the recorded track map and everything
+the learner has measured all live in that browser's `localStorage`, on that
+computer.
+
+Use the app's own buttons:
+
+1. **SAVE** in the header writes a `.json` snapshot of the whole session.
+2. Copy it across, then **RESTORE** on the other machine.
+
+That covers the setup, the race clock, the team names and colours, the tyre
+selections, the stint log, the safety-car roles, the PS5 list and the circuit
+map. Do it before travelling to an event, not after.
+
 ### All commands
 
 | Command | Description |
@@ -305,9 +332,10 @@ npm run dev        # → http://localhost:5173
 | `npm run dev` | Dev server at `http://localhost:5173` |
 | `npm run build` | Production build → `/dist` |
 | `npm run preview` | Preview the production build |
-| `npm test` | Full test suite — 2 407 assertions |
+| `npm test` | All 42 suites — ~2 990 assertions. Judge it by the **exit code**. |
 | `npm run test:smoke` | Quick 1-hour race smoke test |
 | `npm run telemetry` | Start the UDP → WebSocket relay server |
+| `npm run demo` | Ten simulated PS5s, for testing with no console attached |
 
 <br><br>
 

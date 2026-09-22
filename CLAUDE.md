@@ -15,7 +15,7 @@ npm run dev          # Start dev server at http://localhost:5173
 npm run build        # Production build to /dist
 npm run lint         # ESLint (flat config)
 npm run preview      # Preview production build locally
-npm test             # Full test suite (~129 tests)
+npm test             # All 42 suites (~2 990 assertions). Judge by EXIT CODE, not output.
 npm run test:smoke   # Quick 1-hour race smoke test
 npm run telemetry    # Start UDP→WebSocket relay server (separate process)
 
@@ -152,10 +152,10 @@ instead.
 | `src/components/TelemetryControls.jsx` | Collapsible panel: server URL + connect/disconnect, PS5 IP list management, network scan button and results |
 | `src/components/TelemetryLeaderboard.jsx` | Multi-team table sorted by race position: lap/gap, last/best lap times, compound picker, fuel bar, pit/track status |
 | `src/components/DriversTab.jsx` | Pilotes tab: per-driver total drive time vs. `minDriverTimeSecs`, and a per-stint log (driver, tyre, laps, duration, avg/best/worst lap) for the selected team, including the in-progress stint |
-| `src/index.css` | Global dark racing theme (gold accent `#FFD700`; CSS vars for all colors) |
+| `src/index.css` | The whole theme, as CSS vars on `:root`. Accent is **racing red `#E4002B`**, not gold — the app moved off purple-and-gold long ago and this line said otherwise for months. The intent behind the look, and the rules that came from getting it wrong, are in `docs/DESIGN.md`; read the live `--accent` / `--bg-*` values here before styling anything |
 | `server/telemetry-server.js` | Node.js UDP relay: receives Salsa20-encrypted GT7 packets on port 33740, relays to browser via WebSocket on port 20777; supports LAN scan for PS5s and DNS hostname resolution |
 | `tests/test.js` | Smoke test (1h race) |
-| `tests/test_comprehensive.js` | Full test suite (~129 tests) |
+| `tests/test_comprehensive.js` | The engine's own suite (~142 assertions). The full list of all 42 suites, and what each one guards, is in `docs/CURRENT_STATE.md` §2 |
 
 ## Telemetry server
 
@@ -192,7 +192,8 @@ instead.
 
 These are the locked guardrails for the current build. They override convenience.
 The full rationale lives in `docs/DECISIONS.md` (source of truth); the live module
-map is `docs/CURRENT_STATE.md`; the task checklist is `docs/BACKLOG.md`.
+map is `docs/CURRENT_STATE.md`; the task checklist is `docs/BACKLOG.md`; the look
+and the rules behind it are `docs/DESIGN.md`.
 
 ### Locked MVP scope
 
