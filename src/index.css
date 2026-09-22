@@ -5216,3 +5216,21 @@ input[type="range"]::-moz-range-thumb {
   padding-top: 12px;
   border-top: 1px solid var(--rule);
 }
+
+/* The driver on a logged stint is editable, because the tap that names it at
+   the stop is the one most likely to be missed. It reads as text until you
+   reach for it — a table of dropdowns is harder to scan than a table. */
+.stint-driver-pick {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: inherit;
+  padding: 2px 4px;
+  cursor: pointer;
+  max-width: 11ch;
+}
+.stint-driver-pick:hover,
+.stint-driver-pick:focus { border-color: var(--rule-bright, var(--text-muted)); }
+.stint-driver-pick.is-unset { color: var(--text-ghost, var(--text-muted)); font-style: italic; }

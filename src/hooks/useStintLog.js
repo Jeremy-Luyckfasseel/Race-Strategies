@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { emptyEntry, openStint, closeStint, reopenStint, recordLapIfClean, setCompound, assignDriver as assignDriverPure } from '../logic/stintLog';
+import { emptyEntry, openStint, closeStint, reopenStint, recordLapIfClean, setCompound, assignDriver as assignDriverPure, assignDriverAt as assignDriverAtPure, stintLapRange } from '../logic/stintLog';
 
 const STORAGE_KEY = 'gt7-stint-log';
 
@@ -128,6 +128,24 @@ export function useStintLog(teams, teamCompounds, drivers, ownIp = null) {
     if (pendingChanged) setPendingDriverIps(new Set(pendingRef.current));
   }, [teams, teamCompounds, drivers, ownIp, getEntry]);
 
+  /**
+   * Name a stint that has already happened.
+   *
+   * Returns the lap range that moved, so the caller can hand the same laps to
+   * the learner: relabelling the log alone would leave that driver's measured
+   * pace and fuel exactly as wrong as before, while the Pilotes table claimed
+   * otherwise.
+   */
+  const assignDriverAt = useCallback((ip, index, driverId, currentLap = null) => {
+    const entry = getEntry(ip);
+    const next = assignDriverAtPure(entry, index, driverId);
+    if (next === entry) return null;
+    storeRef.current.set(ip, next);
+    saveStore(storeRef.current);
+    setLogs(new Map(storeRef.current));
+    return stintLapRange(entry, index, currentLap);
+  }, [getEntry]);
+
   const assignDriver = useCallback((ip, driverId) => {
     storeRef.current.set(ip, assignDriverPure(getEntry(ip), driverId));
     pendingRef.current.delete(ip);
@@ -147,5 +165,5 @@ export function useStintLog(teams, teamCompounds, drivers, ownIp = null) {
     setLogs(new Map(storeRef.current));
   }, []);
 
-  return { logs, pendingDriverIps, assignDriver, resetAll };
+  return { logs, pendingDriverIps, assignDriver, assignDriverAt, resetAll };
 }

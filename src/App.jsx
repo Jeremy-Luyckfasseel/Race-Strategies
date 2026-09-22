@@ -1398,6 +1398,16 @@ export default function App() {
                 activeIp={strategyIp}
                 onReset={stintLog.resetAll}
                 onGoToTelemetry={() => setActiveTab("race")}
+                /* Naming a stint after the fact has to move its LAPS as well
+                   as its label: the pace curves and the burn rate are fitted
+                   from those lap records, so relabelling the log alone would
+                   leave that driver's measurements exactly as wrong as before
+                   while this table claimed otherwise. */
+                onAssignDriver={(index, driverId) => {
+                  const myLapNow = strategyIp ? (telem.teams.get(strategyIp)?.currentLap ?? null) : null;
+                  const range = stintLog.assignDriverAt(strategyIp, index, driverId, myLapNow);
+                  if (range) learner.reassignDriver(range.fromLap, range.toLap, driverId);
+                }}
                 lang={lang}
               />
             </div>

@@ -307,6 +307,8 @@ export default {
 
   // ── StintTable ──
   st_title: 'Stint Plan',
+  st_unassigned: 'not set',
+  st_reassign_title: 'Change who drove this stint. Its laps move to them, including what they taught the app about pace and fuel.',
   st_driver: 'Driver',
   st_start: 'Start',
   st_end: 'End',

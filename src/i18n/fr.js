@@ -301,6 +301,8 @@ export default {
 
   // ── StintTable ──
   st_title: 'Plan de Relais',
+  st_unassigned: 'non défini',
+  st_reassign_title: "Changer qui a piloté ce relais. Ses tours lui sont transférés, y compris ce qu'ils ont appris à l'app sur le rythme et la consommation.",
   st_driver: 'Pilote',
   st_start: 'Début',
   st_end: 'Fin',

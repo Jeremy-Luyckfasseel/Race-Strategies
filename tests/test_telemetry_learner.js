@@ -345,6 +345,87 @@ section('Per-compound segmentation (Task 1.2) — two compounds, distinct curves
 const DRIVER_A = { start: 119.0, half: 120.0, end: 121.5 };
 const DRIVER_B = { start: 122.0, half: 124.0, end: 127.5 };
 
+/** Noise-free lap frames for one driver's stint on the medium. */
+function stintFor(startLapNumber, Fi, nLaps, spec) {
+  return genStint(startLapNumber, Fi, nLaps, spec, TRUTH.tireLife);
+}
+
+section('naming a stint after the fact moves its measurements');
+{
+  // The tap that names the driver at the stop is the one most likely to be
+  // missed. Correcting it later has to move the LAPS, not just the label —
+  // otherwise that driver's pace and fuel stay exactly as wrong as before
+  // while the Pilotes table claims they have been fixed.
+  const L = createLearner({ tankSize: TRUTH.tankSize, tireLife: TRUTH.tireLife, compoundId: 'M' });
+
+  // Ana's stint is recorded properly.
+  L.setDriver('ana');
+  L.ingest(frame(1, 60));
+  L.ingestAll(stintFor(1, 60, 16, DRIVER_A));
+  L.ingest(frame(17, TRUTH.tankSize, null, { pitExit: true }));
+  L.ingestAll(stintFor(17, TRUTH.tankSize, 28, DRIVER_A));
+
+  // Bo gets in, and nobody taps the picker. Bo's laps land under nobody.
+  L.ingest(frame(45, TRUTH.tankSize, null, { pitExit: true }));
+  L.setDriver(null);
+  L.ingestAll(stintFor(45, TRUTH.tankSize, 28, DRIVER_B));
+
+  const before = L.getEstimates();
+  assert('the unnamed stint belongs to no driver',
+    before.byDriver.bo === undefined, JSON.stringify(Object.keys(before.byDriver)));
+  assert('and its laps are sitting unattributed',
+    L._laps.filter((l) => l.driverId === null).length === 28,
+    String(L._laps.filter((l) => l.driverId === null).length));
+
+  // The engineer notices and fixes it on the Pilotes tab. The range comes from
+  // the stint log, which records the game's lap at pit exit and pit entry — so
+  // it is derived here rather than hardcoded, because a lap is recorded when
+  // the NEXT one starts and encoding that off-by-one as if it were a spec is
+  // how a fixture starts lying.
+  const orphaned = L._laps.filter((l) => l.driverId === null).map((l) => l.lapNum);
+  const moved = L.reassignDriver(Math.min(...orphaned), Math.max(...orphaned), 'bo');
+  assert('every lap of that stint moves', moved === orphaned.length, `${moved} of ${orphaned.length}`);
+  assert('and none are left unattributed',
+    L._laps.filter((l) => l.driverId === null).length === 0);
+
+  const after = L.getEstimates();
+  assert('Bo now has a curve at all', !!after.byDriver.bo);
+  assert('and it is the pace BO actually drove, not the car average',
+    Math.abs(after.byDriver.bo.M.deg.end - DRIVER_B.end) < TOL_TIGHT.lapTime,
+    JSON.stringify(after.byDriver.bo.M.deg));
+  assert('Ana is untouched by it',
+    Math.abs(after.byDriver.ana.M.deg.end - before.byDriver.ana.M.deg.end) < 1e-9);
+
+  // And the fuel followed the laps, which is the half that is easy to forget.
+  assert('Bo also has a measured burn rate now',
+    after.fuelByDriver.bo && after.fuelByDriver.bo.litersPerLap > 0,
+    JSON.stringify(after.fuelByDriver.bo));
+  assert('and it is the real burn, not zero or a guess',
+    Math.abs(after.fuelByDriver.bo.litersPerLap - TRUTH.litersPerLap) < 0.05,
+    String(after.fuelByDriver.bo?.litersPerLap));
+
+  // Nonsense ranges move nothing rather than throwing.
+  assert('a backwards range moves nothing', L.reassignDriver(80, 10, 'ana') === 0);
+  assert('and a range with no laps in it moves nothing',
+    L.reassignDriver(500, 600, 'ana') === 0);
+}
+
+section('fuel is measured per driver, not just pooled');
+{
+  const L = createLearner({ tankSize: TRUTH.tankSize, tireLife: TRUTH.tireLife, compoundId: 'M' });
+  L.setDriver('ana');
+  L.ingest(frame(1, TRUTH.tankSize));
+  L.ingestAll(stintFor(1, TRUTH.tankSize, 20, DRIVER_A));
+
+  const e = L.getEstimates();
+  assert('the car still has one overall burn rate', e.litersPerLap > 0);
+  assert('and the driver has their own', e.fuelByDriver.ana.litersPerLap > 0);
+  assert('measured from the same tank deltas',
+    Math.abs(e.fuelByDriver.ana.litersPerLap - TRUTH.litersPerLap) < 0.05,
+    String(e.fuelByDriver.ana.litersPerLap));
+  assert('a driver nobody has seen has no figure', e.fuelByDriver.bo === undefined);
+}
+
 section('who drove the lap');
 {
   const L = createLearner({ tankSize: TRUTH.tankSize, tireLife: TRUTH.tireLife, compoundId: 'M' });

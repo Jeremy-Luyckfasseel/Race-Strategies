@@ -128,6 +128,20 @@ export function useTelemetryLearner({ activeIp, data, inputs, confirmedCompoundI
     [estimates, inputs, dismissed]
   );
 
+  /**
+   * Hand a range of already-measured laps to a driver.
+   *
+   * Recomputes immediately rather than waiting for the next lap: the correction
+   * was made because the screen was wrong, and leaving it wrong for another two
+   * minutes is the same bug with a timer on it.
+   */
+  const reassignDriver = useCallback((fromLap, toLap, driverId) => {
+    if (!learner) return 0;
+    const moved = learner.reassignDriver(fromLap, toLap, driverId);
+    if (moved > 0) setEstimates(learner.getEstimates());
+    return moved;
+  }, [learner]);
+
   const ignore = useCallback((rec) => {
     setDismissed((prev) => ({ ...prev, [rec.key]: dismissSnapshot(rec) }));
   }, []);
@@ -142,5 +156,5 @@ export function useTelemetryLearner({ activeIp, data, inputs, confirmedCompoundI
     });
   }, []);
 
-  return { estimates, recommendations, ignore, clearDismiss };
+  return { estimates, recommendations, ignore, clearDismiss, reassignDriver };
 }
