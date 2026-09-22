@@ -37,6 +37,7 @@ sync-data/
 # Cygwin/MSYS crash dumps from the bundled bash
 *.stackdump
 
-# Race snapshots. See saves/README.md — the repo is public and a snapshot
-# carries driver names, a LAN address and your race setup.
+# Race snapshots. This repo is PUBLIC and a snapshot carries driver names,
+# a LAN address and the race setup (tyre lives and lap times). Carry them
+# between machines by hand, not through git. See saves/README.md.
 saves/*.json
