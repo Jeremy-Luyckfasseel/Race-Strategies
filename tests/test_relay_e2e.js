@@ -190,7 +190,16 @@ async function main() {
   };
 
   try {
-    await sleep(1200);
+    // Poll for the startup banner rather than sleeping a fixed 1200 ms and
+    // hoping. The relay comes up in well under that on an idle machine, but on
+    // a busy one the lines had not reached our stdout buffer yet — so the two
+    // "is it up" assertions failed while every later assertion in the file
+    // passed, which is a confusing way to say "your timer was too short".
+    for (let waited = 0; waited < 8000; waited += 100) {
+      if (/UDP listening on/.test(serverOut) && /WebSocket server ready/.test(serverOut)) break;
+      if (proc.exitCode !== null) break;
+      await sleep(100);
+    }
     if (/EADDRINUSE/.test(serverOut)) {
       console.error('\n  ! ports ' + UDP + '/' + WS + ' are already in use — something else');
       console.error('    is on the ports this suite reserves for itself. Stop it and re-run.\n');
