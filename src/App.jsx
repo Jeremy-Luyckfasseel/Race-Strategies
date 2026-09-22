@@ -39,7 +39,7 @@ import {
   INPUTS_KEY, buildSnapshot, validateSnapshot, applySnapshot, clearRace,
   loadInputs, snapshotFilename,
 } from "./logic/racePersistence";
-import { LANGS, LANG_KEY, loadLang, t, compoundSequence } from "./i18n/strings";
+import { LANGS, LANG_KEY, loadLang, t, compoundName, compoundSequence } from "./i18n/strings";
 
 const DEFAULT_INPUTS = {
   raceDurationHours: 8,
@@ -773,7 +773,15 @@ export default function App() {
         key: `rec:${rec.key}`,
         kind: 'info',
         title: t("toast_measured", lang, {
-          what: rec.labelKey ? t(rec.labelKey, lang, { ...(rec.labelVars || {}), compound: rec.compoundId ?? '' }) : rec.label,
+          // Through compoundName, like the card that says the same thing:
+          // interpolating the raw id put "S lap times" on the notice, and in
+          // French an untranslated single letter where a word belongs.
+          what: rec.labelKey
+            ? t(rec.labelKey, lang, {
+                ...(rec.labelVars || {}),
+                compound: compoundName(rec.compoundId, lang) || rec.compoundId || '',
+              })
+            : rec.label,
         }),
         detail: t("toast_measured_detail", lang, {
           measured: Array.isArray(rec.measured) ? rec.measured[0] : rec.measured,

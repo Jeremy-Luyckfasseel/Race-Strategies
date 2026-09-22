@@ -43,16 +43,25 @@ App.jsx  (state: inputs, selectedIndex, telemSelectedIp, activeTab, teamLabels, 
   ├── useStrategy hook      → calls findBestStrategies(inputs); debounced; returns sorted array
   ├── useTelemetry hook     → WebSocket to relay server; multi-team Map<ip, packet>; scan support
   ├── useCompoundDetector   → watches pitExit flag; prompts user to confirm tire compound
-  ├── [Strategy tab]
+  ├── useToasts             → notices for what happened while you looked elsewhere
+  ├── [Stratégie tab]  (the only tab with the setup sidebar)
   │     ├── ResultsSummary  → KPI strip, driver summary, top-6 strategy comparison cards
   │     ├── StrategyTimeline → the race as one bar: stint segments, pit marks, windows
   │     └── StintTable      → lap-by-lap stint detail for selected strategy
-  └── [Télémétrie tab]
-        ├── TelemetryControls   → server URL field, PS5 IP list, network scan button
-        ├── TelemetryLeaderboard → multi-team table: pos, lap, gap, times, compound, fuel, status
-        └── LiveDashboard       → single-team widget: speed/gear, RPM/pedals/fuel bars,
-                                   tire temps/wear, compound picker, SVG track map with car dots
+  ├── [Course tab]  (the in-race screen, and the default landing)
+  │     ├── NowView         → the plan strip: clock, stint, laps left, the next call,
+  │     │                     and what a stop THIS lap would do to the race
+  │     ├── TelemetryLeaderboard → multi-team table: pos, lap, gap, times, compound, fuel
+  │     ├── TrackMap        → the circuit, recorded from every car, with lapped-car marks
+  │     └── LiveDashboard   → the selected car: speed/gear, RPM/pedals/fuel bars,
+  │                           tyre temps, compound + driver pickers, fuel intel, incident
+  └── [Pilotes tab]
+        └── DriversTab      → per-driver drive time vs. the minimum, and the stint log
 ```
+
+`TelemetryControls` (relay URL, PS5 list, LAN scan) hangs off the **header** as a
+dropdown rather than living in a tab: it is setup, needed about twice a weekend,
+and in the flow it cost a row of the one screen that has to show everything.
 
 State lives only in `App.jsx` — no Redux, no Context.
 
@@ -98,7 +107,7 @@ several cars connected, both resolve to `null` rather than guessing
 
 ### Live driver assignment (telemetry side)
 
-This is separate from the planner's `planDriverAssignment` above — it is manual, not computed. In the Télémétrie tab, `LiveDashboard` shows a driver picker (from `inputs.drivers`) alongside the existing compound picker; both are prompted together in one banner when a pit stop finishes (`pendingDriver` from `useStintLog`, `pendingConfirmation` from `useCompoundDetector`). Picking a driver calls `useStintLog`'s `assignDriver(ip, driverId)`, which only labels the stint that's already running — it has no effect on the strategy planner's stint lengths or ranking. The Pilotes tab (`DriversTab.jsx`) reads the resulting log to show each driver's total time against `minDriverTimeSecs` and a per-stint table (duration, tyre, avg/best/worst lap); see `stintLog.js`/`useStintLog.js` above.
+This is separate from the planner's `planDriverAssignment` above — it is manual, not computed. On the Course tab, `LiveDashboard` shows a driver picker (from `inputs.drivers`) alongside the existing compound picker; both are prompted together in one banner when a pit stop finishes (`pendingDriver` from `useStintLog`, `pendingConfirmation` from `useCompoundDetector`). Picking a driver calls `useStintLog`'s `assignDriver(ip, driverId)`, which only labels the stint that's already running — it has no effect on the strategy planner's stint lengths or ranking. The Pilotes tab (`DriversTab.jsx`) reads the resulting log to show each driver's total time against `minDriverTimeSecs` and a per-stint table (duration, tyre, avg/best/worst lap); see `stintLog.js`/`useStintLog.js` above.
 
 ### ESLint config note
 
@@ -106,13 +115,14 @@ The `no-unused-vars` rule ignores variables whose names start with an uppercase 
 
 `tests/`, `scripts/` and `server/` get `globals.node`, since they run under node rather than in a browser. Without that block every one of them reported `process`, `Buffer` and `console` as undefined — about sixty false errors that buried the real ones.
 
-**Lint is at zero errors and CI fails on any new one**, so keep it there. Three `react-hooks/exhaustive-deps` warnings remain and are deliberate. Three
-`eslint-disable` lines live in `src/` and each carries its reasoning on the line
-above it: two `exhaustive-deps` suppressions for deliberately mount-only or
-single-dependency effects (`App.jsx`, `TelemetryControls.jsx`). The third, in
+**Lint is at zero errors and CI fails on any new one**, so keep it there. Three `react-hooks/exhaustive-deps` warnings remain and are deliberate. **Two**
+`eslint-disable` lines live in `src/`, each carrying its reasoning on the line
+above it: `exhaustive-deps` suppressions for deliberately mount-only or
+single-dependency effects (`App.jsx`, `TelemetryControls.jsx`). A third, in
 `useTelemetryLearner.js`, was removed — it became an unused-directive warning of
-its own once that effect gained a `try` block, and its reasoning is left there as
-a plain comment. If you add one, justify it the same way or fix the code instead.
+its own once that effect gained a `try` block — and its reasoning is left there
+as a plain comment. If you add one, justify it the same way or fix the code
+instead.
 
 ## Key files
 
@@ -133,7 +143,7 @@ a plain comment. If you add one, justify it the same way or fix the code instead
 | `src/hooks/useCompoundDetector.js` | Watches `data.pitExit` per team; returns `pendingIps` Set + `confirmCompound(ip)` / `stopDetecting(ip)` |
 | `src/hooks/useTrackMap.js` | Records the circuit from **every connected car**, not one. Points dedup into a 3 m grid, so ten cars on the same line cost nothing over one — they only add cells where the lines differ, which gives the track its real width and completes it ~10× faster (the whole value of a lobby session before the race). Per-car recording state lives in `map.cars`; the grid, segments and bounds are shared, and each car extends **its own** segment — appending to whichever segment was last welds two cars' traces into one stroke. Only `strategyIp`'s pit entry fires `onPitEntry`. Covered by `tests/test_ui_trackmap_record.js` |
 | `src/hooks/useStintLog.js` | Thin adapter over `stintLog.js`: opens a stint on pit exit (driver left `null` until `assignDriver(ip, driverId)` is called), closes it on the next pit entry, persists to `localStorage` (`gt7-stint-log`); returns `{ logs, pendingDriverIps, assignDriver, resetAll }` |
-| `src/App.jsx` | Root component; owns all state; two-tab UI (Strategy / Télémétrie); wires telemetry→strategy autofill |
+| `src/App.jsx` | Root component; owns all state; three-tab UI (Stratégie / Course / Pilotes, landing on Course); derives `engineInputs` from the race clock and the ★ car; raises the toasts |
 | `src/components/InputPanel.jsx` | Full sidebar form: car presets, race settings, pit timings, fuel, tire compounds, mid-race mode, drivers, live telemetry |
 | `src/components/ResultsSummary.jsx` | KPI cards + driver summary chips + strategy comparison grid (top-6, expandable) |
 | `src/components/StrategyTimeline.jsx` | The race as one horizontal bar — a segment per stint sized by its share of the laps, pit marks, pit-window shading, compound colours. Plain CSS percentages: no chart library, no measurement, so `tests/test_ui_timeline.js` can assert on it. It replaced a Recharts chart that rendered **no bars at all** under Recharts 3 (every rectangle came back `width: 0`) while its axes and tooltip still worked — which is why that test exists |
