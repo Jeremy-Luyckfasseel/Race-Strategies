@@ -811,78 +811,32 @@ export default function LiveDashboard({
               </div>
             )}
 
-            {/* "+10.2 L → 2 laps" reads as "that fill buys two laps". It does
-                not: the 2 is how long ago the stop was. Said in words, because
-                an arrow between two numbers will always be read as a rate. */}
-            {intel && intel.lastStopFuel != null && intel.lastStopStintLaps != null && (
-              <div className="ld-fuel-intel ld-fuel-intel--dim">
-                <span className="ld-fi-burn">{t('ld_last_stop', lang)}</span>
-                <span className="ld-fi-laps">
-                  {t('ld_took_on', lang, {
-                    n: intel.lastStopFuel.toFixed(1),
-                    laps: intel.lastStopStintLaps,
-                  })}
-                </span>
-              </div>
-            )}
 
-            <button className="ld-vitals-toggle" onClick={() => setShowVitals(v => !v)}>
-              {showVitals ? t('ld_hide_engine', lang) : t('ld_show_engine', lang)}
-            </button>
-            {showVitals && (
-              <div className="ld-vitals-chips">
-                {data.waterTemp != null && data.waterTemp !== 0 && (
-                  <div className="ld-chip">
-                    <span className="ld-chip-k">{t('ld_water', lang)}</span>
-                    <span className="ld-chip-v"
-                      style={{ color: data.waterTemp > 105 ? 'var(--danger)' : 'var(--text-primary)' }}>
-                      {data.waterTemp}°C
-                    </span>
-                  </div>
-                )}
-                {data.oilTemp != null && data.oilTemp !== 0 && (
-                  <div className="ld-chip">
-                    <span className="ld-chip-k">{t('ld_oil', lang)}</span>
-                    <span className="ld-chip-v"
-                      style={{ color: data.oilTemp > 135 ? 'var(--danger)' : 'var(--text-primary)' }}>
-                      {data.oilTemp}°C
-                    </span>
-                  </div>
-                )}
-                {data.boost != null && data.boost !== -1 && (
-                  <div className="ld-chip">
-                    <span className="ld-chip-k">{t('ld_boost', lang)}</span>
-                    <span className="ld-chip-v">
-                      {data.boost >= 0 ? '+' : ''}{data.boost?.toFixed(1)} bar
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
+            <div className="ld-times">
+              <div className="ld-time-row">
+                <span className="ld-time-lbl">{t('ld_last_lap', lang)}</span>
+                <span className="ld-time-val ld-mono">{formatMs(data.lastLapMs)}</span>
+              </div>
+              <div className="ld-time-row">
+                <span className="ld-time-lbl">{t('ld_best_lap', lang)}</span>
+                <span className="ld-time-val ld-mono ld-gold">{formatMs(data.bestLapMs)}</span>
+              </div>
+              {/* Next to the lap times, because that is where the eye already
+                  is when deciding whether this car is about to come in. */}
+              {boxInLaps != null && (
+                <div className="ld-time-row ld-box-row">
+                  <span className="ld-time-lbl">{t('ld_box_in', lang)}</span>
+                  <span className="ld-time-val ld-mono ld-box-val">
+                    {t('ld_box_in_laps', lang, { n: boxInLaps })}
+                    <span className="ld-dim"> {t('ld_box_on', lang, { lap: intel.pitLap })}</span>
+                  </span>
+                </div>
+              )}
+            </div>
+
           </div>
 
           <div className="ld-col">
-            <div className="ld-times">
-              <div className="ld-time-row">
-                <span className="ld-time-lbl">{t('ld_last_lap', lang)}</span>
-                <span className="ld-time-val ld-mono">{formatMs(data.lastLapMs)}</span>
-              </div>
-              <div className="ld-time-row">
-                <span className="ld-time-lbl">{t('ld_best_lap', lang)}</span>
-                <span className="ld-time-val ld-mono ld-gold">{formatMs(data.bestLapMs)}</span>
-              </div>
-              {/* Next to the lap times, because that is where the eye already
-                  is when deciding whether this car is about to come in. */}
-              {boxInLaps != null && (
-                <div className="ld-time-row ld-box-row">
-                  <span className="ld-time-lbl">{t('ld_box_in', lang)}</span>
-                  <span className="ld-time-val ld-mono ld-box-val">
-                    {t('ld_box_in_laps', lang, { n: boxInLaps })}
-                    <span className="ld-dim"> {t('ld_box_on', lang, { lap: intel.pitLap })}</span>
-                  </span>
-                </div>
-              )}
-            </div>
 
             {(data.tireTemp || compound || drivers?.length) && (
               <div className="ld-tire-section">
@@ -925,28 +879,82 @@ export default function LiveDashboard({
                     ))}
                   </div>
                 </div>
-                <TyreAge laps={tyreLaps} life={tyreLife} outlook={setOutlook} lang={lang} />
+                <TyreAge laps={tyreLaps} life={tyreLife} outlook={setOutlook} lang={lang} />
+
+            {/* "+10.2 L → 2 laps" reads as "that fill buys two laps". It does
+                not: the 2 is how long ago the stop was. Said in words, because
+                an arrow between two numbers will always be read as a rate. */}
+            {intel && intel.lastStopFuel != null && intel.lastStopStintLaps != null && (
+              <div className="ld-fuel-intel ld-fuel-intel--dim">
+                <span className="ld-fi-burn">{t('ld_last_stop', lang)}</span>
+                <span className="ld-fi-laps">
+                  {t('ld_took_on', lang, {
+                    n: intel.lastStopFuel.toFixed(1),
+                    laps: intel.lastStopStintLaps,
+                  })}
+                </span>
+              </div>
+            )}
 
-                <div className="tw-grid">
-                  <div className="tw-cell tw-fl">
-                    <TireCorner temp={data.tireTemp?.[0]} pos="FL" />
-                  </div>
-                  <div className="tw-center"><CarTopDown /></div>
-                  <div className="tw-cell tw-fr">
-                    <TireCorner temp={data.tireTemp?.[1]} pos="FR" />
-                  </div>
-                  <div className="tw-cell tw-rl">
-                    <TireCorner temp={data.tireTemp?.[2]} pos="RL" />
-                  </div>
-                  <div className="tw-center-gap" />
-                  <div className="tw-cell tw-rr">
-                    <TireCorner temp={data.tireTemp?.[3]} pos="RR" />
-                  </div>
-                </div>
               </div>
             )}
           </div>
         </div>
+
+        {/* Its own group: the four corners are read as a set, and squeezing
+            them into a column beside the pickers made them a footnote. */}
+        <div className="tw-grid">
+          <div className="tw-cell tw-fl">
+            <TireCorner temp={data.tireTemp?.[0]} pos="FL" />
+          </div>
+          <div className="tw-center"><CarTopDown /></div>
+          <div className="tw-cell tw-fr">
+            <TireCorner temp={data.tireTemp?.[1]} pos="FR" />
+          </div>
+          <div className="tw-cell tw-rl">
+            <TireCorner temp={data.tireTemp?.[2]} pos="RL" />
+          </div>
+          <div className="tw-center-gap" />
+          <div className="tw-cell tw-rr">
+            <TireCorner temp={data.tireTemp?.[3]} pos="RR" />
+          </div>
+        </div>
+
+        {/* Water, oil and boost. Car health rather than a decision, so it sits
+            at the foot of the panel, collapsed, costing a row until opened. */}
+        <button className="ld-vitals-toggle" onClick={() => setShowVitals(v => !v)}>
+          {showVitals ? t('ld_hide_engine', lang) : t('ld_show_engine', lang)}
+        </button>
+        {showVitals && (
+          <div className="ld-vitals-chips">
+            {data.waterTemp != null && data.waterTemp !== 0 && (
+              <div className="ld-chip">
+                <span className="ld-chip-k">{t('ld_water', lang)}</span>
+                <span className="ld-chip-v"
+                  style={{ color: data.waterTemp > 105 ? 'var(--danger)' : 'var(--text-primary)' }}>
+                  {data.waterTemp}°C
+                </span>
+              </div>
+            )}
+            {data.oilTemp != null && data.oilTemp !== 0 && (
+              <div className="ld-chip">
+                <span className="ld-chip-k">{t('ld_oil', lang)}</span>
+                <span className="ld-chip-v"
+                  style={{ color: data.oilTemp > 135 ? 'var(--danger)' : 'var(--text-primary)' }}>
+                  {data.oilTemp}°C
+                </span>
+              </div>
+            )}
+            {data.boost != null && data.boost !== -1 && (
+              <div className="ld-chip">
+                <span className="ld-chip-k">{t('ld_boost', lang)}</span>
+                <span className="ld-chip-v">
+                  {data.boost >= 0 ? '+' : ''}{data.boost?.toFixed(1)} bar
+                </span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
     </div>

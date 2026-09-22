@@ -1167,12 +1167,6 @@ export default function App() {
             };
             return (
             <div className="tab-content tab-content--race">
-              <LearnerRecommendations
-                recommendations={learner.recommendations}
-                onAccept={acceptRecommendation}
-                onIgnore={learner.ignore}
-                lang={lang}
-              />
               {/* The strip: the clock, the plan and the next call, across the
                   top of the screen the car is actually watched on. */}
               <div className="race-strip">
@@ -1302,6 +1296,19 @@ export default function App() {
                         <p>{t("app_no_selection", lang)}</p>
                       </div>
                     )}
+
+                    {/* Under the car rather than across the top of the screen.
+                        A measurement that disagrees with your setup is an offer
+                        to answer when you have a moment, not a call — and at the
+                        top it took a full-width band off the one screen that has
+                        to show everything, to say one sentence. The toast is
+                        what finds you; this is where you decide. */}
+                    <LearnerRecommendations
+                      recommendations={learner.recommendations}
+                      onAccept={acceptRecommendation}
+                      onIgnore={learner.ignore}
+                      lang={lang}
+                    />
                   </div>
                 </div>
               )}

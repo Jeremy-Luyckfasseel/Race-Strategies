@@ -5159,3 +5159,60 @@ input[type="range"]::-moz-range-thumb {
 }
 .race-strip .now-clock { gap: 16px; }
 .race-strip .now-clock-block--dim .now-clock-v { color: var(--text-secondary); }
+
+/* ---------------------------------------------------------------------------
+   The car panel, grouped by the question it answers
+
+   It used to be split by column rather than by meaning: "how much fuel did we
+   take on" sat under the pedals on the left while "what tyre is on it" sat on
+   the right, so answering one question from the driver meant scanning both
+   halves. Four groups now — the car, the pit stop and stint, the tyre
+   temperatures, and engine health — each with its own heading, so there is one
+   place to look.
+   --------------------------------------------------------------------------- */
+
+.telem-3col-data .ld-col {
+  position: relative;
+  padding-top: 16px;
+}
+/* A quiet heading per group, drawn from the column's own data attribute so the
+   markup stays two plain columns. */
+.telem-3col-data .ld-col::before {
+  content: "CAR";
+  position: absolute;
+  top: 0;
+  left: 2px;
+  font-family: var(--font-display);
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--rule);
+  width: calc(100% - 4px);
+}
+.telem-3col-data .ld-col + .ld-col::before { content: "PIT · STINT"; }
+
+/* The tyre corners are read as a set, so they get the full width under both
+   columns rather than being squeezed beside the pickers. */
+.telem-3col-data .tw-grid {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+}
+
+/* Engine health at the foot: a decision is never made from it, so it costs one
+   collapsed row until somebody wants it. */
+.telem-3col-data .ld-vitals-toggle {
+  width: 100%;
+  margin-top: 10px;
+  text-align: left;
+}
+
+/* The recommendation cards, now under the car instead of across the top. */
+.telem-3col-data .rec-panel,
+.telem-3col-data .learner-recs {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+}
