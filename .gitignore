@@ -36,3 +36,7 @@ sync-data/
 
 # Cygwin/MSYS crash dumps from the bundled bash
 *.stackdump
+
+# Race snapshots. See saves/README.md — the repo is public and a snapshot
+# carries driver names, a LAN address and your race setup.
+saves/*.json
