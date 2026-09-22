@@ -97,19 +97,33 @@ export default function NextStintFuel({
             <span className="ns-fuel ns-fuel--capped">
               {t('ns_brimmed', lang, { lap: (Number(currentLap) || 0) + fuel.lapsCovered })}
             </span>
+          ) : fuel.addL < 0.1 ? (
+            /* "Put in 0.0 L" is an instruction to do nothing, written as though
+               it were a measurement. Say what it means instead: the car is
+               already carrying the range this stint needs. */
+            <span className="ns-fuel ns-fuel--none">{t('ns_enough', lang)}</span>
           ) : (
             <span className="ns-fuel">{t('ns_fuel', lang, { n: fuel.addL.toFixed(1) })}</span>
           )}
 
-          {fuel.secs != null && !fuel.capped && (
+          {/* Under a second is not worth a line — and "0s of fuelling" beside
+              a litre figure reads as a broken number rather than a short fill. */}
+          {fuel.secs != null && !fuel.capped && fuel.secs >= 1 && (
             <span className="ns-dim">{t('ns_fuel_secs', lang, { n: fuel.secs.toFixed(0) })}</span>
           )}
 
           {/* Where the number came from. The same litres measured from 41 of
               their own laps and taken from a figure typed in last week are not
-              the same claim. */}
+              the same claim. The car's own rate only needs the "not measured
+              for THEM" caveat when there is a them — with nobody named it is
+              simply the rate, and the caveat was answering a question nobody
+              had asked. */}
           <span className="ns-dim">
-            {t(`ns_source_${rate.source}`, lang, { n: rate.litersPerLap.toFixed(2) })}
+            {t(
+              rate.source === 'car' && driverId ? 'ns_source_car_driver' : `ns_source_${rate.source}`,
+              lang,
+              { n: rate.litersPerLap.toFixed(2) },
+            )}
           </span>
         </div>
       )}

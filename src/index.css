@@ -5171,25 +5171,23 @@ input[type="range"]::-moz-range-thumb {
    place to look.
    --------------------------------------------------------------------------- */
 
-.telem-3col-data .ld-col {
-  position: relative;
-  padding-top: 16px;
-}
-/* A quiet heading per group, drawn from the column's own data attribute so the
-   markup stays two plain columns. */
+/* A quiet heading per group, in NORMAL FLOW rather than absolutely positioned.
+   Positioned, it depended on the column reserving padding for it — and the
+   side-by-side rule below sets `padding-top: 0` and outranks the rule that
+   added it, so the second column's heading sat straight on top of the DRIVER
+   row. A block element takes its own height and no other rule can take that
+   away. */
 .telem-3col-data .ld-col::before {
   content: "CAR";
-  position: absolute;
-  top: 0;
-  left: 2px;
+  display: block;
+  margin-bottom: 8px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--rule);
   font-family: var(--font-display);
   font-size: 0.55rem;
   font-weight: 700;
   letter-spacing: 0.14em;
   color: var(--text-muted);
-  padding-bottom: 3px;
-  border-bottom: 1px solid var(--rule);
-  width: calc(100% - 4px);
 }
 .telem-3col-data .ld-col + .ld-col::before { content: "PIT · STINT"; }
 
@@ -5279,3 +5277,70 @@ input[type="range"]::-moz-range-thumb {
 /* Brimmed and still short is a warning, not an instruction. */
 .ns-fuel--capped { font-size: 0.8rem; }
 .ns-dim { font-size: 0.68rem; color: var(--text-muted); }
+
+/* "Nothing to add" is not a number, so it does not get a number's weight. */
+.ns-fuel--none {
+  font-family: var(--font-display);
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+/* The block sits inside the pit card, so it must not repeat its inset. */
+.telem-3col-data .ns-block { margin-left: 0; margin-right: 0; }
+.ns-answer { line-height: 1.4; }
+
+/* ---------------------------------------------------------------------------
+   The car panel at narrow widths
+
+   The panel is `max(380px, 29vw)`, so on a 1280px screen it is 380px and each
+   of the two groups gets about 170. A driver row is a label plus three names
+   and needs nearer 190, so the content ran out of its column and over the
+   neighbouring one. Measured, not guessed: at 380px the rows reported 184px of
+   content in 156px of box.
+
+   Two answers, in order of preference. Let the rows wrap first — a picker that
+   goes to a second line is still readable. Then, when even that is not enough,
+   stop pretending there is room for two columns and stack them.
+   --------------------------------------------------------------------------- */
+
+.telem-3col-data .ld-tire-section-header,
+.telem-3col-data .ns-row {
+  flex-wrap: wrap;
+}
+/* Wrapped, the label stops reserving a fixed column of its own — otherwise it
+   holds width the buttons underneath it then cannot use. */
+.telem-3col-data .ns-k { flex: 0 0 auto; }
+
+/* The panel measures itself: a viewport media query would be guessing, because
+   the leaderboard beside it can be folded away and change this width without
+   the window moving at all. */
+.telem-3col-data { container-type: inline-size; }
+
+@container (max-width: 470px) {
+  /* Only the breathing room goes. The two columns stay: measured with the rows
+     wrapping, they fit at 380px with 4px to spare, and stacking them cost the
+     left/right grouping AND made the panel 274px too tall. */
+  .telem-3col-data .ld-body { gap: 0 8px; }
+  .telem-3col-data .ld-col + .ld-col { padding-left: 8px; }
+  .telem-3col-data .ld-times,
+  .telem-3col-data .tw-age,
+  .telem-3col-data .ld-tire-section-header { padding: 6px 7px; }
+  .telem-3col-data .ns-block { padding: 6px 7px; }
+  .telem-3col-data .ld-speed-val { font-size: 1.7rem; }
+  .telem-3col-data .ld-gear-val { font-size: 2rem; }
+
+  /* The four corners go to one row. Two rows of wide cells cost 132px of a
+     panel that is already 103px short, and the car-shaped 2x2 is a nicety —
+     being able to SEE the temperatures at all is not. */
+  .telem-3col-data .tw-grid {
+    grid-template-areas: "fl fr rl rr";
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: auto;
+    margin-top: 8px;
+    padding-top: 8px;
+  }
+  .telem-3col-data .tw-corner { padding: 4px 5px; }
+  .telem-3col-data .tw-corner .tw-temp { font-size: 0.82rem; }
+  .telem-3col-data .ns-block { margin-top: 6px; }
+  .telem-3col-data .ns-row { margin-top: 3px; }
+}
