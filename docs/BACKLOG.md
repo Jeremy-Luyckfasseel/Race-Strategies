@@ -12,13 +12,49 @@
 
 ---
 
+---
+
+## State as of 2026-09-22 (branch `fix/ui-pass`)
+
+Phases 1–3 are **built and covered by tests**; the rows below are marked
+accordingly. What changed since the phase plans were written, and is therefore
+not described by them:
+
+- **Three tabs, not four.** Télémétrie was merged into **Course**: the plan
+  strip across the top, the field, the map and the selected car underneath, all
+  on one screen with no scrolling. Reading the call on one tab and watching the
+  car obey it on another was the thing that made a second screen feel necessary.
+- **The race has an explicit start** (`raceClock.js`). The lobby is open for
+  hours and that driving is practice, so the plan follows the clock rather than
+  a duration someone retypes.
+- **The learner learns per driver**, and what it measures survives a reload.
+- **Racecraft** (`racecraft.js`): where a stop this lap puts you, whether an
+  undercut lands, what traffic you are about to reach.
+- **Conditions, safety car, incident, rival fuel intel, tyre history** — all
+  added, all pure, all tested.
+- **Toasts** for what happened while you were looking elsewhere.
+
+**Still genuinely open**, in the order I would do them:
+
+- [ ] **Run it against a real PS5.** Every check in this branch is against
+  `scripts/fake-field.mjs`. The relay's crypto and byte offsets are proven
+  end-to-end by `test_relay_e2e.js`; whether the *numbers* are plausible on real
+  hardware is not, and cannot be from here.
+- [ ] **Confirm the compound taps are being made.** GT7 sends no compound id, so
+  the stint log, the tyre history and the learner's per-compound curves are only
+  as right as the taps after each stop. This is the largest source of wrong data
+  in a real race, and no code change can close it.
+- [~] **Build the Electron installer** (`npm run dist` on Windows). Scaffolded,
+  never run.
+
+
 ## Already built — DO NOT REBUILD
 
 These exist in the current code. Verify before extending; never re-implement.
 
 - [done] **Strategy engine** — `findBestStrategies` enumerates/ranks all valid
   pit+compound strategies (`src/logic/strategy.js`). _Accept: `npm test` green
-  (~1586 assertions)._
+  (~2 990 assertions across 42 suites)._
 - [done] **`useStrategy` hook** — 600 ms-debounced wrapper + manual `calculate()`.
 - [done] **Telemetry relay** — UDP 33740 receive + Salsa20 decode + WS 20777 relay
   + LAN scan + heartbeat (`server/telemetry-server.js`).
@@ -98,7 +134,7 @@ These exist in the current code. Verify before extending; never re-implement.
   comes from the existing one-tap confirm (never guessed); fuel-weight stays one
   global estimate. _Accept: two compounds → two distinct curves; same compound across
   stints refines, not resets._
-- [ ] **1.3 Propose-and-accept wiring** — optional `useTelemetryLearner.js` runs the
+- [done] **1.3 Propose-and-accept wiring** — optional `useTelemetryLearner.js` runs the
   learner on the selected car; learner output held in a **separate `learned` object**,
   never auto-written to `inputs`; confident + materially-different values surface a
   recommendation card ("measured X vs your Y — Accept/Ignore") with a trust display;
@@ -110,22 +146,22 @@ These exist in the current code. Verify before extending; never re-implement.
 
 ## Phase 2 — Single-team in-race loop ("Now" view)
 
-- [ ] **2.1 "Now" view** — `src/components/NowView.jsx` + pure `src/logic/raceState.js`
+- [done] **2.1 "Now" view** — `src/components/NowView.jsx` + pure `src/logic/raceState.js`
   helpers: current optimal plan headline, next action (target pit lap + fuel to add +
   tires y/n), stint countdown (`endLap − currentLap`), lift-and-coast/push prompt.
   _Accept: shows correct next pit lap, fuel, laps-left, and L&C verdict; updates live._
-- [ ] **2.1a Margin = laps of fuel** — tight <~1 lap → "lift and coast"; surplus
+- [done] **2.1a Margin = laps of fuel** — tight <~1 lap → "lift and coast"; surplus
   >~2 laps → "you can push"; calm wording; tunable named constants. _Accept: correct
   verdict from synthetic race state in a node test._
-- [ ] **2.1b Live plan source** — active strategy from accepted/manual inputs only;
+- [done] **2.1b Live plan source** — active strategy from accepted/manual inputs only;
   recalc on edit or on **accept**; "freeze plan" toggle. _Accept: plan never shifts
   silently from raw learner output; freeze holds it steady._
-- [ ] **2.1c Pit-now trigger** — earliest-of (planned pit lap, fuel-exhaustion lap,
+- [done] **2.1c Pit-now trigger** — earliest-of (planned pit lap, fuel-exhaustion lap,
   tyre-wear threshold) with reason shown ("box: fuel/tyres/plan"). _Accept: correct
   earliest reason from a node test._
-- [ ] **2.1d Full-screen race layout** — dedicated glanceable second-screen view,
+- [done] **2.1d Full-screen race layout** — dedicated glanceable second-screen view,
   large type, few elements. _Accept: readable at a glance, separate from config tabs._
-- [ ] **2.2 Single-team as default** — default `activeTab`/landing = single-team
+- [done] **2.2 Single-team as default** — default `activeTab`/landing = single-team
   "Now" + dashboard; multi-team leaderboard moved behind a collapsed "Advanced / LAN
   event" section (not deleted). _Accept: fresh load lands single-team; no telemetry
   plumbing removed._
@@ -136,21 +172,21 @@ These exist in the current code. Verify before extending; never re-implement.
 
 ## Phase 3 — Packaging & onboarding
 
-- [ ] **3.0 Distribution form** — CONFIRMED Electron; record at top of
+- [done] **3.0 Distribution form** — CONFIRMED Electron; record at top of
   `docs/PACKAGING.md`. _Accept: choice documented._
-- [ ] **3.1 Auto-connect / auto-reconnect** — on mount connect to relay + scan;
+- [done] **3.1 Auto-connect / auto-reconnect** — on mount connect to relay + scan;
   auto-pick PS5 only when exactly one found, else prompt; "session active" =
   `onTrack` AND speed >~5 km/h; reconnect with exponential backoff 1→2→4…cap ~15 s
   all session unless user disconnected. Extract pure helpers (backoff, active-session
   check) for node tests. _Accept: fresh launch shows live data with no IP typed;
   relay restart reconnects; explicit disconnect stays disconnected._
-- [ ] **3.2 Package as Electron app** — main process spawns `telemetry-server.js`
+- [~] **3.2 Package as Electron app** — main process spawns `telemetry-server.js`
   child + loads built `dist/`; electron-builder Windows installer; ship **unsigned**
   for MVP (SmartScreen click-through guide); note Salsa20 key location;
   `docs/PACKAGING.md` reproduces the build. _Accept: Windows installer launches on a
   clean machine, starts relay itself, shows UI — no terminal/npm; dev workflow
   (`npm run dev` + `npm run telemetry`) still works._
-- [ ] **3.3 First-run onboarding** — `src/components/Onboarding.jsx`: firewall
+- [done] **3.3 First-run onboarding** — `src/components/Onboarding.jsx`: firewall
   explainer line → auto-scan → show detected PS5 → optional car/track tag → drop into
   "Now" view; localStorage "done" flag. _Accept: first-time user goes nothing → live
   strategy in a few clicks, no telemetry numbers typed._
