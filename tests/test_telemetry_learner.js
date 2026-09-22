@@ -521,5 +521,60 @@ section('a driver who has barely driven proposes nothing');
 // Summary
 // ===========================================================================
 
+section('correcting a PAST stint does not repoint the driver on track');
+{
+  // reassignDriver sets currentDriverId when the running stint's start lap falls
+  // inside the range, so the laps still arriving go to the corrected driver. That
+  // is right for the stint being driven and wrong for any earlier one — and the
+  // two used to be indistinguishable, because adjacent stints shared the pit lap
+  // (closeStint takes endLap: currentLap, reopenStint takes startLap: currentLap).
+  // Correcting the stint that had just ended matched, and every lap from then on
+  // was filed under that past driver. stintLapRange is exclusive of the closing
+  // lap now, which is also simply what the learner records.
+  const L = createLearner({ tankSize: TRUTH.tankSize, tireLife: TRUTH.tireLife, compoundId: 'M' });
+
+  // Ana drives the first stint without being named.
+  L.ingest(frame(1, TRUTH.tankSize));
+  L.setDriver(null);
+  L.ingestAll(stintFor(1, TRUTH.tankSize, 19, DRIVER_A));
+
+  // Bo gets in at lap 20 and IS named.
+  L.ingest(frame(20, TRUTH.tankSize, null, { pitExit: true }));
+  L.setDriver('bo');
+  L.ingestAll(stintFor(20, TRUTH.tankSize, 13, DRIVER_B));
+
+  const boLapsBefore = L._laps.filter((l) => l.driverId === 'bo').length;
+  assert('Bo has laps of his own before the correction', boLapsBefore > 0, String(boLapsBefore));
+
+  // The engineer names the FIRST stint on the Pilotes tab. Its range is
+  // [startLap, endLap - 1] = [1, 19] — the pit lap 20 is Bo's, not Ana's.
+  const moved = L.reassignDriver(1, 19, 'ana');
+  assert('Ana takes the laps of the stint she drove', moved > 0, String(moved));
+
+  assert('and none of Bo’s laps moved with them',
+    L._laps.filter((l) => l.driverId === 'bo').length === boLapsBefore,
+    `${boLapsBefore} -> ${L._laps.filter((l) => l.driverId === 'bo').length}`);
+
+  // The laps that arrive AFTER the correction must still be Bo's: he is the one
+  // driving. This is the assertion the bug failed.
+  L.ingestAll(stintFor(33, TRUTH.tankSize / 2, 4, DRIVER_B));
+  const tail = L._laps.filter((l) => l.lapNum >= 33);
+  assert('the car on track is still Bo after the correction',
+    tail.length > 0 && tail.every((l) => l.driverId === 'bo'),
+    JSON.stringify(tail.map((l) => [l.lapNum, l.driverId])));
+
+  // And naming the stint that IS running still carries forward, which is the
+  // behaviour the guard has to preserve rather than remove.
+  const M = createLearner({ tankSize: TRUTH.tankSize, tireLife: TRUTH.tireLife, compoundId: 'M' });
+  M.ingest(frame(1, TRUTH.tankSize));
+  M.setDriver(null);
+  M.ingestAll(stintFor(1, TRUTH.tankSize, 10, DRIVER_A));
+  M.reassignDriver(1, 10, 'ana');
+  M.ingestAll(stintFor(11, TRUTH.tankSize / 2, 3, DRIVER_A));
+  assert('naming the running stint does carry forward',
+    M._laps.filter((l) => l.lapNum >= 11).every((l) => l.driverId === 'ana'),
+    JSON.stringify(M._laps.filter((l) => l.lapNum >= 11).map((l) => [l.lapNum, l.driverId])));
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

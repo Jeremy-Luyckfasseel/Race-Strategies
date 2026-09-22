@@ -143,6 +143,14 @@ export function useStintLog(teams, teamCompounds, drivers, ownIp = null) {
     storeRef.current.set(ip, next);
     saveStore(storeRef.current);
     setLogs(new Map(storeRef.current));
+    // Naming the stint that is RUNNING answers the "who is driving" prompt, so
+    // it has to clear it — otherwise the Course tab kept asking a question the
+    // Pilotes tab had just been used to answer, with no way to dismiss it.
+    // Naming an older stint answers nothing about the car on track and leaves
+    // the prompt where it is.
+    if (index === (entry?.history?.length ?? 0) && entry?.current) {
+      if (pendingRef.current.delete(ip)) setPendingDriverIps(new Set(pendingRef.current));
+    }
     return stintLapRange(entry, index, currentLap);
   }, [getEntry]);
 

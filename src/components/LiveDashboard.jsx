@@ -647,6 +647,7 @@ export default function LiveDashboard({
         <div className="ld-body">
 
           <div className="ld-col">
+            <span className="ld-col-head">{t('ld_group_car', lang)}</span>
             <div className="ld-gear-speed">
               <div className="ld-gear-box">
                 <span className="ld-gear">{gearLabel(data.gear)}</span>
@@ -837,8 +838,14 @@ export default function LiveDashboard({
           </div>
 
           <div className="ld-col">
+            <span className="ld-col-head">{t('ld_group_pit', lang)}</span>
 
-            {(data.tireTemp || compound || drivers?.length) && (
+            {/* `nextStint` and the last-stop fill are neither a tyre nor a
+                driver, and were being hidden by a guard about both: on a rival
+                with no compound set and a packet that has not carried tyre
+                temperatures yet, the "took on N L" line silently vanished. */}
+            {(data.tireTemp || compound || drivers?.length || nextStint
+              || (intel && intel.lastStopFuel != null)) && (
               <div className="ld-tire-section">
                 {(pendingConfirmation || pendingDriver) && (
                   <div className="ld-confirm-banner">
@@ -885,21 +892,21 @@ export default function LiveDashboard({
                     record it after — one place for everything about a stop. */}
                 {nextStint}
 
-            {/* "+10.2 L → 2 laps" reads as "that fill buys two laps". It does
-                not: the 2 is how long ago the stop was. Said in words, because
-                an arrow between two numbers will always be read as a rate. */}
-            {intel && intel.lastStopFuel != null && intel.lastStopStintLaps != null && (
-              <div className="ld-fuel-intel ld-fuel-intel--dim">
-                <span className="ld-fi-burn">{t('ld_last_stop', lang)}</span>
-                <span className="ld-fi-laps">
-                  {t('ld_took_on', lang, {
-                    n: intel.lastStopFuel.toFixed(1),
-                    laps: intel.lastStopStintLaps,
-                  })}
-                </span>
-              </div>
-            )}
-
+                {/* "+10.2 L → 2 laps" reads as "that fill buys two laps". It
+                    does not: the 2 is how long ago the stop was. Said in words,
+                    because an arrow between two numbers will always be read as
+                    a rate. */}
+                {intel && intel.lastStopFuel != null && intel.lastStopStintLaps != null && (
+                  <div className="ld-fuel-intel ld-fuel-intel--dim">
+                    <span className="ld-fi-burn">{t('ld_last_stop', lang)}</span>
+                    <span className="ld-fi-laps">
+                      {t('ld_took_on', lang, {
+                        n: intel.lastStopFuel.toFixed(1),
+                        laps: intel.lastStopStintLaps,
+                      })}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>

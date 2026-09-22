@@ -159,6 +159,20 @@ export function assignDriverAt(entry, index, driverId) {
  * A finished stint knows both ends. The running one has no end yet, so the
  * caller supplies the car's current lap — without it the range would be open
  * and would swallow laps that have not happened.
+ *
+ * EXCLUSIVE of the closing lap, which is not a detail. Both ends were inclusive
+ * and adjacent stints share that lap: `closeStint` takes `endLap: currentLap`
+ * on pit entry and `reopenStint` takes `startLap: currentLap` on pit exit, the
+ * same game lap. So the pit lap belonged to both stints, and naming an old
+ * stint moved a lap out of the one after it — and, because the learner sets
+ * `currentDriverId` when the running stint's `startLap` falls inside the range,
+ * correcting the stint that had just ended silently repointed every lap from
+ * then on to that past driver.
+ *
+ * Exclusive is also simply what the learner records: a lap is filed when the
+ * NEXT one starts (`lapNum = lastLapSeen`), so a stint opened on 45 and closed
+ * on 73 owns lap records 45–72. A stint that closed on the lap it opened owns
+ * no records at all, and says so with null rather than an inverted range.
  */
 export function stintLapRange(entry, index, currentLap = null) {
   if (!entry) return null;
@@ -168,5 +182,7 @@ export function stintLapRange(entry, index, currentLap = null) {
   if (!st || st.startLap == null) return null;
   const end = st.endLap ?? currentLap;
   if (end == null) return null;
-  return { fromLap: st.startLap, toLap: Math.max(st.startLap, end) };
+  const toLap = end - 1;
+  if (toLap < st.startLap) return null;
+  return { fromLap: st.startLap, toLap };
 }

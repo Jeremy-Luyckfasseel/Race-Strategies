@@ -1418,6 +1418,11 @@ input[type="range"]::-moz-range-thumb {
 
 .driver-chip-name { font-weight: 600; color: var(--text-primary); font-family: var(--font-ui); }
 .driver-chip-time { font-family: var(--font-data); color: var(--text-secondary); font-size: 0.75rem; }
+/* Measured, so it reads as data; dimmer than the drive time, which is the
+   thing this chip is actually about. `is-thin` is short of the sample gate
+   — still worth seeing, not worth fuelling to. */
+.driver-chip-fuel { font-family: var(--font-data); color: var(--text-muted); font-size: 0.7rem; }
+.driver-chip-fuel.is-thin { color: var(--text-ghost, var(--text-muted)); font-style: italic; }
 .driver-chip-flag { color: var(--danger); font-size: 0.68rem; font-family: var(--font-display); letter-spacing: 0.05em; text-transform: uppercase; }
 
 /* ============================================================
@@ -5176,9 +5181,13 @@ input[type="range"]::-moz-range-thumb {
    side-by-side rule below sets `padding-top: 0` and outranks the rule that
    added it, so the second column's heading sat straight on top of the DRIVER
    row. A block element takes its own height and no other rule can take that
-   away. */
-.telem-3col-data .ld-col::before {
-  content: "CAR";
+   away.
+
+   It is also a real element rather than CSS `content`. The text was "CAR" and
+   "PIT · STINT" in the stylesheet: visible strings outside src/i18n/, which the
+   language switch cannot reach and test_ui_i18n cannot see — and DEFAULT_LANG
+   is 'fr'. */
+.ld-col-head {
   display: block;
   margin-bottom: 8px;
   padding-bottom: 3px;
@@ -5189,7 +5198,6 @@ input[type="range"]::-moz-range-thumb {
   letter-spacing: 0.14em;
   color: var(--text-muted);
 }
-.telem-3col-data .ld-col + .ld-col::before { content: "PIT · STINT"; }
 
 /* The tyre corners are read as a set, so they get the full width under both
    columns rather than being squeezed beside the pickers. */
@@ -5278,13 +5286,6 @@ input[type="range"]::-moz-range-thumb {
 .ns-fuel--capped { font-size: 0.8rem; }
 .ns-dim { font-size: 0.68rem; color: var(--text-muted); }
 
-/* "Nothing to add" is not a number, so it does not get a number's weight. */
-.ns-fuel--none {
-  font-family: var(--font-display);
-  font-size: 0.74rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
 /* The block sits inside the pit card, so it must not repeat its inset. */
 .telem-3col-data .ns-block { margin-left: 0; margin-right: 0; }
 .ns-answer { line-height: 1.4; }

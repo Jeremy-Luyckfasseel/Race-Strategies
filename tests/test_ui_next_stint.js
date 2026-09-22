@@ -60,9 +60,6 @@ const view = (over = {}) => render(React.createElement(NextStintFuel, {
   globalLitersPerLap: 3.60,
   tankSize: 100,
   lapsPerFullTank: 28,
-  fuelRateLitersPerSec: 4,
-  currentFuel: 0,
-  currentLap: 40,
   plannedStintLaps: 20,
   lang: 'en',
   ...over,
@@ -87,9 +84,10 @@ section('it asks the two things the plan did not know');
   const txt = textOf($(v.container, '.ns-block'));
   assert('the block is there', $(v.container, '.ns-block') !== null);
   assert('it offers the drivers', /Ana/.test(txt) && /Bo/.test(txt), txt);
+  // Softest first, and only the ones set up: IM and W are tireLife 0 here.
   assert('and the tyres, softest first',
     $$(v.container, '.ns-row')[1] &&
-    $$($$(v.container, '.ns-row')[1], '.ld-cp-btn').map((b) => b.textContent.trim()).join() === 'S,M,H,IM,W',
+    $$($$(v.container, '.ns-row')[1], '.ld-cp-btn').map((b) => b.textContent.trim()).join() === 'S,M,H',
     $$($$(v.container, '.ns-row')[1], '.ld-cp-btn').map((b) => b.textContent.trim()).join());
   v.unmount();
 }
@@ -123,11 +121,11 @@ section('the answer follows who is getting in');
 
 section('the answer follows the tyre');
 {
-  const v = view({ plannedStintLaps: 30 });
+  const v = view({ plannedStintLaps: 25 });
   pick(v, 'Ana');
   const long = Number(litres(v).match(/([\d.]+)/)[1]);
 
-  // A soft good for 12 laps caps the stint: fuelling for 30 on it buys nothing
+  // A soft good for 12 laps caps the stint: fuelling for 25 on it buys nothing
   // but weight the car carries and never burns.
   pick(v, 'S');
   const short = Number(litres(v).match(/([\d.]+)/)[1]);
@@ -139,33 +137,56 @@ section('the answer follows the tyre');
 
 section('a tank is a tank');
 {
-  // 30 laps at 3.90 is 117 L into a 100 L tank. "Put in 117" is not an
-  // instruction; saying it is brimmed and still will not reach is.
-  const v = view({ plannedStintLaps: 30, currentLap: 40 });
+  // 30 laps at 3.90 is 117 L into a 100 L tank. "117 L" is not an instruction;
+  // saying it is brimmed and still will not reach is.
+  const v = view({ plannedStintLaps: 30 });
   pick(v, 'Bo');
   pick(v, 'H');
   const txt = textOf($(v.container, '.ns-answer'));
   assert('it does not quote more than the tank holds',
     !/1[01]\d(\.\d)? L/.test(txt), txt);
   assert('it says to brim it', /brim/i.test(txt), txt);
-  assert('and names the lap a full tank actually reaches',
-    /lap \d+/.test(txt), txt);
+  // In LAPS, and never as a race lap number. The lap it used to name was the
+  // tank's range counted from the CURRENT lap, while the tank it describes is
+  // filled at the next stop — short by however far away that stop is.
+  assert('it says how far a full tank gets, in laps',
+    /25 of the 30 laps/.test(txt), txt);
+  assert('and never names a race lap', !/lap \d/i.test(txt), txt);
   v.unmount();
 }
 
-section('it only subtracts fuel that is really aboard');
+section('it quotes a tank target, not litres to add');
 {
-  const v = view({ currentFuel: 40 });
+  // It used to net the figure against the fuel aboard right now. "Right now" is
+  // up to 25 laps before the stop being described, and the car arrives near
+  // empty — which is why it is stopping. Netting there read "nothing to add" a
+  // lap after a stop, for a stint that would start on fumes.
+  const v = view({ plannedStintLaps: 20 });
   pick(v, 'Ana');
-  const withFuel = Number(litres(v).match(/([\d.]+)/)[1]);
+  const n = Number(litres(v).match(/([\d.]+)/)[1]);
+  assert('it is the whole stint, not the shortfall',
+    Math.abs(n - (20 * 3.40 + 0.5)) < 0.05, String(n));
+  assert('and it says it is a tank level', /tank to/i.test(litres(v)), litres(v));
+  v.unmount();
+}
+
+section('only tyres that are set up, and only when there is a stop to fuel for');
+{
+  // IM and W are configured with tireLife: 0. Offering them let you pick one,
+  // take the `active` class, and move nothing.
+  const v = view();
+  const labels = $$(v.container, '.ld-cp-btn').map((b) => b.textContent.trim());
+  assert('a tyre with no life is not offered', !labels.includes('IM') && !labels.includes('W'),
+    labels.join(','));
+  assert('the ones that are set up still are',
+    ['H', 'M', 'S'].every((id) => labels.includes(id)), labels.join(','));
   v.unmount();
 
-  const empty = view({ currentFuel: 0 });
-  pick(empty, 'Ana');
-  const fromEmpty = Number(litres(empty).match(/([\d.]+)/)[1]);
-  assert('what is already aboard is not poured in again',
-    Math.abs(fromEmpty - withFuel - 40) < 0.05, `${fromEmpty} vs ${withFuel}`);
-  empty.unmount();
+  // On the final stint there is no next stop. It stayed silent — until the
+  // first tyre tap, which made it quote litres for a stop that never comes.
+  const last = view({ plannedStintLaps: null });
+  assert('no next stop, no block', $(last.container, '.ns-block') === null);
+  last.unmount();
 }
 
 section('it says nothing rather than guessing');

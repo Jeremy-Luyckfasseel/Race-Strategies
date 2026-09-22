@@ -22,7 +22,7 @@ function formatDuration(secs) {
   return m > 0 ? `${m}m${String(s).padStart(2, '0')}s` : `${s}s`;
 }
 
-export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp, onReset, onGoToTelemetry, onAssignDriver, currentLap = null, lang = DEFAULT_LANG }) {
+export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp, onReset, onGoToTelemetry, onAssignDriver, fuelByDriver = null, currentLap = null, lang = DEFAULT_LANG }) {
   // Ticks once a second so the in-progress stint's elapsed time counts toward
   // its driver's total (and the "min not met" flag) instead of freezing at
   // zero for the whole stint. Date.now() is only ever read inside this effect,
@@ -70,6 +70,25 @@ export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp,
               <div key={d.id} className={`driver-chip${metMinimum ? '' : ' driver-chip-warn'}`}>
                 <span className="driver-chip-name">{d.name}</span>
                 <span className="driver-chip-time">{formatDriveTime(total)}</span>
+                {/* What this driver actually burns, measured off their own laps.
+                    It was already being learned and used to size their next
+                    fill, but only ever shown at the pit stop — and this tab is
+                    where you come to ask what a driver does, so a figure that
+                    exists and is not here is a figure you will not trust.
+                    Shown short of the sample gate too, marked, because "3.58
+                    from 4 laps" is worth seeing and is not worth acting on. */}
+                {(() => {
+                  const f = fuelByDriver?.[d.id];
+                  if (!f || f.litersPerLap == null) return null;
+                  return (
+                    <span className={`driver-chip-fuel${f.confident ? '' : ' is-thin'}`}>
+                      {t(f.confident ? 'dt_fuel_rate' : 'dt_fuel_rate_thin', lang, {
+                        n: f.litersPerLap.toFixed(2),
+                        laps: f.sampleCount,
+                      })}
+                    </span>
+                  );
+                })()}
                 {!metMinimum && <span className="driver-chip-flag">{t('rs_min_not_met', lang)}</span>}
               </div>
             );

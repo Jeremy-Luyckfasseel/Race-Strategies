@@ -138,9 +138,21 @@ export function useTelemetryLearner({ activeIp, data, inputs, confirmedCompoundI
   const reassignDriver = useCallback((fromLap, toLap, driverId) => {
     if (!learner) return 0;
     const moved = learner.reassignDriver(fromLap, toLap, driverId);
-    if (moved > 0) setEstimates(learner.getEstimates());
+    if (moved === 0) return 0;
+    setEstimates(learner.getEstimates());
+    // And write it, rather than waiting for the next lap edge ~2 minutes out.
+    // The stint log saved its label synchronously; a reload in between would
+    // show the corrected name in the Pilotes table with the laps still filed
+    // under the old driver — exactly the disagreement this feature exists to
+    // remove. Same try/catch as the lap-edge write: storage is best-effort.
+    try {
+      const store = globalThis.localStorage;
+      if (store && activeIp) {
+        store.setItem(LEARNER_KEY, writeFor(store.getItem(LEARNER_KEY), activeIp, learner.snapshot()));
+      }
+    } catch { /* out of quota or no storage — the correction still holds in memory */ }
     return moved;
-  }, [learner]);
+  }, [learner, activeIp]);
 
   const ignore = useCallback((rec) => {
     setDismissed((prev) => ({ ...prev, [rec.key]: dismissSnapshot(rec) }));

@@ -1318,9 +1318,6 @@ export default function App() {
                             globalLitersPerLap={learner.estimates?.litersPerLap}
                             tankSize={inputs.tankSize}
                             lapsPerFullTank={inputs.lapsPerFullTank}
-                            fuelRateLitersPerSec={inputs.fuelRateLitersPerSec}
-                            currentFuel={myFuelL}
-                            currentLap={myLap}
                             plannedStintLaps={nextStintLaps}
                             lang={lang}
                           />
@@ -1432,6 +1429,10 @@ export default function App() {
                 drivers={inputs.drivers}
                 minDriverTimeSecs={inputs.minDriverTimeSecs}
                 activeIp={strategyIp}
+                /* Learned per driver already — this is the tab you come to when
+                   you want to know what a driver does, so it belongs here and
+                   not only in the pit-stop fill. */
+                fuelByDriver={learner.estimates?.fuelByDriver}
                 onReset={stintLog.resetAll}
                 onGoToTelemetry={() => setActiveTab("race")}
                 /* Naming a stint after the fact has to move its LAPS as well

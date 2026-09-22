@@ -9,10 +9,18 @@
  * the car panel, beside the pickers that record what actually happened — the
  * same two facts, one before the stop and one after.
  *
- * It states which burn rate it used and where that came from, because "put in
- * 92 L" from a driver's own 41 measured laps and the same number from the
- * figure you typed in last week are not the same claim, and the difference is
- * whether you check it.
+ * It states which burn rate it used and where that came from, because "92 L"
+ * from a driver's own 41 measured laps and the same number from the figure you
+ * typed in last week are not the same claim, and the difference is whether you
+ * check it.
+ *
+ * It quotes a TANK TARGET, not litres to add. It used to net the figure against
+ * the fuel aboard right now — but "right now" is up to 25 laps before the stop
+ * it is describing, and the car arrives near empty, which is why it is stopping.
+ * Netting there made it read "nothing to add — it already has the range" just
+ * after a stop, for a stint that would start on fumes. What is actually aboard
+ * when the car arrives is the engine's to know, and the plan's "add N L" line
+ * already says it; this answers the question the pit menu asks.
  */
 
 import { useState } from 'react';
@@ -23,8 +31,7 @@ const COMPOUND_CLS = { H: 'cp-hard', M: 'cp-med', S: 'cp-soft', IM: 'cp-inter', 
 
 export default function NextStintFuel({
   drivers, compounds, fuelByDriver, globalLitersPerLap,
-  tankSize, lapsPerFullTank, fuelRateLitersPerSec,
-  currentFuel, currentLap, plannedStintLaps, lang = DEFAULT_LANG,
+  tankSize, lapsPerFullTank, plannedStintLaps, lang = DEFAULT_LANG,
 }) {
   const [driverId, setDriverId] = useState(null);
   const [compoundId, setCompoundId] = useState(null);
@@ -32,26 +39,30 @@ export default function NextStintFuel({
   // Nothing to ask if there is nobody to ask about.
   if (!drivers || drivers.length === 0) return null;
 
-  const comp = compounds?.find((c) => c.id === compoundId) ?? null;
+  // And nothing to answer if there is no next stop. On the final stint the plan
+  // gives no stint length, and without this the block stayed silent only until
+  // the first tyre tap — then confidently quoted litres for a stop that will
+  // never happen.
+  const planned = Number(plannedStintLaps);
+  if (!(planned > 0)) return null;
+
+  // Only tyres that are actually set up. Offering all five let you pick a wet
+  // with `tireLife: 0`, which took the `active` class and moved nothing — a
+  // button that looks like it worked and did not.
+  const active = (compounds || []).filter((c) => Number(c.tireLife) > 0);
+  const comp = active.find((c) => c.id === compoundId) ?? null;
 
   // How long the stint has to be. The tyre caps it when one is chosen, because
   // fuelling for 30 laps on a tyre good for 18 buys nothing but weight.
   const tyreLife = Number(comp?.tireLife) || 0;
-  const laps = tyreLife > 0 && plannedStintLaps > 0
-    ? Math.min(tyreLife, plannedStintLaps)
-    : (tyreLife > 0 ? tyreLife : plannedStintLaps);
+  const laps = tyreLife > 0 ? Math.min(tyreLife, planned) : planned;
 
   const rate = burnRateFor({
     driverId, fuelByDriver, globalLitersPerLap, tankSize, lapsPerFullTank,
   });
-  const fuel = rate && laps > 0
-    ? stintFuel({
-        lapsInStint: laps,
-        litersPerLap: rate.litersPerLap,
-        tankSize,
-        currentFuel,
-        fuelRateLitersPerSec,
-      })
+  // No `currentFuel`: this is the tank target, so stintFuel quotes the total.
+  const fuel = rate
+    ? stintFuel({ lapsInStint: laps, litersPerLap: rate.litersPerLap, tankSize })
     : null;
 
   return (
@@ -76,7 +87,7 @@ export default function NextStintFuel({
       <div className="ns-row">
         <span className="ns-k">{t('ns_tyre', lang)}</span>
         <div className="ns-picks">
-          {COMPOUND_ORDER.map((id) => (
+          {COMPOUND_ORDER.filter((id) => active.some((c) => c.id === id)).map((id) => (
             <button
               key={id}
               className={`ld-cp-btn ${COMPOUND_CLS[id]}${compoundId === id ? ' active' : ''}`}
@@ -92,24 +103,16 @@ export default function NextStintFuel({
       {fuel && (
         <div className="ns-answer">
           {fuel.capped ? (
-            /* A tank is a tank. "Put in 112 L" is not an instruction; saying it
-               is brimmed and still will not reach is. */
+            /* A tank is a tank. "112 L" is not an instruction; saying it is
+               brimmed and still will not reach is. Said in LAPS, not as a race
+               lap number: the old wording counted the tank's range from the
+               current lap, while the tank it describes is filled at the next
+               stop — short by however far away that stop is. */
             <span className="ns-fuel ns-fuel--capped">
-              {t('ns_brimmed', lang, { lap: (Number(currentLap) || 0) + fuel.lapsCovered })}
+              {t('ns_brimmed', lang, { covered: fuel.lapsCovered, needed: laps })}
             </span>
-          ) : fuel.addL < 0.1 ? (
-            /* "Put in 0.0 L" is an instruction to do nothing, written as though
-               it were a measurement. Say what it means instead: the car is
-               already carrying the range this stint needs. */
-            <span className="ns-fuel ns-fuel--none">{t('ns_enough', lang)}</span>
           ) : (
-            <span className="ns-fuel">{t('ns_fuel', lang, { n: fuel.addL.toFixed(1) })}</span>
-          )}
-
-          {/* Under a second is not worth a line — and "0s of fuelling" beside
-              a litre figure reads as a broken number rather than a short fill. */}
-          {fuel.secs != null && !fuel.capped && fuel.secs >= 1 && (
-            <span className="ns-dim">{t('ns_fuel_secs', lang, { n: fuel.secs.toFixed(0) })}</span>
+            <span className="ns-fuel">{t('ns_fuel', lang, { n: fuel.needL.toFixed(1) })}</span>
           )}
 
           {/* Where the number came from. The same litres measured from 41 of
