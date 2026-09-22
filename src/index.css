@@ -5234,3 +5234,48 @@ input[type="range"]::-moz-range-thumb {
 .stint-driver-pick:hover,
 .stint-driver-pick:focus { border-color: var(--rule-bright, var(--text-muted)); }
 .stint-driver-pick.is-unset { color: var(--text-ghost, var(--text-muted)); font-style: italic; }
+
+/* ── Next stint: who is getting in, on what, and how many litres ──
+   Asked before the stop, in the same group as the pickers that record it
+   after. One place for everything about a stop. */
+.ns-block {
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-xs);
+  border-left: 2px solid var(--rule-mid);
+}
+.ns-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+}
+.ns-k {
+  font-family: var(--font-display);
+  font-size: 0.56rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  flex: 0 0 5.5em;
+}
+.ns-picks { display: flex; gap: 3px; flex-wrap: wrap; }
+
+.ns-answer {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 3px 10px;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--rule);
+}
+.ns-fuel {
+  font-family: var(--font-data);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+/* Brimmed and still short is a warning, not an instruction. */
+.ns-fuel--capped { font-size: 0.8rem; }
+.ns-dim { font-size: 0.68rem; color: var(--text-muted); }

@@ -23,6 +23,7 @@ import { computeStrategy } from "./hooks/useStrategy";
 import LiveDashboard, { TrackMap } from "./components/LiveDashboard";
 import Dialog from "./components/Dialog";
 import Toasts from "./components/Toasts";
+import NextStintFuel from "./components/NextStintFuel";
 import { useToasts } from "./hooks/useToasts";
 import { useDialog } from "./hooks/useDialog";
 import TelemetryLeaderboard from "./components/TelemetryLeaderboard";
@@ -887,6 +888,22 @@ export default function App() {
     };
   }, [incidentMark, strategyIp, telem.pace]);
 
+  /**
+   * How many laps the stint after the next stop is planned to run.
+   *
+   * The litres to put in are that many laps of whoever is getting in. Taken
+   * from the plan rather than from the tyre alone, because the stint can be cut
+   * short by the flag long before the tyre gives up, and brimming for a tyre
+   * life you will never use is weight carried for nothing.
+   */
+  const nextStintLaps = useMemo(() => {
+    const stints = nowBest?.strategy?.stints;
+    if (!stints || myLap == null) return null;
+    const idx = stints.findIndex((st) => st.pitLap != null && st.pitLap >= myLap);
+    const after = idx >= 0 ? stints[idx + 1] : null;
+    return after?.lapsInStint ?? null;
+  }, [nowBest, myLap]);
+
   const nextStopLap = useMemo(() => {
     const stints = nowBest?.strategy?.stints;
     if (!stints || myLap == null) return null;
@@ -1289,6 +1306,25 @@ export default function App() {
                         onClearIncident={clearIncident}
                         onIncidentLoss={setIncidentLoss}
                         onApplyPace={displayIp === strategyIp ? applyPacePenalty : undefined}
+                        /* Who is getting in and on what, asked BEFORE the stop
+                           — the same two facts the pickers record after it.
+                           Only on my own car: there is nothing to fuel on a
+                           rival's. */
+                        nextStint={displayIp === strategyIp ? (
+                          <NextStintFuel
+                            drivers={inputs.drivers}
+                            compounds={inputs.compounds}
+                            fuelByDriver={learner.estimates?.fuelByDriver}
+                            globalLitersPerLap={learner.estimates?.litersPerLap}
+                            tankSize={inputs.tankSize}
+                            lapsPerFullTank={inputs.lapsPerFullTank}
+                            fuelRateLitersPerSec={inputs.fuelRateLitersPerSec}
+                            currentFuel={myFuelL}
+                            currentLap={myLap}
+                            plannedStintLaps={nextStintLaps}
+                            lang={lang}
+                          />
+                        ) : null}
                         lang={lang}
                       />
                     ) : (

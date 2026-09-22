@@ -564,7 +564,7 @@ export function TrackMap({ currentLap, cars, mapRef, onReset, lang = DEFAULT_LAN
 export default function LiveDashboard({
   data, label, compound, pendingConfirmation, onCompoundChange,
   drivers, currentDriverId, pendingDriver, onDriverChange,
-  tyreLaps = null, tyreLife = null, fuelRecord = null, stintEntry = null,
+  tyreLaps = null, tyreLife = null, fuelRecord = null, stintEntry = null, nextStint = null,
   incident = null, onIncident, onClearIncident, onIncidentLoss, onApplyPace, lang = DEFAULT_LANG,
 }) {
   const [showVitals, setShowVitals] = useState(false);
@@ -879,7 +879,11 @@ export default function LiveDashboard({
                     ))}
                   </div>
                 </div>
-                <TyreAge laps={tyreLaps} life={tyreLife} outlook={setOutlook} lang={lang} />
+                <TyreAge laps={tyreLaps} life={tyreLife} outlook={setOutlook} lang={lang} />
+
+                {/* Asked before the stop, in the same group as the pickers that
+                    record it after — one place for everything about a stop. */}
+                {nextStint}
 
             {/* "+10.2 L → 2 laps" reads as "that fill buys two laps". It does
                 not: the 2 is how long ago the stop was. Said in words, because
