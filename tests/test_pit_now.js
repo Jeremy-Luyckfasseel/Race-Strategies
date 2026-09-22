@@ -228,5 +228,26 @@ section('damage is carried until the next stop, not to the flag');
     twenty !== six, `${six} vs ${twenty}`);
 }
 
+section('an unknown fuel reading is not an empty tank');
+{
+  // Number(null) is 0, not NaN, so an unknown reading coerced straight to a
+  // number is indistinguishable from a dry tank — and a dry tank quotes the
+  // most expensive stop there is. That number feeds how many places a stop
+  // would cost, so guessing here shows "you lose three places" when you lose
+  // one. There is no honest answer without a reading.
+  const INP = { pitBaseSecs: 25, tireChangeSecs: 5, tankSize: 100, fuelRateLitersPerSec: 4 };
+
+  assert('a real reading costs only the fuel actually needed',
+    Math.abs(fullServiceLoss(INP, 60) - (25 + 5 + 10)) < 1e-9,
+    String(fullServiceLoss(INP, 60)));
+  assert('a genuinely empty tank costs a full refuel',
+    Math.abs(fullServiceLoss(INP, 0) - (25 + 5 + 25)) < 1e-9,
+    String(fullServiceLoss(INP, 0)));
+
+  assert('but no reading at all says nothing', fullServiceLoss(INP, null) === null);
+  assert('and neither does an undefined one', fullServiceLoss(INP, undefined) === null);
+  assert('nor a value that is not a number', fullServiceLoss(INP, 'x') === null);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

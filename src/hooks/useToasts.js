@@ -45,15 +45,25 @@ export function useToasts() {
    */
   const push = useCallback((toast) => {
     const id = toast.key ?? `t${Date.now()}${Math.random()}`;
+    // Drop any countdown the previous copy was running. The effect below only
+    // starts a timer for an id that has none, so without this a refreshed
+    // toast kept the ORIGINAL copy's timer and vanished on its schedule — new
+    // information on screen for whatever was left of the old window, which is
+    // the opposite of what a refresh is for.
+    const running = timers.current.get(id);
+    if (running) {
+      clearTimeout(running);
+      timers.current.delete(id);
+    }
     setToasts((prev) => {
       const without = prev.filter((x) => x.id !== id);
       return [...without, { ...toast, id }].slice(-MAX_TOASTS);
     });
   }, []);
 
-  // One timer per live toast, cleared on unmount. Set in an effect rather than
-  // inside `push` so a toast replaced by a fresher copy of itself gets a fresh
-  // countdown instead of inheriting the old one's.
+  // One timer per live toast, cleared on unmount. A toast that is replaced by a
+  // fresher copy of itself gets a fresh countdown because `push` clears the old
+  // timer first; this loop then sees an id with none and starts one.
   useEffect(() => {
     for (const toast of toasts) {
       if (timers.current.has(toast.id)) continue;

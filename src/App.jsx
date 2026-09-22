@@ -668,8 +668,13 @@ export default function App() {
     // Only cars that are racing: a safety car is not in the standings and must
     // not take a place off anyone.
     const racingIps = [...telem.teams.keys()].filter((ip) => !isSafetyCar(carRoles, ip));
-    const myFuel = Number(telem.teams.get(strategyIp)?.fuelLiters);
-    const pitLoss = fullServiceLoss(inputs, Number.isFinite(myFuel) ? myFuel : 0);
+    // Without a fuel reading there is no honest cost for a stop, and without
+     // that there is no honest answer to "where would I come out". This used to
+     // pass 0 for an unknown reading, which quotes a full refuel and overstates
+     // the places lost.
+    const myFuel = telem.teams.get(strategyIp)?.fuelLiters;
+    const pitLoss = fullServiceLoss(inputs, Number.isFinite(Number(myFuel)) ? myFuel : null);
+    if (pitLoss == null) return null;
     const name = (ip) => getTeamLabel(ip);
 
     // GT7's own classification for "where I am now", so the strip agrees with

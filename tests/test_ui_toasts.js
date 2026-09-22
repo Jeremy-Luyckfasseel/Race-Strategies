@@ -156,5 +156,33 @@ section('the stack does not become wallpaper');
   v.unmount();
 }
 
+section('a refreshed notice gets a fresh countdown');
+{
+  // A notice replaced by a newer version of itself must not inherit the old
+  // copy's timer: that leaves new information on screen for whatever was left
+  // of the old window, which is the opposite of what a refresh is for.
+  const v = boot();
+  await push({ key: 'rec:fuel', kind: 'info', title: 'Laps per tank', detail: '28.0' });
+
+  // Most of the way through the first window...
+  await settle(TOAST_MS - 1500);
+  assert('the first version is still up', $$(v.container, '.toast').length === 1);
+
+  // ...then the measurement moves and the notice is raised again.
+  await push({ key: 'rec:fuel', kind: 'info', title: 'Laps per tank', detail: '26.4' });
+  assert('the newer value is showing', /26\.4/.test(textOf($(v.container, '.toast'))),
+    textOf($(v.container, '.toast')));
+
+  // Past the point the ORIGINAL would have expired.
+  await settle(2500);
+  assert('it did not vanish on the schedule of the copy it replaced',
+    $$(v.container, '.toast').length === 1, 'the refreshed notice inherited the old timer');
+
+  // It still goes on its own.
+  await settle(TOAST_MS);
+  assert('and it does expire on its own', $$(v.container, '.toast').length === 0);
+  v.unmount();
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

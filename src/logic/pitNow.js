@@ -35,11 +35,19 @@
  * now: a stop on lap 3 costs far more in fuel time than one on lap 25.
  */
 export function fullServiceLoss(inputs, currentFuel) {
+  // `Number(null)` is 0, not NaN, so an UNKNOWN reading coerced straight to a
+  // number is indistinguishable from a dry tank — and a dry tank quotes the
+  // most expensive stop there is. On a 100 L tank at 4 L/s that is 25 s of
+  // refuelling instead of the real 10 s, fed straight into how many places a
+  // stop would cost: "you lose three places" when you lose one. The sibling
+  // function four lines down already rejects null for exactly this reason;
+  // this one guessed instead. There is no honest answer without a reading.
+  if (currentFuel == null || !Number.isFinite(Number(currentFuel))) return null;
   const base = Number(inputs?.pitBaseSecs) || 0;
   const tyres = Number(inputs?.tireChangeSecs) || 0;
   const tank = Number(inputs?.tankSize) || 0;
   const rate = Number(inputs?.fuelRateLitersPerSec) || 0;
-  const have = Math.max(0, Number(currentFuel) || 0);
+  const have = Math.max(0, Number(currentFuel));
   const fuelSecs = rate > 0 ? Math.max(0, tank - have) / rate : 0;
   return base + tyres + fuelSecs;
 }
