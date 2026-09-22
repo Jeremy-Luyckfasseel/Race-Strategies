@@ -110,7 +110,13 @@ async function bootMidRace(over = {}) {
   const ws = sockets[index];
   await act(async () => { ws.deliver(packet(over)); });
   // The Now view has a plan when it stops saying it is waiting for one.
-  await settleUntil(() => $(view.container, '.now-action-body') !== null);
+  // Wait for a real box lap, not just for the action block to exist. Both the
+  // "run to the flag" state and the real plan render `.now-action-body`, so
+  // polling on that returned as soon as the FIRST render landed — which is the
+  // empty one, before the engine's 600 ms debounce has produced anything. That
+  // made this suite fail intermittently with exactly the symptom it exists to
+  // catch, which is the worst kind of flake.
+  await settleUntil(() => $(view.container, '.now-box-lap') !== null);
   return view;
 }
 
