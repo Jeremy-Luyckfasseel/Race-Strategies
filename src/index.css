@@ -2194,7 +2194,12 @@ input[type="range"]::-moz-range-thumb {
   max-width: none;
   margin: 0;
   display: grid;
-  grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+  /* The first column is a fixed 360px — the toast's width, and where toasts
+     land. Sized by its content it was "MCG" wide, or ~265px once a lift-and-
+     coast warning appeared under it: so the strip shifted sideways whenever
+     that warning came and went, and a toast there covered the laps-left count
+     on one screen and not on another. */
+  grid-template-columns: 360px auto auto minmax(0, 1fr) auto;
   grid-template-areas:
     "car stint laps call state"
     "rc  rc    rc   rc   rc";
@@ -5070,15 +5075,15 @@ input[type="range"]::-moz-range-thumb {
 /* ---------------------------------------------------------------------------
    Toasts — what happened while you were looking somewhere else
 
-   Top left, over the app's title — asked for there. It is the one corner with
-   nothing live under it; the tabs below the title stay reachable because the
-   stack is only as tall as its toasts.
+   Top left of the plan strip, over the car name — where it was asked for.
+   Over the title it covered the tabs; here it sits on the strip's quietest
+   corner. 96px = the header and tab row (88px) plus a little air.
    --------------------------------------------------------------------------- */
 
 .toasts {
   position: fixed;
   left: 16px;
-  top: 8px;
+  top: 96px;
   z-index: 900;
   display: flex;
   flex-direction: column;
