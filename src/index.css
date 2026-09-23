@@ -3589,10 +3589,13 @@ input[type="range"]::-moz-range-thumb {
 }
 /* 0.44rem measured 7.04px in the running app — too small to read. */
 .telem-3col-lb .lb-hcol  { font-size: 0.58rem; padding: 4px 6px; }
-/* 3px, not 6px, and the name and its lap/fuel line closer together: a row
-   was 47px, so a 15-car field needed 116px more than the column had. */
-.telem-3col-lb .lbc      { padding: 3px 6px; }
-.telem-3col-lb .lb-team-inner { gap: 1px; }
+/* Rows are 41px: 47 did not fit a 15-car field (116px over), 35 fitted but
+   read small. 41 with larger type is the most the column takes for 15 cars
+   on a 1080p window with room to spare. */
+.telem-3col-lb .lbc      { padding: 4px 6px; }
+.telem-3col-lb .lb-team-inner { gap: 2px; }
+.telem-3col-lb .lb-meta-lap,
+.telem-3col-lb .lb-meta-fuel { font-size: 0.68rem; }
 .telem-3col-lb .lb-meta  { margin-top: 0; }
 /* The tyre button is min-width 34px. In a 38px column with 6px of padding
    either side it had 26px to live in, so it was clipped by 8px and the panel
@@ -3608,7 +3611,7 @@ input[type="range"]::-moz-range-thumb {
 .telem-3col-lb .lb-rename-btn { display: none; }
 .telem-3col-lb .lb-mine-btn   { padding: 0 3px 0 0; font-size: 0.72rem; }
 .telem-3col-lb .lb-stripe     { margin-right: 5px; }
-.telem-3col-lb .lb-tname      { font-size: 0.67rem; min-width: 4ch; }
+.telem-3col-lb .lb-tname      { font-size: 0.76rem; min-width: 4ch; }
 .telem-3col-lb .lb-mine-pill,
 .telem-3col-lb .lb-box-pill   { margin-left: 3px; padding: 1px 3px 0; }
 .telem-3col-lb .lb-picker-label { display: none; }
@@ -5098,15 +5101,25 @@ input[type="range"]::-moz-range-thumb {
   align-items: flex-start;
   gap: 10px;
   padding: 10px 10px 10px 12px;
-  background: var(--bg-card);
-  border: 1px solid var(--rule);
-  border-left: 3px solid var(--rule-bright, var(--text-muted));
+  /* Lifted off the app rather than made of it: on --bg-card, the same surface
+     as every panel, a toast read as one more panel and went unnoticed. The
+     overlay tone is the lightest surface in the palette, with a real outline
+     and a shadow that separates it from the strip underneath. */
+  background: var(--bg-overlay);
+  border: 1px solid var(--rule-bright);
+  border-left: 4px solid var(--text-secondary);
   border-radius: var(--radius-xs);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.65), 0 0 0 1px rgba(0,0,0,0.4);
   animation: toast-in 0.18s ease-out;
 }
-/* One that needs answering — a tyre has to be recorded either way. */
-.toast--act { border-left-color: var(--accent); }
+/* One that needs answering — a tyre has to be recorded either way. Red all
+   round and tinted, so it cannot be mistaken for news. */
+.toast--act {
+  border-color: var(--accent);
+  border-left-color: var(--accent);
+  background: linear-gradient(rgba(228,0,43,0.14), rgba(228,0,43,0.14)), var(--bg-overlay);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.65), 0 0 18px rgba(228,0,43,0.25);
+}
 
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(-8px); }
@@ -5119,7 +5132,7 @@ input[type="range"]::-moz-range-thumb {
 .toast-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .toast-title {
   font-family: var(--font-display);
-  font-size: 0.76rem;
+  font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--text-primary);
