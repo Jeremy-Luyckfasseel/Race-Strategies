@@ -2212,28 +2212,20 @@ input[type="range"]::-moz-range-thumb {
      that warning came and went, and a toast there covered the laps-left count
      on one screen and not on another. */
   grid-template-columns: 360px auto auto minmax(0, 1fr) auto;
-  /* Stint, laps left and the call span both rows, so they sit in the strip's
-     vertical middle. What is small goes in the second row beside them: the
-     fuel warning under the car name, the tyre crossover under the race
-     buttons. It used to be one row of content with a second row holding only
-     the crossover, so everything read as pinned to the top with empty space
-     underneath. The racecraft line, when there is one, takes a third row. */
+  /* Everything but the race buttons spans both rows, so it sits in the strip's
+     vertical middle; the tyre crossover goes under the buttons. The racecraft
+     line, when there is one, takes a third row. */
   grid-template-areas:
-    "car  stint laps call state"
-    "warn stint laps call xo"
-    "rc   rc    rc   rc   rc";
+    "car stint laps call state"
+    "car stint laps call xo"
+    "rc  rc    rc   rc   rc";
   align-items: center;
   column-gap: 26px;
   row-gap: 6px;
 }
 
 .race-strip .now-header   { grid-area: state; justify-self: end; align-self: end; margin: 0; }
-.race-strip .now-view:not(:has(.now-verdict)) {
-  grid-template-areas:
-    "car stint laps call state"
-    "car stint laps call xo"
-    "rc  rc    rc   rc   rc";
-}
+
 .race-strip .now-plan     { grid-area: stint; }
 .race-strip .now-countdown{ grid-area: laps; }
 .race-strip .now-action   { grid-area: call; min-width: 0; }
@@ -2385,15 +2377,6 @@ input[type="range"]::-moz-range-thumb {
   /* Below this the call and the race state cannot share a row honestly. */
   .race-strip .now-view {
     grid-template-columns: auto auto minmax(0, 1fr);
-    grid-template-areas:
-      "car   stint laps"
-      "warn  warn  warn"
-      "call  call  call"
-      "rc    rc    rc"
-      "state state state"
-      "xo    xo    xo";
-  }
-  .race-strip .now-view:not(:has(.now-verdict)) {
     grid-template-areas:
       "car   stint laps"
       "call  call  call"
@@ -3644,18 +3627,31 @@ input[type="range"]::-moz-range-thumb {
    leaderboard keeps it), the star is tightened, and the name is given a floor
    it cannot be compressed below. */
 .telem-3col-lb .lb-rename-btn { display: none; }
-/* Follow a rival. Same footprint as the star beside it. */
+/* Follow a rival: a bell, because following means "tell me when they stop".
+   A 20px target around a 14px icon — the first version was a 0.7rem circle
+   glyph, too small to see and to hit. */
 .lb-follow-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  /* Overhangs the 13px name line instead of pushing it apart: at full height
+     it made every rival row 6px taller and 15 cars no longer fit. */
+  margin: -4px 3px -4px 0;
+  padding: 0;
+  flex: 0 0 20px;
   background: none;
-  border: none;
-  padding: 0 3px 0 0;
-  font-size: 0.7rem;
-  line-height: 1;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
   color: var(--text-muted);
   cursor: pointer;
 }
-.lb-follow-btn:hover { color: var(--text-primary); }
+.lb-follow-btn:hover { color: var(--text-primary); border-color: var(--rule-bright); }
 .lb-follow-btn.is-on { color: var(--accent); }
+/* A followed rival is marked along its row, so the cars I am racing can be
+   picked out of fifteen without reading a single name. */
+.lb-row-followed { box-shadow: inset 3px 0 0 var(--accent); }
 /* Not followed, once some are: still there, just not competing for the eye. */
 .lb-row-quiet { opacity: 0.5; }
 .lb-row-quiet:hover { opacity: 0.85; }
@@ -5221,21 +5217,25 @@ input[type="range"]::-moz-range-thumb {
 /* The fuel warning was a full-width bordered box on its own row, which cost
    50px of the strip to say one sentence. It is a real warning and keeps the
    accent, but it belongs beside the consequences it changes, not above them. */
+/* The fuel warning rides on the call's own label line, at its right-hand end:
+   it is about the call ("you will not reach box lap N on this fuel"), and
+   there it costs no height. Under the car name it sat where toasts land; on a
+   line of its own it made the strip 15px taller whenever it came and went. */
 .race-strip .now-verdict {
-  grid-area: warn;
-  justify-self: start;
+  grid-area: call;
+  justify-self: end;
   align-self: start;
   display: flex;
   align-items: baseline;
   gap: 8px;
-  margin: 0;
-  padding: 3px 10px;
+  margin: 6px 0 0;
+  padding: 1px 8px;
   border-radius: var(--radius-xs);
   border: 1px solid var(--accent);
   background: rgba(228, 0, 43, 0.08);
 }
-.race-strip .now-verdict-text { font-size: 0.72rem; letter-spacing: 0.06em; }
-.race-strip .now-verdict-margin { font-size: 0.68rem; }
+.race-strip .now-verdict-text { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; }
+.race-strip .now-verdict-margin { font-size: 0.62rem; }
 
 /* The clock's own labels were 0.52rem of --text-ghost on a dark panel: present
    in the DOM, invisible on the screen, so the two times read as one number

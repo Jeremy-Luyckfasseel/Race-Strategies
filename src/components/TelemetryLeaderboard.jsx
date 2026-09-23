@@ -206,7 +206,16 @@ export default function TelemetryLeaderboard({
                         title={isFollowedCar ? t('lb_follow_unset', lang) : t('lb_follow_set', lang)}
                         aria-pressed={isFollowedCar}
                       >
-                        {isFollowedCar ? '◉' : '○'}
+                        {/* A bell: this is "tell me when they stop". Outlined
+                            when off, filled when on. */}
+                        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                          <path
+                            d="M8 1.6a4 4 0 0 0-4 4v2.5L2.7 10.3a.6.6 0 0 0 .5.95h9.6a.6.6 0 0 0 .5-.95L12 8.1V5.6a4 4 0 0 0-4-4z"
+                            fill={isFollowedCar ? 'currentColor' : 'none'}
+                            stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"
+                          />
+                          <path d="M6.4 12.9a1.7 1.7 0 0 0 3.2 0" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                        </svg>
                       </button>
                     )}
                     {isEditing ? (
