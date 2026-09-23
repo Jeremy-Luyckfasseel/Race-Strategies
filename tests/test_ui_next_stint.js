@@ -53,7 +53,14 @@ const FUEL_BY_DRIVER = {
   thirsty: { litersPerLap: 3.90, confident: true },
 };
 
-const view = (over = {}) => render(React.createElement(NextStintFuel, {
+// The pick is owned by App (it becomes the new stint's driver and tyre at the
+// pit exit), so the block is controlled. This holds it the way App does.
+function Host(props) {
+  const [pick, setPick] = React.useState({ driverId: null, compoundId: null });
+  return React.createElement(NextStintFuel, { ...props, pick, onPick: setPick });
+}
+
+const view = (over = {}) => render(React.createElement(Host, {
   drivers: DRIVERS,
   compounds: COMPOUNDS,
   fuelByDriver: FUEL_BY_DRIVER,
@@ -84,10 +91,10 @@ section('it asks the two things the plan did not know');
   const txt = textOf($(v.container, '.ns-block'));
   assert('the block is there', $(v.container, '.ns-block') !== null);
   assert('it offers the drivers', /Ana/.test(txt) && /Bo/.test(txt), txt);
-  // Softest first, and only the ones set up: IM and W are tireLife 0 here.
+  // Softest first, then inters and wets.
   assert('and the tyres, softest first',
     $$(v.container, '.ns-row')[1] &&
-    $$($$(v.container, '.ns-row')[1], '.ld-cp-btn').map((b) => b.textContent.trim()).join() === 'S,M,H',
+    $$($$(v.container, '.ns-row')[1], '.ld-cp-btn').map((b) => b.textContent.trim()).join() === 'S,M,H,IM,W',
     $$($$(v.container, '.ns-row')[1], '.ld-cp-btn').map((b) => b.textContent.trim()).join());
   v.unmount();
 }
@@ -170,16 +177,20 @@ section('it quotes a tank target, not litres to add');
   v.unmount();
 }
 
-section('only tyres that are set up, and only when there is a stop to fuel for');
+section('every tyre can be picked, and one with no life says so');
 {
-  // IM and W are configured with tireLife: 0. Offering them let you pick one,
-  // take the `active` class, and move nothing.
+  // The pick is also what the car is set to at the pit exit, so inters and wets
+  // have to be offered even with no tyre life typed in — rain does not wait.
   const v = view();
   const labels = $$(v.container, '.ld-cp-btn').map((b) => b.textContent.trim());
-  assert('a tyre with no life is not offered', !labels.includes('IM') && !labels.includes('W'),
+  assert('inters and wets are offered', labels.includes('IM') && labels.includes('W'),
     labels.join(','));
-  assert('the ones that are set up still are',
-    ['H', 'M', 'S'].every((id) => labels.includes(id)), labels.join(','));
+  pick(v, 'Ana');
+  pick(v, 'W');
+  const txt = textOf($(v.container, '.ns-answer'));
+  assert('a tyre with no life does not cap the stint',
+    Math.abs(Number(litres(v).match(/([\d.]+)/)[1]) - (20 * 3.40 + 0.5)) < 0.05, litres(v));
+  assert('and says the fill is sized for the planned stint', /no life set/i.test(txt), txt);
   v.unmount();
 
   // On the final stint there is no next stop. It stayed silent — until the

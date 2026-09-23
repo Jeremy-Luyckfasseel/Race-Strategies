@@ -23,7 +23,6 @@
  * already says it; this answers the question the pit menu asks.
  */
 
-import { useState } from 'react';
 import { DEFAULT_LANG, t, COMPOUND_ORDER, compoundName } from '../i18n/strings';
 import { burnRateFor, stintFuel } from '../logic/stintFuel';
 
@@ -31,10 +30,14 @@ const COMPOUND_CLS = { H: 'cp-hard', M: 'cp-med', S: 'cp-soft', IM: 'cp-inter', 
 
 export default function NextStintFuel({
   drivers, compounds, fuelByDriver, globalLitersPerLap,
-  tankSize, lapsPerFullTank, plannedStintLaps, lang = DEFAULT_LANG,
+  tankSize, lapsPerFullTank, plannedStintLaps,
+  pick = { driverId: null, compoundId: null }, onPick = () => {}, lang = DEFAULT_LANG,
 }) {
-  const [driverId, setDriverId] = useState(null);
-  const [compoundId, setCompoundId] = useState(null);
+  // Owned by App, not here: at the pit exit the pick becomes the new stint's
+  // driver and tyre, so it has to outlive this block and be readable there.
+  const { driverId, compoundId } = pick;
+  const setDriverId = (id) => onPick({ ...pick, driverId: id });
+  const setCompoundId = (id) => onPick({ ...pick, compoundId: id });
 
   // Nothing to ask if there is nobody to ask about.
   if (!drivers || drivers.length === 0) return null;
@@ -46,11 +49,10 @@ export default function NextStintFuel({
   const planned = Number(plannedStintLaps);
   if (!(planned > 0)) return null;
 
-  // Only tyres that are actually set up. Offering all five let you pick a wet
-  // with `tireLife: 0`, which took the `active` class and moved nothing — a
-  // button that looks like it worked and did not.
-  const active = (compounds || []).filter((c) => Number(c.tireLife) > 0);
-  const comp = active.find((c) => c.id === compoundId) ?? null;
+  // All five, like the tyre picker above it: the pick is also what the car is
+  // set to at the pit exit, and rain does not wait for inters to have a tyre
+  // life typed in. A tyre with no life set does not cap the stint, and says so.
+  const comp = (compounds || []).find((c) => c.id === compoundId) ?? null;
 
   // How long the stint has to be. The tyre caps it when one is chosen, because
   // fuelling for 30 laps on a tyre good for 18 buys nothing but weight.
@@ -87,7 +89,7 @@ export default function NextStintFuel({
       <div className="ns-row">
         <span className="ns-k">{t('ns_tyre', lang)}</span>
         <div className="ns-picks">
-          {COMPOUND_ORDER.filter((id) => active.some((c) => c.id === id)).map((id) => (
+          {COMPOUND_ORDER.map((id) => (
             <button
               key={id}
               className={`ld-cp-btn ${COMPOUND_CLS[id]}${compoundId === id ? ' active' : ''}`}
@@ -121,6 +123,9 @@ export default function NextStintFuel({
               for THEM" caveat when there is a them — with nobody named it is
               simply the rate, and the caveat was answering a question nobody
               had asked. */}
+          {compoundId && !(tyreLife > 0) && (
+            <span className="ns-dim">{t('ns_no_life', lang)}</span>
+          )}
           <span className="ns-dim">
             {t(
               rate.source === 'car' && driverId ? 'ns_source_car_driver' : `ns_source_${rate.source}`,

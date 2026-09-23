@@ -2443,10 +2443,20 @@ input[type="range"]::-moz-range-thumb {
    gives up the width and has plenty: it is mostly empty space around a
    circuit. */
 .telem-3col-data {
-  width: max(380px, 29vw);
+  /* 460, not 380: measured with everything a stop can put in the PIT column at
+     once (banner, tyre set, next stint answered, last stop), 380 wrapped every
+     picker and came out 87px taller than the column; 460 is the first width
+     that fits. The map has the room to give — it is mostly empty around the
+     circuit. */
+  width: max(460px, 29vw);
   flex-shrink: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  /* The scrollbar's width is reserved whether or not it shows. Without this, a
+     stop's confirm banner tipping the panel into overflow brought the
+     scrollbar in, the content lost ~15px of width, and every card on the right
+     re-wrapped and resized at once — the "whole side moves" after a pit toast. */
+  scrollbar-gutter: stable;
 }
 
 .telem-no-sel {
@@ -5201,6 +5211,23 @@ input[type="range"]::-moz-range-thumb {
   color: var(--text-muted);
 }
 
+/* The four corners as ONE row, FL FR RL RR, at every width. As a 2x2 around
+   the car silhouette they cost 132px, and with a stop's banner up, a tyre set
+   and the next stint answered, the panel came out 33px taller than its column:
+   a scroll, on the one screen that must never need one. The row is ~65px and
+   keeps every number; only the silhouette goes. */
+.telem-3col-data .tw-grid {
+  grid-template-areas: "fl fr rl rr";
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: auto;
+}
+.telem-3col-data .tw-center,
+.telem-3col-data .tw-center-gap { display: none; }
+
+/* The column heading already draws the rule. The section's own top border
+   under it was a second line 8px lower, framing nothing. */
+.telem-3col-data .ld-tire-section { border-top: none; padding-top: 0; }
+
 /* The tyre corners are read as a set, so they get the full width under both
    columns rather than being squeezed beside the pickers. */
 .telem-3col-data .tw-grid {
@@ -5352,16 +5379,6 @@ input[type="range"]::-moz-range-thumb {
   .telem-3col-data .ld-speed-val { font-size: 1.7rem; }
   .telem-3col-data .ld-gear-val { font-size: 2rem; }
 
-  /* The four corners go to one row. Two rows of wide cells cost 132px of a
-     panel that is already 103px short, and the car-shaped 2x2 is a nicety —
-     being able to SEE the temperatures at all is not. */
-  .telem-3col-data .tw-grid {
-    grid-template-areas: "fl fr rl rr";
-    grid-template-columns: repeat(4, 1fr);
-    grid-template-rows: auto;
-    margin-top: 8px;
-    padding-top: 8px;
-  }
   .telem-3col-data .tw-corner { padding: 4px 5px; }
   .telem-3col-data .tw-corner .tw-temp { font-size: 0.82rem; }
   .telem-3col-data .ns-block { margin-top: 6px; }

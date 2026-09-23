@@ -437,5 +437,47 @@ section('all three tabs render with a full field');
   v.unmount();
 }
 
+section('what I picked for the next stint is what the car gets at the stop');
+{
+  // Picking the next driver and tyre before the stop and then confirming both
+  // again after it was the same question twice. At my car's pit exit the pick
+  // becomes the new stint's driver and tyre, and neither prompt is raised.
+  const v = await bootApp();
+  await v.sendField();
+  click(tabButton(v.container, 'Course'));
+  await settle(30);
+  click($($$(v.container, '.lb-row')[4], '.lb-mine-btn'));
+  await settle(30);
+
+  // The block needs a plan (it sizes the NEXT stint), and the engine is debounced.
+  let ns = null;
+  for (let i = 0; i < 60 && !ns; i++) {
+    await v.sendField();
+    ns = $(v.container, '.ns-block');
+  }
+  assert('the next-stint block is there for my car', ns !== null);
+
+  const rows = $$(v.container, '.ns-row');
+  const driverBtn = $$(rows[0], '.ld-cp-btn')[0];
+  const driverName = driverBtn?.textContent.trim();
+  click(driverBtn);
+  await settle(30);
+  click($$($$(v.container, '.ns-row')[1], '.ld-cp-btn').find((b) => b.textContent.trim() === 'W'));
+  await settle(30);
+
+  await act(async () => { v.relay().deliver(packet(IPS[4], 4, { pitExit: true, speedKmh: 80, currentLap: 9 })); });
+  await settle();
+
+  const tyre = $(v.container, '.ld-compound-picker .active');
+  assert('the car is on the wets I picked', tyre?.textContent.trim() === 'W', tyre?.textContent);
+  const driver = $(v.container, '.ld-driver-picker .active');
+  assert('and the driver I picked is driving', driver?.textContent.trim() === driverName,
+    `${driver?.textContent} vs ${driverName}`);
+  assert('so there is nothing left to confirm', $(v.container, '.ld-confirm-banner') === null);
+  assert('and the pick is cleared for the stint after',
+    $$(v.container, '.ns-row .ld-cp-btn.active').length === 0);
+  v.unmount();
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

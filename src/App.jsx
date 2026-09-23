@@ -308,6 +308,11 @@ export default function App() {
   const toasts = useToasts();
   const detector = useCompoundDetector(racingTeams);
   const stintLog = useStintLog(racingTeams, teamCompounds, inputs.drivers, myTeamIp || null);
+  // Who gets in next and on what, picked in the car panel BEFORE the stop. At
+  // my car's pit exit it becomes the new stint's driver and tyre, so the two
+  // prompts that follow a stop are already answered — picking them twice, once
+  // before and once after, was asking the same question twice.
+  const [nextPick, setNextPick] = useState({ driverId: null, compoundId: null });
   const teamKeys = useMemo(() => [...telem.teams.keys()], [telem.teams]);
   const getTeamLabel = useCallback((ip) => teamLabels[ip] || ip, [teamLabels]);
 
@@ -826,19 +831,41 @@ export default function App() {
       pitExitSeen.current.set(ip, lap);
 
       const mine = ip === strategyIp;
+
+      // Apply the pre-stop pick to the stint that just opened. This effect is
+      // declared after useCompoundDetector and useStintLog, so in the same
+      // commit their effects have already run: the new stint is open and both
+      // prompts are raised, and answering them here clears them.
+      const applied = [];
+      if (mine) {
+        if (nextPick.compoundId) {
+          updateTeamCompound(ip, nextPick.compoundId);
+          applied.push(compoundName(nextPick.compoundId, lang));
+        }
+        if (nextPick.driverId) {
+          stintLog.assignDriver(ip, nextPick.driverId);
+          applied.push(inputs.drivers.find((d) => d.id === nextPick.driverId)?.name ?? '');
+        }
+        if (applied.length) setNextPick({ driverId: null, compoundId: null });
+      }
+      // Both known: nothing left to do, so it is news rather than a task.
+      const done = mine && nextPick.compoundId && nextPick.driverId;
+
       toasts.push({
         key: `pit:${ip}:${lap}`,
-        kind: mine ? 'act' : 'info',
-        sticky: mine,
+        kind: mine && !done ? 'act' : 'info',
+        sticky: mine && !done,
         title: t(mine ? "toast_pit_mine" : "toast_pit_rival", lang, { who: getTeamLabel(ip) }),
-        detail: t(mine ? "toast_pit_mine_detail" : "toast_pit_rival_detail", lang),
+        detail: applied.length
+          ? t("toast_pit_mine_applied", lang, { what: applied.filter(Boolean).join(' · ') })
+          : t(mine ? "toast_pit_mine_detail" : "toast_pit_rival_detail", lang),
         action: {
           label: t("toast_go_car", lang),
           run: () => { setActiveTab("race"); setTelemSelectedIp(ip); },
         },
       });
     }
-  }, [telem.teams, carRoles, strategyIp, lang, getTeamLabel, toasts]);
+  }, [telem.teams, carRoles, strategyIp, lang, getTeamLabel, toasts, nextPick, updateTeamCompound, stintLog, inputs.drivers]);
 
   const scDeployedIp = useMemo(
     () => safetyCarDeployed(telem.teams, carRoles),
@@ -1319,6 +1346,8 @@ export default function App() {
                             tankSize={inputs.tankSize}
                             lapsPerFullTank={inputs.lapsPerFullTank}
                             plannedStintLaps={nextStintLaps}
+                            pick={nextPick}
+                            onPick={setNextPick}
                             lang={lang}
                           />
                         ) : null}

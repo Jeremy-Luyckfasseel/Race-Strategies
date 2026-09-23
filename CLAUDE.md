@@ -15,7 +15,7 @@ npm run dev          # Start dev server at http://localhost:5173
 npm run build        # Production build to /dist
 npm run lint         # ESLint (flat config)
 npm run preview      # Preview production build locally
-npm test             # All 45 suites (~3 090 assertions). Judge by EXIT CODE, not output.
+npm test             # All 45 suites (~3 096 assertions). Judge by EXIT CODE, not output.
 npm run test:smoke   # Quick 1-hour race smoke test
 npm run telemetry    # Start UDP→WebSocket relay server (separate process)
 
@@ -107,7 +107,7 @@ several cars connected, both resolve to `null` rather than guessing
 
 ### Live driver assignment (telemetry side)
 
-This is separate from the planner's `planDriverAssignment` above — it is manual, not computed. On the Course tab, `LiveDashboard` shows a driver picker (from `inputs.drivers`) alongside the existing compound picker; both are prompted together in one banner when a pit stop finishes (`pendingDriver` from `useStintLog`, `pendingConfirmation` from `useCompoundDetector`). Picking a driver calls `useStintLog`'s `assignDriver(ip, driverId)`, which only labels the stint that's already running — it has no effect on the strategy planner's stint lengths or ranking. The Pilotes tab (`DriversTab.jsx`) reads the resulting log to show each driver's total time against `minDriverTimeSecs` and a per-stint table (duration, tyre, avg/best/worst lap); see `stintLog.js`/`useStintLog.js` above.
+This is separate from the planner's `planDriverAssignment` above — it is manual, not computed. On the Course tab, `LiveDashboard` shows a driver picker (from `inputs.drivers`) alongside the existing compound picker; both are prompted together in one banner when a pit stop finishes (`pendingDriver` from `useStintLog`, `pendingConfirmation` from `useCompoundDetector`). Picking a driver calls `useStintLog`'s `assignDriver(ip, driverId)`, which only labels the stint that's already running — it has no effect on the strategy planner's stint lengths or ranking. The next-stint block (`NextStintFuel`) asks the same two questions BEFORE the stop; its pick lives in `App` as `nextPick` and, at my car's pit exit, is applied as the new stint's driver and tyre, answering both prompts and clearing itself. This relies on the pit-exit effect in `App` being declared after `useCompoundDetector` and `useStintLog`, so in the same commit the new stint is already open and both prompts already raised — `test_ui_app_e2e.js` guards it. The Pilotes tab (`DriversTab.jsx`) reads the resulting log to show each driver's total time against `minDriverTimeSecs` and a per-stint table (duration, tyre, avg/best/worst lap); see `stintLog.js`/`useStintLog.js` above.
 
 ### ESLint config note
 
