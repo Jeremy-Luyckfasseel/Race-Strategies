@@ -71,6 +71,7 @@ what a fight really costs the plan is fuel, which is already measured.
 | `racecraft.js` | The three questions about other cars. `positionIfPitNow` (where I rejoin, who is either side, and how far off in seconds), `undercut` (box first and pass in the pit lane — only the *difference* between the two stops counts against you, not the whole stop), `trafficAhead` (the backmarker I am about to reach), `freshTyreGainSecs`. Deliberately models no cost for attacking or defending: there is no data to calibrate it from. |
 | `gaps.js` | Leaderboard intervals from start/finish crossings: `trackLapCrossings`, `lapInterval`, `liveInterval`, `lapProgress`, `lapsOnMe`, `formatInterval`. The ±1-lap case is resolved against the leader's previous crossing and says **nothing** when it cannot yet be told — a one-lap counter difference is the normal state of every close fight for part of every lap. `lapsOnMe` judges on track position, so a car that has just pitted is not called lapped. |
 | `rivalIntel.js` | Any car's fuel read off its own trace: `trackFuelUse`, `burnPerLap` (median of clean laps), `fuelLapsLeft`, `predictedPitLap`, `rivalSummary`, `burnProgress`. No input from us and nothing assumed about their car. |
+| `stintFuel.js` | Litres for the stint about to start, for a named driver on a named tyre. `burnRateFor` falls back driver → car → configured and says which it used; `stintFuel` returns a **tank target**, capped at the tank, never netted against live fuel — the stop it describes can be 25 laps away and the car arrives near empty. Deliberately NOT an engine re-run per driver: stint length is set by fuel range, and per-driver fuel would make fuel range depend on who is driving while the driver is chosen FROM the stint length. |
 | `tyreHistory.js` | The stint log read back per compound: sets run, laps each, best/avg, measured fall-off. `currentSetOutlook` uses the **median** of previous *finished* sets, so one stint cut short by a spin is not the expectation. Silent on a first set. |
 | `pitNow.js` | **Box now or wait**, answered by the engine rather than by arithmetic. Builds two futures and runs both through `findBestStrategies`, comparing laps first and race time second. `fullServiceLoss` returns **null** for an unknown fuel reading — an unknown tank is not an empty one. |
 | `incident.js` | Not a damage button — anything that makes the plan wrong. `measuredLossSecs` / `effectiveLossSecs`. The lap it happened on is costed as a one-off, never averaged into the per-lap rate. |
@@ -112,7 +113,8 @@ what a fight really costs the plan is fuel, which is already measured.
 | `LiveDashboard.jsx` | The selected car: gear/speed, RPM/throttle/brake/fuel, fuel intel, tyre **temperature** per corner (the radius-derived wear was removed — it never moved on real hardware), laps-on-set against the configured life, compound + driver pickers, the incident panel and the box-now comparison. Exports `TrackMap`. |
 | `TelemetryLeaderboard.jsx` | The field by race position: lap/gap, last/best, compound, fuel, pit status, laps-until-box per car, ★ to mark my team and ✎ to rename. |
 | `TelemetryControls.jsx` | Relay URL, PS5 list, LAN scan. Lives in the **header** as a dropdown, not in a tab. |
-| `DriversTab.jsx` | Per-driver drive time against `minDriverTimeSecs`, and the per-stint log. |
+| `DriversTab.jsx` | Per-driver drive time against `minDriverTimeSecs`, each driver's **measured burn rate** (marked when short of the sample gate), and the per-stint log — whose driver cell is a picker, so a stint nobody named at the stop can be named later and its laps move with the label. |
+| `NextStintFuel.jsx` | "Who is getting in, on what" → litres, in the pit group of the car panel beside the pickers that record what actually happened. Offers only compounds that are set up, and says nothing at all when there is no next stop to fuel for. |
 | `LearnerRecommendations.jsx` | Propose-and-accept cards with a trust line. |
 | `Dialog.jsx` | The card the app asks its questions on. Escape and the backdrop cancel, Enter confirms, focus lands on the confirming button. |
 | `Toasts.jsx` | Bottom right — the top of this screen is the plan and the left is the field. Notices **navigate** rather than act: a tyre picked by mis-tapping a corner card is a wrong compound in the stint log for the rest of the stint. |
@@ -189,7 +191,7 @@ The UI suites add a small DOM harness (`tests/helpers/`): jsdom, React's own `ac
 | `test_teams.js` | 45 assertions. `src/logic/teams.js` — the 16-colour palette, `teamColor` fallbacks, append-only `withTeamOrder`, `isStalePacket`/`dropStaleTeams` (same-reference returns when nothing changed), and the key multi-car invariant: a car keeps its colour when another car drops out. |
 | `test_stint_log.js` | 29 assertions. `src/logic/stintLog.js` — the Drivers-tab stint-log state machine: stint open/close, per-lap average/best/worst folding without retaining individual lap times, compound sync, driver (re)assignment, `reopenStint`'s defensive archive-before-overwrite (a missed pit-entry packet must not lose the prior stint), `recordLapIfClean`'s out-lap/paused/off-track exclusion. |
 
-`npm test` runs all **42 suites** in sequence — **~2 990 assertions**, all
+`npm test` runs all **49 suites** in sequence — **~3 226 assertions**, all
 pure node, printing `✓/✗` and exiting non-zero on failure. **These are the
 guardrail — keep every assertion green, and judge a run by its EXIT CODE, not
 by reading the output.** Roughly 1 350 are hand-written; 1 643 are the bulk
@@ -206,6 +208,11 @@ engine behaviour changes. That is expected.)
 | `test_conditions.js` | Dry/wet as a compound filter, the fallback when no wet tyre is configured, and the crossover figure. |
 | `test_car_roles.js` / `test_ui_safety_car.js` | A safety car out of the standings and the gap chain, renumbering behind it without a hole, deployment detection, and the reduced pit loss. |
 | `test_rival_intel.js` | Burn rate from a car's own trace, the predicted box lap, and the refusal to guess before enough clean laps. |
+| `test_manual_plan.js` / `test_ui_manual_plan.js` | A typed plan runs as typed: tyres in row order, typed laps honoured, fuel at each stop for the typed stint, what fuel or tyre life cannot allow cut and reported, rows never reached and rows that run out flagged, a no-life tyre refused, mid-race skipping, drivers assigned as for the engine. On screen: the engine chip fills the field, the comparison with the engine's best, the notes, race/hand back. `test_ui_app_e2e.js` checks racing it really moves the strip's box lap. |
+| `test_stint_defaults.js` | Picked beats assumed; nothing picked means the plan's next tyre (early stops and stops past the plan included) and the same driver; nothing known means nothing assumed. `test_ui_app_e2e.js` runs it through a stop, and checks that only followed rivals raise a notice and a flickering tyre (`isFollowed`, `test_teams.js`). |
+| `test_pit_watch.js` | A followed rival is asked about from its entry, still after its exit, and given up on a lap later onto its old tyre; an answer is not re-asked by the same stop's flags; unfollowing stops it; a missed entry is asked from the exit. Owed must-run tyres, and unsure when a stint's tyre is unknown. `test_ui_app_e2e.js` drives the picker end to end. |
+| `test_ui_learner_recs.js` | The proposals in the car panel are ONE row — the first proposal, "1 of N", its sample count and volatility badge, buttons acting on the one on screen — while the Strategy tab keeps the full cards. The cards were 135px and pushed the car panel into a scroll. |
+| `test_stint_fuel.js` / `test_ui_next_stint.js` | The burn-rate fallback chain and the litres, then the same on screen: a tank target rather than a netted amount, the brimmed case counted in laps rather than naming a race lap it cannot know, only tyres that are set up, and silence on the final stint. |
 | `test_tyre_history.js` | Per-compound history, median-of-finished-sets outlook, silence on a first set. |
 | `test_incident.js` / `test_pit_now.js` | The measured loss, and box-now vs wait run through the real engine. Includes the guard that an unknown fuel reading is **not** an empty tank. |
 | `test_racecraft.js` / `test_ui_racecraft.js` | Where I rejoin and between whom, the undercut, and the traffic I am about to reach — plus the two failures the live field caught: a position disagreeing with the leaderboard, and a delta that escaped the field ("P4 → P13" in a ten-car race). |
@@ -509,7 +516,7 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
 npm run dev          # Vite dev server :5173
 npm run build        # production build → /dist
 npm run lint         # ESLint flat config — zero errors, 3 deliberate warnings
-npm test             # all 42 suites (~2 990 assertions). Judge by EXIT CODE.
+npm test             # all 49 suites (~3 226 assertions). Judge by EXIT CODE.
 npm run test:smoke   # quick 1h race test
 npm run telemetry    # the UDP→WS relay (separate process)
 npm run demo         # ten fake PS5s, for testing with no hardware in the room

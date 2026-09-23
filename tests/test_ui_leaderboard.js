@@ -351,5 +351,49 @@ section('a twelve-car field renders without incident');
   v.unmount();
 }
 
+section('following the rivals I race');
+{
+  const toggled = [];
+  // Rows are in race order; the row for a car is found by its name cell.
+  const rowFor = (v, ip) => $$(v.container, '.lb-row').find((r) => r.textContent.includes(ip));
+
+  const none = mount({ myTeamIp: IPS[0], followed: new Set(), onToggleFollow: (ip) => toggled.push(ip) });
+  assert('every rival has a follow button', $$(none.container, '.lb-follow-btn').length === 3,
+    String($$(none.container, '.lb-follow-btn').length));
+  assert('but my own car does not', !rowFor(none, IPS[0]).querySelector('.lb-follow-btn'));
+  assert('with nobody followed, nobody is dimmed', $$(none.container, '.lb-row-quiet').length === 0);
+  click(rowFor(none, IPS[2]).querySelector('.lb-follow-btn'));
+  assert('clicking it follows that car', toggled.join() === IPS[2], toggled.join());
+  assert('without selecting the row', none.calls.select.length === 0, none.calls.select.join());
+  none.unmount();
+
+  const some = mount({ myTeamIp: IPS[0], followed: new Set([IPS[2]]), onToggleFollow: () => {} });
+  assert('a followed car shows it', rowFor(some, IPS[2]).querySelector('.lb-follow-btn.is-on') !== null);
+  assert('the cars not followed step back', $$(some.container, '.lb-row-quiet').length === 2,
+    String($$(some.container, '.lb-row-quiet').length));
+  assert('mine never does', !rowFor(some, IPS[0]).className.includes('lb-row-quiet'));
+  some.unmount();
+}
+
+section('the must-run tyres a car still owes');
+{
+  const rowFor = (v, ip) => $$(v.container, '.lb-row').find((r) => r.textContent.includes(ip));
+  const v = mount({
+    owed: new Map([
+      [IPS[1], { owed: ['H'], unknownStints: 0 }],
+      [IPS[2], { owed: ['M', 'H'], unknownStints: 1 }],
+    ]),
+  });
+  const one = $$(rowFor(v, IPS[1]), '.lb-owe-pill');
+  assert('a car that has not run hards says it owes them', one.length === 1 && /H/.test(one[0].textContent),
+    one.map((p) => p.textContent).join());
+  assert('and it is sure of it', !one[0].className.includes('is-unsure'));
+  const two = $$(rowFor(v, IPS[2]), '.lb-owe-pill');
+  assert('each owed tyre is named', two.length === 2, String(two.length));
+  assert('marked unsure when a stint had no tyre set', two.every((p) => p.className.includes('is-unsure')));
+  assert('a car that owes nothing says nothing', $$(rowFor(v, IPS[0]), '.lb-owe-pill').length === 0);
+  v.unmount();
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

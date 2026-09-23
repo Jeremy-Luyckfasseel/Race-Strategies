@@ -19,7 +19,7 @@ import {
   coalescePacket,
   resolveActiveCars,
   stableCarId,
-} from '../src/logic/teams.js';
+ isFollowed, } from '../src/logic/teams.js';
 
 let passed = 0;
 let failed = 0;
@@ -211,6 +211,16 @@ section('colour survives pruning — the reason team order is append-only');
   const colorCAfter = teamColor(order.indexOf('c'));
   assert('car c keeps its colour after car b drops out', colorCAfter === colorCBefore);
   assert('car a keeps its colour too', teamColor(order.indexOf('a')) === TEAM_PALETTE[0]);
+}
+
+section('whose stops reach me');
+{
+  const none = new Set();
+  assert('with nobody followed, every rival does', isFollowed('b', 'a', none) && isFollowed('c', 'a', null));
+  const two = new Set(['b', 'c']);
+  assert('once some are followed, those do', isFollowed('b', 'a', two) && isFollowed('c', 'a', two));
+  assert('and the rest do not', !isFollowed('d', 'a', two));
+  assert('my own car always does, followed or not', isFollowed('a', 'a', two));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

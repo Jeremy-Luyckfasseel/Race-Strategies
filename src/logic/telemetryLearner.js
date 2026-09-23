@@ -203,6 +203,40 @@ export function createLearner(cfg = {}) {
     currentDriverId = id || null;
   }
 
+  /**
+   * Hand a range of already-recorded laps to a driver.
+   *
+   * The driver is named at the stop, and at three in the morning that tap gets
+   * missed — leaving a whole stint's worth of measurement filed under nobody.
+   * Correcting it afterwards has to move the LAPS, not just the label: the
+   * curves and the burn rate are fitted from `laps[]`, so relabelling the stint
+   * log alone would leave the driver's pace and fuel exactly as wrong as
+   * before, while the screen claimed otherwise.
+   *
+   * Inclusive of both ends, because a stint is named by the lap it opened on
+   * and the lap it closed on. Returns how many laps moved, so a caller can say
+   * nothing happened rather than imply it did.
+   */
+  function reassignDriver(fromLap, toLap, driverId) {
+    const lo = Number(fromLap);
+    const hi = Number(toLap);
+    if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi < lo) return 0;
+    let moved = 0;
+    for (const l of laps) {
+      if (l.lapNum >= lo && l.lapNum <= hi && l.driverId !== (driverId || null)) {
+        l.driverId = driverId || null;
+        moved += 1;
+      }
+    }
+    // A stint being corrected may be the one still running, in which case the
+    // laps arriving after this must go to the same driver rather than back to
+    // whoever was named before.
+    if (moved > 0 && stintStartLap != null && stintStartLap >= lo && stintStartLap <= hi) {
+      currentDriverId = driverId || null;
+    }
+    return moved;
+  }
+
   /** @type {LapRecord[]} */
   const laps = Array.isArray(cfg.restore?.laps) ? [...cfg.restore.laps] : [];
 
@@ -319,22 +353,25 @@ export function createLearner(cfg = {}) {
   // Estimation (computed on demand from the accumulated laps).
   // -------------------------------------------------------------------------
 
+  /**
+   * Is this lap's tank delta usable as a fuel measurement?
+   *
+   * The tank has to have gone DOWN by a sane amount, and the lap must not be a
+   * multi-lap jump or a refuel. It does NOT have to be "clean": a lap spent in
+   * traffic still burns real fuel, and that is the whole traffic-proof point.
+   */
+  function usableForFuel(l) {
+    return l.fuelUsed != null
+      && l.fuelUsed > 0
+      && l.fuelUsed < tankSize
+      && !l.dirtyReasons.includes('lapjump')
+      && !l.dirtyReasons.includes('pitlap')
+      && !l.dirtyReasons.includes('paused');
+  }
+
   /** Fuel/lap from tank deltas — traffic-proof, no clean-lap requirement. */
-  function estimateFuel() {
-    // A lap is usable for fuel if the tank actually went DOWN by a sane amount and
-    // it wasn't a multi-lap jump or a pit (refuel) lap. We do NOT require it to be
-    // "clean" — that's the whole traffic-proof point.
-    const deltas = laps
-      .filter(
-        (l) =>
-          l.fuelUsed != null &&
-          l.fuelUsed > 0 &&
-          l.fuelUsed < tankSize &&
-          !l.dirtyReasons.includes('lapjump') &&
-          !l.dirtyReasons.includes('pitlap') &&
-          !l.dirtyReasons.includes('paused')
-      )
-      .map((l) => l.fuelUsed);
+  function estimateFuel(rows = laps) {
+    const deltas = rows.filter(usableForFuel).map((l) => l.fuelUsed);
 
     const sampleCount = deltas.length;
     const litersPerLap = sampleCount > 0 ? median(deltas) : null;
@@ -579,6 +616,7 @@ export function createLearner(cfg = {}) {
      * right answer rather than a confident average of somebody else.
      */
     const byDriver = {};
+    const fuelByDriver = {};
     for (const did of new Set(laps.map((l) => l.driverId).filter(Boolean))) {
       const mine = laps.filter((l) => l.driverId === did);
       const cleanBy = {};
@@ -586,6 +624,18 @@ export function createLearner(cfg = {}) {
         cleanBy[id] = cleanLapsFor(mine.filter((l) => l.compoundId === id));
       }
       byDriver[did] = fitCompounds(cleanBy);
+
+      /**
+       * How much fuel THIS driver burns a lap.
+       *
+       * Not a refinement — it moves the pit window. A driver on 3.40 L/lap gets
+       * 29 laps out of a 100 L tank and one on 3.65 gets 27, and the engine was
+       * planning both with a single number. Over an eight-hour race that is a
+       * stop's worth of error.
+       *
+       * Measured exactly as the car's own burn is, on that driver's laps only.
+       */
+      fuelByDriver[did] = estimateFuel(mine);
     }
 
     // Aggregate degradation trust = the current compound's (what the engineer is
@@ -603,6 +653,9 @@ export function createLearner(cfg = {}) {
 
       // --- the same, per driver: { driverId: { compoundId: {...} } } ---
       byDriver,
+
+      // --- and how much fuel each of them burns: { driverId: {…fuel} } ---
+      fuelByDriver,
 
       // --- trust payloads, per estimate (Task 1.3 propose-and-accept UI) ---
       trust: {
@@ -659,6 +712,7 @@ export function createLearner(cfg = {}) {
     ingestAll,
     setCompound,
     setDriver,
+    reassignDriver,
     getEstimates,
     snapshot,
     // Exposed for tests / inspection.

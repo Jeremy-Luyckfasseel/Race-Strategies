@@ -6,7 +6,7 @@
  * Run with: node tests/test_stint_log.js
  */
 
-import { emptyEntry, openStint, closeStint, reopenStint, recordLap, recordLapIfClean, setCompound, assignDriver } from '../src/logic/stintLog.js';
+import { emptyEntry, openStint, closeStint, reopenStint, recordLap, recordLapIfClean, setCompound, assignDriver, assignDriverAt, stintLapRange } from '../src/logic/stintLog.js';
 
 let passed = 0;
 let failed = 0;
@@ -135,6 +135,67 @@ section('mandatory-compound-style scenario — a full pit cycle preserves prior 
   assert('prior stint stays in history across the new stint', entry.history.length === 1 && entry.history[0].driverId === 'd1');
   assert('new stint gets the newly assigned driver', entry.current.driverId === 'd2');
   assert('new stint gets the confirmed compound', entry.current.compound === 'S');
+}
+
+section('stintLapRange — the laps a stint owns, exclusive of its closing lap');
+{
+  // Adjacent stints SHARE the pit lap: closeStint takes endLap: currentLap on
+  // pit entry and reopenStint takes startLap: currentLap on pit exit, the same
+  // game lap. With both ends inclusive that lap belonged to two stints at once.
+  let e = openStint(emptyEntry(), { compound: 'M', startLap: 1, startTime: 0, driverId: 'd1' });
+  e = closeStint(e, { endLap: 20 });
+  e = reopenStint(e, { compound: 'S', startLap: 20, startTime: 1000 });
+
+  const first = stintLapRange(e, 0);
+  const second = stintLapRange(e, 1, 33);
+
+  assert('the finished stint starts where it opened', first.fromLap === 1, JSON.stringify(first));
+  assert('and ends the lap BEFORE it closed', first.toLap === 19, JSON.stringify(first));
+  assert('the running stint starts on the pit lap', second.fromLap === 20, JSON.stringify(second));
+  assert('and ends the lap before the one in progress', second.toLap === 32, JSON.stringify(second));
+  assert('so the two do not overlap', first.toLap < second.fromLap,
+    `${first.toLap} vs ${second.fromLap}`);
+
+  // This is what the overlap cost: the learner sets currentDriverId when the
+  // RUNNING stint's startLap falls inside a reassigned range. Stint 0's range
+  // used to end on 20, which is stint 1's startLap, so correcting the stint
+  // that had just ended silently repointed every lap from then on.
+  assert('correcting the old stint cannot claim the running one is startLap',
+    !(second.fromLap >= first.fromLap && second.fromLap <= first.toLap));
+
+  // A stint that closed on the lap it opened recorded nothing: the learner
+  // files a lap when the NEXT one starts.
+  let z = openStint(emptyEntry(), { compound: 'M', startLap: 7, startTime: 0 });
+  z = closeStint(z, { endLap: 7 });
+  assert('a stint with no completed lap has no range', stintLapRange(z, 0) === null);
+
+  assert('no entry, no range', stintLapRange(null, 0) === null);
+  assert('an index past the end has no range', stintLapRange(e, 9, 33) === null);
+  // The running stint has no end of its own, so without the car's lap the range
+  // would be open and would swallow laps that have not happened.
+  assert('the running stint needs the current lap', stintLapRange(e, 1) === null);
+}
+
+section('assignDriverAt — naming a stint after the fact');
+{
+  let e = openStint(emptyEntry(), { compound: 'M', startLap: 1, startTime: 0, driverId: null });
+  e = closeStint(e, { endLap: 20 });
+  // reopenStint always opens with driverId: null — the driver is named by the
+  // human at the stop, never carried over from the stint before.
+  e = reopenStint(e, { compound: 'S', startLap: 20, startTime: 1000 });
+  e = assignDriver(e, 'd2');
+
+  const named = assignDriverAt(e, 0, 'd1');
+  assert('the finished stint takes the name', named.history[0].driverId === 'd1');
+  assert('and the running one is untouched', named.current.driverId === 'd2');
+
+  const runner = assignDriverAt(e, 1, 'd3');
+  assert('the running stint can be named too', runner.current.driverId === 'd3');
+  assert('without touching the finished one', runner.history[0].driverId === null);
+
+  assert('naming it what it already is changes nothing',
+    assignDriverAt(named, 0, 'd1') === named);
+  assert('an index past the end changes nothing', assignDriverAt(e, 9, 'd1') === e);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

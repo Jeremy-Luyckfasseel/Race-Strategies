@@ -345,6 +345,87 @@ section('Per-compound segmentation (Task 1.2) — two compounds, distinct curves
 const DRIVER_A = { start: 119.0, half: 120.0, end: 121.5 };
 const DRIVER_B = { start: 122.0, half: 124.0, end: 127.5 };
 
+/** Noise-free lap frames for one driver's stint on the medium. */
+function stintFor(startLapNumber, Fi, nLaps, spec) {
+  return genStint(startLapNumber, Fi, nLaps, spec, TRUTH.tireLife);
+}
+
+section('naming a stint after the fact moves its measurements');
+{
+  // The tap that names the driver at the stop is the one most likely to be
+  // missed. Correcting it later has to move the LAPS, not just the label —
+  // otherwise that driver's pace and fuel stay exactly as wrong as before
+  // while the Pilotes table claims they have been fixed.
+  const L = createLearner({ tankSize: TRUTH.tankSize, tireLife: TRUTH.tireLife, compoundId: 'M' });
+
+  // Ana's stint is recorded properly.
+  L.setDriver('ana');
+  L.ingest(frame(1, 60));
+  L.ingestAll(stintFor(1, 60, 16, DRIVER_A));
+  L.ingest(frame(17, TRUTH.tankSize, null, { pitExit: true }));
+  L.ingestAll(stintFor(17, TRUTH.tankSize, 28, DRIVER_A));
+
+  // Bo gets in, and nobody taps the picker. Bo's laps land under nobody.
+  L.ingest(frame(45, TRUTH.tankSize, null, { pitExit: true }));
+  L.setDriver(null);
+  L.ingestAll(stintFor(45, TRUTH.tankSize, 28, DRIVER_B));
+
+  const before = L.getEstimates();
+  assert('the unnamed stint belongs to no driver',
+    before.byDriver.bo === undefined, JSON.stringify(Object.keys(before.byDriver)));
+  assert('and its laps are sitting unattributed',
+    L._laps.filter((l) => l.driverId === null).length === 28,
+    String(L._laps.filter((l) => l.driverId === null).length));
+
+  // The engineer notices and fixes it on the Pilotes tab. The range comes from
+  // the stint log, which records the game's lap at pit exit and pit entry — so
+  // it is derived here rather than hardcoded, because a lap is recorded when
+  // the NEXT one starts and encoding that off-by-one as if it were a spec is
+  // how a fixture starts lying.
+  const orphaned = L._laps.filter((l) => l.driverId === null).map((l) => l.lapNum);
+  const moved = L.reassignDriver(Math.min(...orphaned), Math.max(...orphaned), 'bo');
+  assert('every lap of that stint moves', moved === orphaned.length, `${moved} of ${orphaned.length}`);
+  assert('and none are left unattributed',
+    L._laps.filter((l) => l.driverId === null).length === 0);
+
+  const after = L.getEstimates();
+  assert('Bo now has a curve at all', !!after.byDriver.bo);
+  assert('and it is the pace BO actually drove, not the car average',
+    Math.abs(after.byDriver.bo.M.deg.end - DRIVER_B.end) < TOL_TIGHT.lapTime,
+    JSON.stringify(after.byDriver.bo.M.deg));
+  assert('Ana is untouched by it',
+    Math.abs(after.byDriver.ana.M.deg.end - before.byDriver.ana.M.deg.end) < 1e-9);
+
+  // And the fuel followed the laps, which is the half that is easy to forget.
+  assert('Bo also has a measured burn rate now',
+    after.fuelByDriver.bo && after.fuelByDriver.bo.litersPerLap > 0,
+    JSON.stringify(after.fuelByDriver.bo));
+  assert('and it is the real burn, not zero or a guess',
+    Math.abs(after.fuelByDriver.bo.litersPerLap - TRUTH.litersPerLap) < 0.05,
+    String(after.fuelByDriver.bo?.litersPerLap));
+
+  // Nonsense ranges move nothing rather than throwing.
+  assert('a backwards range moves nothing', L.reassignDriver(80, 10, 'ana') === 0);
+  assert('and a range with no laps in it moves nothing',
+    L.reassignDriver(500, 600, 'ana') === 0);
+}
+
+section('fuel is measured per driver, not just pooled');
+{
+  const L = createLearner({ tankSize: TRUTH.tankSize, tireLife: TRUTH.tireLife, compoundId: 'M' });
+  L.setDriver('ana');
+  L.ingest(frame(1, TRUTH.tankSize));
+  L.ingestAll(stintFor(1, TRUTH.tankSize, 20, DRIVER_A));
+
+  const e = L.getEstimates();
+  assert('the car still has one overall burn rate', e.litersPerLap > 0);
+  assert('and the driver has their own', e.fuelByDriver.ana.litersPerLap > 0);
+  assert('measured from the same tank deltas',
+    Math.abs(e.fuelByDriver.ana.litersPerLap - TRUTH.litersPerLap) < 0.05,
+    String(e.fuelByDriver.ana.litersPerLap));
+  assert('a driver nobody has seen has no figure', e.fuelByDriver.bo === undefined);
+}
+
 section('who drove the lap');
 {
   const L = createLearner({ tankSize: TRUTH.tankSize, tireLife: TRUTH.tireLife, compoundId: 'M' });
@@ -439,6 +520,61 @@ section('a driver who has barely driven proposes nothing');
 // ===========================================================================
 // Summary
 // ===========================================================================
+
+section('correcting a PAST stint does not repoint the driver on track');
+{
+  // reassignDriver sets currentDriverId when the running stint's start lap falls
+  // inside the range, so the laps still arriving go to the corrected driver. That
+  // is right for the stint being driven and wrong for any earlier one — and the
+  // two used to be indistinguishable, because adjacent stints shared the pit lap
+  // (closeStint takes endLap: currentLap, reopenStint takes startLap: currentLap).
+  // Correcting the stint that had just ended matched, and every lap from then on
+  // was filed under that past driver. stintLapRange is exclusive of the closing
+  // lap now, which is also simply what the learner records.
+  const L = createLearner({ tankSize: TRUTH.tankSize, tireLife: TRUTH.tireLife, compoundId: 'M' });
+
+  // Ana drives the first stint without being named.
+  L.ingest(frame(1, TRUTH.tankSize));
+  L.setDriver(null);
+  L.ingestAll(stintFor(1, TRUTH.tankSize, 19, DRIVER_A));
+
+  // Bo gets in at lap 20 and IS named.
+  L.ingest(frame(20, TRUTH.tankSize, null, { pitExit: true }));
+  L.setDriver('bo');
+  L.ingestAll(stintFor(20, TRUTH.tankSize, 13, DRIVER_B));
+
+  const boLapsBefore = L._laps.filter((l) => l.driverId === 'bo').length;
+  assert('Bo has laps of his own before the correction', boLapsBefore > 0, String(boLapsBefore));
+
+  // The engineer names the FIRST stint on the Pilotes tab. Its range is
+  // [startLap, endLap - 1] = [1, 19] — the pit lap 20 is Bo's, not Ana's.
+  const moved = L.reassignDriver(1, 19, 'ana');
+  assert('Ana takes the laps of the stint she drove', moved > 0, String(moved));
+
+  assert('and none of Bo’s laps moved with them',
+    L._laps.filter((l) => l.driverId === 'bo').length === boLapsBefore,
+    `${boLapsBefore} -> ${L._laps.filter((l) => l.driverId === 'bo').length}`);
+
+  // The laps that arrive AFTER the correction must still be Bo's: he is the one
+  // driving. This is the assertion the bug failed.
+  L.ingestAll(stintFor(33, TRUTH.tankSize / 2, 4, DRIVER_B));
+  const tail = L._laps.filter((l) => l.lapNum >= 33);
+  assert('the car on track is still Bo after the correction',
+    tail.length > 0 && tail.every((l) => l.driverId === 'bo'),
+    JSON.stringify(tail.map((l) => [l.lapNum, l.driverId])));
+
+  // And naming the stint that IS running still carries forward, which is the
+  // behaviour the guard has to preserve rather than remove.
+  const M = createLearner({ tankSize: TRUTH.tankSize, tireLife: TRUTH.tireLife, compoundId: 'M' });
+  M.ingest(frame(1, TRUTH.tankSize));
+  M.setDriver(null);
+  M.ingestAll(stintFor(1, TRUTH.tankSize, 10, DRIVER_A));
+  M.reassignDriver(1, 10, 'ana');
+  M.ingestAll(stintFor(11, TRUTH.tankSize / 2, 3, DRIVER_A));
+  assert('naming the running stint does carry forward',
+    M._laps.filter((l) => l.lapNum >= 11).every((l) => l.driverId === 'ana'),
+    JSON.stringify(M._laps.filter((l) => l.lapNum >= 11).map((l) => [l.lapNum, l.driverId])));
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

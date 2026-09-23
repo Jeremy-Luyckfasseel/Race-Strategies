@@ -366,6 +366,10 @@ function simulateStrategy(p) {
     cyclic = true,
     presetDriverAssignment = null,
     finalStintOverride = null,
+    // A typed-in plan's stint lengths: (stintIndex) => laps, or null for "the
+    // engine decides". Still capped by fuel and tyre life — a car cannot run
+    // past its tank — and a stint that had to be cut says so (`forcedLaps`).
+    forcedStintLaps = null,
   } = p;
 
   const stints = [];
@@ -434,6 +438,11 @@ function simulateStrategy(p) {
       targetStopLap = currentLap + limitForMandatory - 1;
     } else {
       targetStopLap = trueT <= trueF ? trueT : trueF;
+    }
+
+    const forcedLaps = forcedStintLaps ? forcedStintLaps(stints.length) : null;
+    if (forcedLaps > 0) {
+      targetStopLap = currentLap + Math.min(forcedLaps, fuelLapsLeft, tireLapsLeft) - 1;
     }
 
     if (targetStopLap < currentLap) targetStopLap = currentLap;
@@ -560,6 +569,9 @@ function simulateStrategy(p) {
 
       let isDifferentCompound = activeComp.id !== nextComp.id;
 
+      // The next stint's typed length, if the plan gives one.
+      const nextForced = forcedStintLaps ? forcedStintLaps(stints.length + 1) : null;
+
       let nextReqStops = mandatoryStops - pitsDone;
       let nextLimit = 9999;
       if (nextReqStops > 0 && estRemainingLaps > 0) {
@@ -579,6 +591,10 @@ function simulateStrategy(p) {
         // than total race distance), leaving the cost/benefit comparison below
         // unreachable in practice. This is the narrow, physically-correct
         // trigger instead.
+        tiresActuallyChanged = true;
+      } else if (nextForced > 0 && nextForced > currentTireLifeLeft) {
+        // The typed next stint is longer than this set has left: keeping it
+        // would cut the stint short of what was asked for, so change.
         tiresActuallyChanged = true;
       } else {
         // Compare total time over the SAME upcoming stint length (bounded by
@@ -605,6 +621,10 @@ function simulateStrategy(p) {
       if (nextTireCap < 1) nextTireCap = 1;
 
       let lapsInNextStint = Math.min(cappedStintLaps(nextTireCap, effectiveLPT, nextLimit), estRemainingLapsForFuel);
+      // Fuel for the stint that was typed, not the one the engine would run.
+      if (nextForced > 0) {
+        lapsInNextStint = Math.min(nextForced, cappedStintLaps(nextTireCap, effectiveLPT, 9999), estRemainingLapsForFuel);
+      }
 
       // The required total fuel in the tank for the next stint
       let targetFuelLiters = lapsInNextStint * effectiveLitersPerLap + 0.5;
@@ -656,6 +676,8 @@ function simulateStrategy(p) {
       driverId: stintDriverId,
       driverName: stintDriverName,
       avgLapTimeSecs: stintAvgLapTimeSecs,
+      // What a typed plan asked for, when it asked; null otherwise.
+      forcedLaps: forcedLaps > 0 ? forcedLaps : null,
     });
 
     if (isLast) break;
@@ -719,6 +741,103 @@ function labelStrategy(strategy) {
  * @param {object} params
  * @returns {Array} Array of sorted strategies
  */
+// ---------------------------------------------------------------------------
+// A typed-in plan
+// ---------------------------------------------------------------------------
+
+/**
+ * Run a plan typed row by row: "Medium, 10 stints, 25 laps each / then Soft
+ * until the flag". A row is `{ compoundId, stints, laps }`; `stints: null`
+ * means until the flag (only meaningful on the last row); `laps: null` means
+ * the engine sizes that row's stints from fuel and tyre life, as it does for
+ * its own plans. Drivers are not part of it — they are assigned exactly as
+ * for an engine plan.
+ *
+ * Mid-race it skips the stints already driven (`stintsDone`), and the running
+ * stint only has what is left of its typed length (`lapsIntoStint`).
+ *
+ * Returns the usual result shape plus `manual`:
+ *   rows[i].engineLaps   what the engine would run on that row, to offer
+ *   rows[i].reached      whether the race gets to that row at all
+ *   rows[i].invalid      the tyre has no life set, so it cannot be simulated
+ *   beyondPlan           the race needs more stints than the rows give (and no
+ *                        row is "until the flag"), so the last tyre carries on
+ *   cutShort             stints whose typed laps fuel or tyre life would not allow
+ */
+function runManualPlan(rows, activeCompounds, evaluate, { stintsDone = 0, lapsIntoStint = 0 } = {}) {
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  const byId = new Map(activeCompounds.map((c) => [c.id, c]));
+  const invalid = rows.map((r) => !byId.has(r.compoundId));
+  if (invalid.some(Boolean)) {
+    return { manual: { rows: rows.map((r, i) => ({ ...r, invalid: invalid[i], engineLaps: null, reached: false })), error: 'invalid_tyre' } };
+  }
+
+  // Every row becomes one entry per stint; an "until the flag" last row is the
+  // tail that repeats.
+  const entries = [];
+  const rowOf = [];
+  let tail = null;
+  rows.forEach((r, i) => {
+    const n = r.stints == null ? null : Math.max(0, Math.floor(Number(r.stints)) || 0);
+    if (n == null && i === rows.length - 1) { tail = { row: i, comp: byId.get(r.compoundId), laps: Number(r.laps) > 0 ? Math.floor(Number(r.laps)) : null }; return; }
+    for (let k = 0; k < (n ?? 1); k++) {
+      entries.push({ comp: byId.get(r.compoundId), laps: Number(r.laps) > 0 ? Math.floor(Number(r.laps)) : null });
+      rowOf.push(i);
+    }
+  });
+  if (entries.length === 0 && !tail) return null;
+
+  const entryAt = (i) => (i < entries.length ? entries[i] : (tail ?? entries[entries.length - 1]));
+  const rowAt = (i) => (i < entries.length ? rowOf[i] : (tail ? tail.row : rowOf[rowOf.length - 1]));
+
+  // The engine plan from where the race is now: the remaining entries, then
+  // the tail (or the last entry) held to the flag.
+  const plan = entries.slice(stintsDone).map((e) => e.comp);
+  plan.push(tail ? tail.comp : entryAt(Math.max(stintsDone, entries.length - 1)).comp);
+
+  const typed = (i) => {
+    const laps = entryAt(i + stintsDone).laps;
+    if (!(laps > 0)) return null;
+    return i === 0 && lapsIntoStint > 0 ? Math.max(1, laps - lapsIntoStint) : laps;
+  };
+
+  const result = evaluate(plan, false, { forcedStintLaps: typed });
+  const engine = evaluate(plan, false);
+
+  const raceStints = result.strategy.stints.length + stintsDone;
+  const rowFirstStint = rows.map((_, i) => {
+    for (let k = 0; k < raceStints; k++) if (rowAt(k) === i) return k;
+    return -1;
+  });
+
+  // What the engine would run on each row: the first full stint it gives that
+  // row (a race's last stint is cut by the flag, so it is only used when it is
+  // the only one).
+  const engineLaps = rows.map((_, i) => {
+    const mine = engine.strategy.stints.filter((_, k) => rowAt(k + stintsDone) === i);
+    const full = mine.find((st) => st.pitLap !== null) ?? mine[0];
+    return full ? full.lapsInStint : null;
+  });
+
+  const cutShort = result.strategy.stints
+    .filter((st) => st.forcedLaps && st.pitLap !== null && st.lapsInStint < st.forcedLaps)
+    .map((st) => ({ stintNum: st.stintNum + stintsDone, asked: st.forcedLaps, got: st.lapsInStint }));
+
+  return {
+    label: result.label,
+    sequenceIds: result.sequenceIds,
+    compoundIds: result.compoundIds,
+    strategy: result.strategy,
+    manual: {
+      rows: rows.map((r, i) => ({ ...r, engineLaps: engineLaps[i], reached: rowFirstStint[i] !== -1, invalid: false })),
+      beyondPlan: !tail && raceStints > entries.length,
+      plannedStints: tail ? null : entries.length,
+      raceStints,
+      cutShort,
+    },
+  };
+}
+
 export function findBestStrategies(params) {
   const {
     raceDurationHours, tankSize, lapsPerFullTank, fuelMap,
@@ -865,7 +984,10 @@ export function findBestStrategies(params) {
     ...plans.filter(plan => plan.length > 1).map(plan => ({ plan, cyclic: false })),
   ];
 
-  const strategies = allVariants.map(({ plan, cyclic }) => {
+  // One compound plan through the simulation and both driver assignments. The
+  // engine's own enumeration and a typed-in plan both come through here, so a
+  // typed plan is simulated and driver-assigned exactly as the engine's are.
+  function evaluate(plan, cyclic, extra = {}) {
     const baseSimParams = {
       targetRaceTimeSecs,
       tankSize: Number(tankSize),
@@ -886,6 +1008,7 @@ export function findBestStrategies(params) {
       processedDrivers,
       minDriverTimeSecs: minDriveTimeSecs,
       cyclic,
+      ...extra,
     };
 
     let strategy = simulateStrategy(baseSimParams);
@@ -950,7 +1073,18 @@ export function findBestStrategies(params) {
       _simParams: baseSimParams,
       _driverAssignment: usedDriverAssignment,
     };
-  });
+  }
+
+  // A typed-in plan: run that one plan only, and say how it fits the race.
+  if (params.manualPlan) {
+    const r = runManualPlan(params.manualPlan, activeCompounds, evaluate, {
+      stintsDone: midRaceMode ? Number(params.manualStintsDone) || 0 : 0,
+      lapsIntoStint: midRaceMode ? Number(params.manualLapsIntoStint) || 0 : 0,
+    });
+    return r ? [r] : [];
+  }
+
+  const strategies = allVariants.map(({ plan, cyclic }) => evaluate(plan, cyclic));
 
   // Hard filter: remove strategies that violate mandatory compound or minimum stop rules
   const filtered = strategies.filter(s => {

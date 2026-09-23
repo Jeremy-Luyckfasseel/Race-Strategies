@@ -6,6 +6,9 @@ import StrategyTimeline from "./components/StrategyTimeline";
 import { useStrategy } from "./hooks/useStrategy";
 import { useTelemetry } from "./hooks/useTelemetry";
 import { useCompoundDetector } from "./hooks/useCompoundDetector";
+import { stintAfterStop, planTyreNow } from "./logic/stintDefaults";
+import { stepPitWatch, resolvePitWatch } from "./logic/pitWatch";
+import { tyresOwed } from "./logic/mandatoryTyres";
 import { useStintLog } from "./hooks/useStintLog";
 import { useTrackMap } from "./hooks/useTrackMap";
 import { useTelemetryLearner } from "./hooks/useTelemetryLearner";
@@ -23,6 +26,9 @@ import { computeStrategy } from "./hooks/useStrategy";
 import LiveDashboard, { TrackMap } from "./components/LiveDashboard";
 import Dialog from "./components/Dialog";
 import Toasts from "./components/Toasts";
+import NextStintFuel from "./components/NextStintFuel";
+import ManualPlan from "./components/ManualPlan";
+import { findBestStrategies } from "./logic/strategy";
 import { useToasts } from "./hooks/useToasts";
 import { useDialog } from "./hooks/useDialog";
 import TelemetryLeaderboard from "./components/TelemetryLeaderboard";
@@ -34,7 +40,7 @@ import TeamPanel from "./components/TeamPanel";
 import DriversTab from "./components/DriversTab";
 import { CAR_PRESETS, parseLapTime } from "./logic/strategy";
 import { mergeAnalysisIntoInputs, mergeDriverSessions } from "./logic/sessionAnalysis";
-import { teamColor, resolveActiveCars } from "./logic/teams";
+import { teamColor, resolveActiveCars, isFollowed } from "./logic/teams";
 import {
   INPUTS_KEY, buildSnapshot, validateSnapshot, applySnapshot, clearRace,
   loadInputs, snapshotFilename,
@@ -307,6 +313,11 @@ export default function App() {
   const toasts = useToasts();
   const detector = useCompoundDetector(racingTeams);
   const stintLog = useStintLog(racingTeams, teamCompounds, inputs.drivers, myTeamIp || null);
+  // Who gets in next and on what, picked in the car panel BEFORE the stop. At
+  // my car's pit exit it becomes the new stint's driver and tyre, so the two
+  // prompts that follow a stop are already answered — picking them twice, once
+  // before and once after, was asking the same question twice.
+  const [nextPick, setNextPick] = useState({ driverId: null, compoundId: null });
   const teamKeys = useMemo(() => [...telem.teams.keys()], [telem.teams]);
   const getTeamLabel = useCallback((ip) => teamLabels[ip] || ip, [teamLabels]);
 
@@ -625,6 +636,112 @@ export default function App() {
   const ranked = result?.ranked ?? [];
   const selectedStrategy = ranked[selectedIndex] ?? best;
 
+  // A plan typed in by hand (ManualPlan): rows of tyre / stints / laps, and
+  // whether the race screen is following it instead of the engine's best.
+  const [manual, setManual] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("gt7-manual-plan"));
+      if (saved && Array.isArray(saved.rows)) return { rows: saved.rows, racing: !!saved.racing };
+    } catch { /* nothing saved, or unreadable — start empty */ }
+    return { rows: [], racing: false };
+  });
+  const saveManual = useCallback((next) => {
+    setManual(next);
+    try { localStorage.setItem("gt7-manual-plan", JSON.stringify(next)); } catch { /* storage full or off */ }
+  }, []);
+  // Run through the same engine inputs as the engine's own search: race clock,
+  // my car's lap, fuel and tyre. Mid-race the stints already in my stint log
+  // are skipped, so row 1 is not restarted at lap 150. Only when the engine
+  // itself accepted the inputs — its validation is the gate for both.
+  const manualResult = useMemo(() => {
+    if (!best || manual.rows.length === 0) return null;
+    const log = strategyIp ? stintLog.logs.get(strategyIp) : null;
+    return findBestStrategies({
+      ...engineInputs,
+      manualPlan: manual.rows,
+      manualStintsDone: log?.history?.length ?? 0,
+      manualLapsIntoStint: log?.current && myLap != null ? Math.max(0, myLap - log.current.startLap) : 0,
+    })[0] ?? null;
+  }, [best, manual.rows, engineInputs, stintLog.logs, strategyIp, myLap]);
+  const racingManual = manual.racing && !!manualResult?.strategy;
+
+  // The rivals I am actually racing. Their stops raise a notice and a
+  // flickering tyre button; the rest of a big field stays quiet. Empty means
+  // everyone, as before there was a choice (isFollowed in teams.js).
+  const [followed, setFollowed] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("gt7-followed")) || []); } catch { return new Set(); }
+  });
+  const toggleFollow = useCallback((ip) => {
+    setFollowed((prev) => {
+      const next = new Set(prev);
+      if (next.has(ip)) next.delete(ip); else next.add(ip);
+      try { localStorage.setItem("gt7-followed", JSON.stringify([...next])); } catch { /* storage off */ }
+      return next;
+    });
+  }, []);
+
+  // A followed rival in the pits: its tyre is asked for beside its row from
+  // the pit entry until I answer, or one lap after its exit — then it is put
+  // back on the tyre it had (pitWatch.js). Only cars with a bell.
+  const pitWatchRef = useRef(new Map());
+  const [pitWatch, setPitWatch] = useState(() => new Map());
+  const resolvePit = useCallback((ip) => {
+    pitWatchRef.current = resolvePitWatch(pitWatchRef.current, ip);
+    setPitWatch(pitWatchRef.current);
+  }, []);
+
+  // Step the pit watch on every packet. Declared after useStintLog and
+  // updateTeamCompound; what it read as "the tyre before the stop" is the
+  // render before the entry cleared it.
+  useEffect(() => {
+    const r = stepPitWatch(pitWatchRef.current, racingTeams, {
+      isWatched: (ip) => ip !== strategyIp && followed.has(ip),
+      compoundOf: (ip) => teamCompounds[ip] ?? stintLog.logs.get(ip)?.history?.at(-1)?.compound ?? null,
+    });
+    if (!r.changed) return;
+    pitWatchRef.current = r.state;
+    for (const e of r.expired) if (e.compound) updateTeamCompound(e.ip, e.compound);
+    setPitWatch(r.state);
+  }, [racingTeams, followed, strategyIp, teamCompounds, stintLog.logs, updateTeamCompound]);
+
+  // A rival's notice comes as it goes IN: its tyre shows in the game for a few
+  // seconds in the pit box and is hidden for the rest of the stint, so after
+  // the exit is too late to be told. My own car is told at its exit, where
+  // there is something to confirm.
+  const pitEntrySeen = useRef(new Map());
+  useEffect(() => {
+    for (const [ip, d] of telem.teams) {
+      if (!d?.pitDetected || ip === strategyIp || isSafetyCar(carRoles, ip)) continue;
+      const lap = d.currentLap ?? 0;
+      if (pitEntrySeen.current.get(ip) === lap) continue;
+      pitEntrySeen.current.set(ip, lap);
+      if (!isFollowed(ip, strategyIp, followed)) continue;
+      toasts.push({
+        key: `pitin:${ip}:${lap}`,
+        kind: 'info',
+        title: t("toast_pit_rival_in", lang, { who: getTeamLabel(ip) }),
+        detail: t(followed.has(ip) ? "toast_pit_rival_in_detail" : "toast_pit_rival_detail", lang),
+        action: {
+          label: t("toast_go_car", lang),
+          run: () => { setActiveTab("race"); setTelemSelectedIp(ip); },
+        },
+      });
+    }
+  }, [telem.teams, strategyIp, carRoles, followed, toasts, lang, getTeamLabel]);
+
+  // Which of the race's must-run tyres each car has not run yet.
+  const owedByIp = useMemo(() => {
+    const mandatory = inputs.compounds.filter((c) => c.mandatory).map((c) => c.id);
+    const out = new Map();
+    if (mandatory.length === 0) return out;
+    for (const [ip, entry] of stintLog.logs) {
+      const o = tyresOwed(entry, mandatory);
+      if (o && o.owed.length) out.set(ip, o);
+    }
+    return out;
+  }, [inputs.compounds, stintLog.logs]);
+  const planBase = racingManual ? manualResult : best;
+
 
   // --- "Now" view live state (Phase 2) ---
   // Freeze-plan toggle (DECISION 2): hold the plan steady so nothing shifts
@@ -633,10 +750,10 @@ export default function App() {
   const [planFrozen, setPlanFrozen] = useState(false);
   const [frozenBest, setFrozenBest] = useState(null);
   const toggleFreeze = useCallback(() => {
-    if (!planFrozen) setFrozenBest(best); // about to freeze → snapshot current best
+    if (!planFrozen) setFrozenBest(planBase); // about to freeze → snapshot the plan being raced
     setPlanFrozen((f) => !f);
-  }, [planFrozen, best]);
-  const nowBest = planFrozen ? frozenBest : best;
+  }, [planFrozen, planBase]);
+  const nowBest = planFrozen ? frozenBest : planBase;
 
   // Best available fuel/lap: the learner's confident estimate, else derived from
   // the active (accepted/manual) inputs. The plan source stays the active inputs.
@@ -815,6 +932,7 @@ export default function App() {
    */
   useEffect(() => {
     pitExitSeen.current.clear();
+    pitEntrySeen.current.clear();
     recSeen.current.clear();
   }, [raceStartedAt, strategyIp]);
   useEffect(() => {
@@ -825,19 +943,71 @@ export default function App() {
       pitExitSeen.current.set(ip, lap);
 
       const mine = ip === strategyIp;
+      // Rivals were told as they went in (the pit-entry effect above).
+      if (!mine) continue;
+
+      // Apply the pre-stop pick to the stint that just opened. This effect is
+      // declared after useCompoundDetector and useStintLog, so in the same
+      // commit their effects have already run: the new stint is open and both
+      // prompts are raised, and answering them here clears them.
+      // What was not picked is assumed: the plan's tyre for the stint now
+      // starting, and the same driver as before (stintDefaults.js). The toast
+      // says which parts were assumed, and both pickers can still change them.
+      const applied = [];
+      let done = false;
+      if (mine) {
+        const log = stintLog.logs.get(ip);
+        const set = stintAfterStop({
+          pick: nextPick,
+          strategy: nowBest?.strategy,
+          exitLap: lap,
+          // The render before this one: the stint just ended is still `current`
+          // if its pit entry was missed, else the last in history.
+          previousDriverId: log?.current?.driverId ?? log?.history?.at(-1)?.driverId ?? null,
+        });
+        if (set.compoundId) {
+          updateTeamCompound(ip, set.compoundId);
+          const name = compoundName(set.compoundId, lang);
+          applied.push(set.compoundFrom === 'plan' ? t("toast_tag_plan", lang, { x: name }) : name);
+        }
+        if (set.driverId && inputs.drivers.length > 0) {
+          stintLog.assignDriver(ip, set.driverId);
+          const name = inputs.drivers.find((d) => d.id === set.driverId)?.name ?? '';
+          applied.push(set.driverFrom === 'same' ? t("toast_tag_same", lang, { x: name }) : name);
+        }
+        if (nextPick.compoundId || nextPick.driverId) setNextPick({ driverId: null, compoundId: null });
+        // Both known: nothing left to do, so it is news rather than a task.
+        done = !!set.compoundId && (!!set.driverId || inputs.drivers.length === 0);
+      }
+
       toasts.push({
         key: `pit:${ip}:${lap}`,
-        kind: mine ? 'act' : 'info',
-        sticky: mine,
+        kind: mine && !done ? 'act' : 'info',
+        sticky: mine && !done,
         title: t(mine ? "toast_pit_mine" : "toast_pit_rival", lang, { who: getTeamLabel(ip) }),
-        detail: t(mine ? "toast_pit_mine_detail" : "toast_pit_rival_detail", lang),
+        detail: applied.length
+          ? t("toast_pit_mine_applied", lang, { what: applied.filter(Boolean).join(' · ') })
+          : t(mine ? "toast_pit_mine_detail" : "toast_pit_rival_detail", lang),
         action: {
           label: t("toast_go_car", lang),
           run: () => { setActiveTab("race"); setTelemSelectedIp(ip); },
         },
       });
     }
-  }, [telem.teams, carRoles, strategyIp, lang, getTeamLabel, toasts]);
+  }, [telem.teams, carRoles, strategyIp, lang, getTeamLabel, toasts, nextPick, updateTeamCompound, stintLog, inputs.drivers, nowBest, followed]);
+
+  // My car on track with no tyre set — the race has just started, or a stop's
+  // tyre was cleared — is on whatever the plan has for this stint. Only while
+  // a stint is open: in the pit lane (stint closed at entry) the stop decides,
+  // via the block above. Declared after it, so in the commit where a stop is
+  // seen, the stint is still closed here and cannot overwrite what the stop set.
+  useEffect(() => {
+    if (!strategyIp || myLap == null || teamCompounds[strategyIp]) return;
+    if (!stintLog.logs.get(strategyIp)?.current) return;
+    if (detector.pendingIps.has(strategyIp)) return;
+    const tyre = planTyreNow(nowBest?.strategy, myLap);
+    if (tyre) updateTeamCompound(strategyIp, tyre);
+  }, [strategyIp, myLap, teamCompounds, stintLog.logs, detector.pendingIps, nowBest, updateTeamCompound]);
 
   const scDeployedIp = useMemo(
     () => safetyCarDeployed(telem.teams, carRoles),
@@ -886,6 +1056,22 @@ export default function App() {
       ),
     };
   }, [incidentMark, strategyIp, telem.pace]);
+
+  /**
+   * How many laps the stint after the next stop is planned to run.
+   *
+   * The litres to put in are that many laps of whoever is getting in. Taken
+   * from the plan rather than from the tyre alone, because the stint can be cut
+   * short by the flag long before the tyre gives up, and brimming for a tyre
+   * life you will never use is weight carried for nothing.
+   */
+  const nextStintLaps = useMemo(() => {
+    const stints = nowBest?.strategy?.stints;
+    if (!stints || myLap == null) return null;
+    const idx = stints.findIndex((st) => st.pitLap != null && st.pitLap >= myLap);
+    const after = idx >= 0 ? stints[idx + 1] : null;
+    return after?.lapsInStint ?? null;
+  }, [nowBest, myLap]);
 
   const nextStopLap = useMemo(() => {
     const stints = nowBest?.strategy?.stints;
@@ -1150,10 +1336,19 @@ export default function App() {
               teamOrder: telem.teamOrder,
               teamLabels,
               teamCompounds,
-              pendingIps: detector.pendingIps,
+              // Rivals are asked beside the leaderboard (pitWatch), not by a
+              // flickering button; only my own car's row still marks a stop.
+              pendingIps: new Set(detector.pendingIps.has(strategyIp) ? [strategyIp] : []),
+              followed,
+              onToggleFollow: toggleFollow,
               selectedIp: displayIp,
               onSelect: setTelemSelectedIp,
-              onCompoundChange: (ip, c) => updateTeamCompound(ip, c),
+              // Setting a tyre by hand answers the pit question for that car.
+              onCompoundChange: (ip, c) => { updateTeamCompound(ip, c); resolvePit(ip); },
+              pitWatch,
+              onPitPick: (ip, c) => { updateTeamCompound(ip, c); resolvePit(ip); },
+              onPitDismiss: resolvePit,
+              owed: owedByIp,
               myTeamIp,
               onSetMyTeam: setMyTeam,
               onRenameTeam: updateTeamLabel,
@@ -1167,19 +1362,17 @@ export default function App() {
             };
             return (
             <div className="tab-content tab-content--race">
-              <LearnerRecommendations
-                recommendations={learner.recommendations}
-                onAccept={acceptRecommendation}
-                onIgnore={learner.ignore}
-                lang={lang}
-              />
               {/* The strip: the clock, the plan and the next call, across the
                   top of the screen the car is actually watched on. */}
               <div className="race-strip">
               <NowView
                 data={strategyIp ? telem.teams.get(strategyIp) : null}
                 strategy={nowBest?.strategy ?? null}
-                planLabel={nowBest?.sequenceIds ? compoundSequence(nowBest.sequenceIds, lang) : (nowBest?.label ?? null)}
+                planLabel={(() => {
+                  const seq = nowBest?.sequenceIds ? compoundSequence(nowBest.sequenceIds, lang) : (nowBest?.label ?? null);
+                  // Say whose plan the race screen is following.
+                  return nowBest?.manual && seq ? `${t("mp_tag", lang)} \u00B7 ${seq}` : seq;
+                })()}
                 litersPerLap={nowLitersPerLap}
                 tireLife={nowTireLife}
                 frozen={planFrozen}
@@ -1202,11 +1395,13 @@ export default function App() {
                 scGreenPitLoss={tyreOnlyPitLoss(inputs)}
                 scSlowdown={scSlowdown}
                 racecraft={racecraft}
-                crossoverSecs={crossoverSecsPerLap(
-                  tyreOnlyPitLoss(inputs),
-                  (nowBest?.strategy?.totalLaps ?? 0)
-                    - (strategyIp ? (telem.teams.get(strategyIp)?.currentLap ?? 0) : 0),
-                )}
+                crossover={(() => {
+                  const stopSecs = tyreOnlyPitLoss(inputs);
+                  const laps = (nowBest?.strategy?.totalLaps ?? 0)
+                    - (strategyIp ? (telem.teams.get(strategyIp)?.currentLap ?? 0) : 0);
+                  const perLap = crossoverSecsPerLap(stopSecs, laps);
+                  return perLap == null ? null : { perLap, stopSecs, laps: Math.floor(laps) };
+                })()}
                 lang={lang}
               />
               </div>
@@ -1295,6 +1490,24 @@ export default function App() {
                         onClearIncident={clearIncident}
                         onIncidentLoss={setIncidentLoss}
                         onApplyPace={displayIp === strategyIp ? applyPacePenalty : undefined}
+                        /* Who is getting in and on what, asked BEFORE the stop
+                           — the same two facts the pickers record after it.
+                           Only on my own car: there is nothing to fuel on a
+                           rival's. */
+                        nextStint={displayIp === strategyIp ? (
+                          <NextStintFuel
+                            drivers={inputs.drivers}
+                            compounds={inputs.compounds}
+                            fuelByDriver={learner.estimates?.fuelByDriver}
+                            globalLitersPerLap={learner.estimates?.litersPerLap}
+                            tankSize={inputs.tankSize}
+                            lapsPerFullTank={inputs.lapsPerFullTank}
+                            plannedStintLaps={nextStintLaps}
+                            pick={nextPick}
+                            onPick={setNextPick}
+                            lang={lang}
+                          />
+                        ) : null}
                         lang={lang}
                       />
                     ) : (
@@ -1302,6 +1515,20 @@ export default function App() {
                         <p>{t("app_no_selection", lang)}</p>
                       </div>
                     )}
+
+                    {/* Under the car rather than across the top of the screen.
+                        A measurement that disagrees with your setup is an offer
+                        to answer when you have a moment, not a call — and at the
+                        top it took a full-width band off the one screen that has
+                        to show everything, to say one sentence. The toast is
+                        what finds you; this is where you decide. */}
+                    <LearnerRecommendations
+                      compact
+                      recommendations={learner.recommendations}
+                      onAccept={acceptRecommendation}
+                      onIgnore={learner.ignore}
+                      lang={lang}
+                    />
                   </div>
                 </div>
               )}
@@ -1378,6 +1605,17 @@ export default function App() {
                   <StintTable stints={selectedStrategy.strategy.stints} lang={lang} />
                 </>
               )}
+              {best && (
+                <ManualPlan
+                  rows={manual.rows}
+                  onRows={(rows) => saveManual({ ...manual, rows })}
+                  result={manualResult}
+                  best={best}
+                  racing={racingManual}
+                  onRacing={(racing) => saveManual({ ...manual, racing })}
+                  lang={lang}
+                />
+              )}
             </div>
           )}
 
@@ -1389,8 +1627,22 @@ export default function App() {
                 drivers={inputs.drivers}
                 minDriverTimeSecs={inputs.minDriverTimeSecs}
                 activeIp={strategyIp}
+                /* Learned per driver already — this is the tab you come to when
+                   you want to know what a driver does, so it belongs here and
+                   not only in the pit-stop fill. */
+                fuelByDriver={learner.estimates?.fuelByDriver}
                 onReset={stintLog.resetAll}
                 onGoToTelemetry={() => setActiveTab("race")}
+                /* Naming a stint after the fact has to move its LAPS as well
+                   as its label: the pace curves and the burn rate are fitted
+                   from those lap records, so relabelling the log alone would
+                   leave that driver's measurements exactly as wrong as before
+                   while this table claimed otherwise. */
+                onAssignDriver={(index, driverId) => {
+                  const myLapNow = strategyIp ? (telem.teams.get(strategyIp)?.currentLap ?? null) : null;
+                  const range = stintLog.assignDriverAt(strategyIp, index, driverId, myLapNow);
+                  if (range) learner.reassignDriver(range.fromLap, range.toLap, driverId);
+                }}
                 lang={lang}
               />
             </div>

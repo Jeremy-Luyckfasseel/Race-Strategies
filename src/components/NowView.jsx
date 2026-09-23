@@ -52,7 +52,7 @@ function CompoundChip({ id, lang }) {
   return <span className={`now-compound compound-${id}`}>{compoundName(id, lang) || id}</span>;
 }
 
-export default function NowView({ data, strategy, planLabel, litersPerLap, tireLife, frozen, onToggleFreeze, label, needsTeam, onGoToTelemetry, clock, onStartRace, onClearRace, conditions = 'dry', onConditionsChange, conditionsWarning = null, crossoverSecs = null, scDeployed = false, scPitLoss = null, scGreenPitLoss = null, scSlowdown = null, racecraft = null, lang }) {
+export default function NowView({ data, strategy, planLabel, litersPerLap, tireLife, frozen, onToggleFreeze, label, needsTeam, onGoToTelemetry, clock, onStartRace, onClearRace, conditions = 'dry', onConditionsChange, conditionsWarning = null, crossover = null, scDeployed = false, scPitLoss = null, scGreenPitLoss = null, scSlowdown = null, racecraft = null, lang }) {
   const hasData = !!data && Number.isFinite(Number(data.currentLap));
   const currentLap = hasData ? Number(data.currentLap) : strategy?.stints?.[0]?.startLap ?? null;
 
@@ -67,10 +67,12 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
   const tyreLap = tireLife && cs ? cs.stint.startLap + tireLife - 1 : null;
   const box = pitNowTrigger({ plannedPitLap: na?.pitLap, fuelExhaustionLap: dryLap, tyreWearLap: tyreLap });
 
-  // Only the warning is worth screen space. "On target" and "you can push" are
-  // both "carry on", and a team that pushes flat out all race never acts on
-  // either — a line that never changes what you do is noise on a pit wall.
+  // The WORDS are only worth screen space as a warning: "on target" and "you
+  // can push" both mean carry on. But the NUMBER is shown always, quietly —
+  // shown only when short, a missing warning could not be told from a missing
+  // feature ("is it even there?"). Red, with "lift and coast", when short.
   const showVerdict = verdict === 'lift';
+  const showMargin = verdict !== 'unknown';
 
   return (
     <div className="now-view">
@@ -211,13 +213,12 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
                 repeating, so the reason is a tooltip on the lap itself. */}
           </div>
 
-          {/* Shown only when the fuel will not reach the stop at this pace. */}
-          {showVerdict && (
-            <div className="now-verdict now-verdict--lift">
-              <span className="now-verdict-text">{t('now_lift', lang)}</span>
-              {margin != null && Number.isFinite(margin) && (
-                <span className="now-verdict-margin">{t('now_margin', lang, { n: round1(margin) })}</span>
-              )}
+          {showMargin && (
+            <div className={`now-verdict ${showVerdict ? 'now-verdict--lift' : 'now-verdict--ok'}`}>
+              <span className="now-verdict-text">{t(showVerdict ? 'now_lift' : 'now_fuel', lang)}</span>
+              <span className="now-verdict-margin">
+                {t('now_margin', lang, { n: (margin > 0 ? '+' : '') + round1(margin) })}
+              </span>
             </div>
           )}
 
@@ -277,9 +278,15 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
         </div>
       )}
 
-      {crossoverSecs != null && (
+      {/* Shows its working — the stop and the laps left — so it reads as the
+          calculation it is rather than a number from nowhere. */}
+      {crossover && (
         <div className="now-crossover">
-          {t('cond_crossover', lang, { n: crossoverSecs.toFixed(1) })}
+          {t('cond_crossover', lang, {
+            n: crossover.perLap.toFixed(crossover.perLap < 1 ? 2 : 1),
+            stop: Math.round(crossover.stopSecs),
+            laps: crossover.laps,
+          })}
         </div>
       )}
     </div>

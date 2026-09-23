@@ -216,5 +216,55 @@ section('all three at once');
   all.unmount();
 }
 
+section('the tyre crossover shows its working');
+{
+  // It read "pays off above 0.3s/lap lost" with nothing to say where 0.3 came
+  // from, and in the background's own colour. It is the tyre-only stop divided
+  // by the laps left, so it says both.
+  const v = render(React.createElement(NowView, {
+    data: DATA, strategy: null, planLabel: null, litersPerLap: 3, tireLife: 30,
+    frozen: false, onToggleFreeze: () => {}, label: 'MCG', lang: 'en',
+    crossover: { perLap: 52 / 235, stopSecs: 52, laps: 235 },
+  }));
+  const txt = textOf($(v.container, '.now-crossover'));
+  assert('the threshold, to two places when under a second', /0\.22s\/lap/.test(txt), txt);
+  assert('the stop it is made of', /52s stop/.test(txt), txt);
+  assert('and the laps it is spread over', /235 laps left/.test(txt), txt);
+  v.unmount();
+
+  const none = render(React.createElement(NowView, {
+    data: DATA, strategy: null, planLabel: null, litersPerLap: 3, tireLife: 30,
+    frozen: false, onToggleFreeze: () => {}, label: 'MCG', lang: 'en', crossover: null,
+  }));
+  assert('nothing to decide, no line', $(none.container, '.now-crossover') === null);
+  none.unmount();
+}
+
+section('the fuel margin to the stop is always shown, red only when short');
+{
+  // Box on lap 30; the car is on lap 20 at 3 L/lap.
+  const PLAN = { stints: [
+    { stintNum: 1, startLap: 1, endLap: 30, lapsInStint: 30, pitLap: 30, compound: 'M', fuelToAddLiters: 60, tiresChanged: true },
+    { stintNum: 2, startLap: 31, endLap: 60, lapsInStint: 30, pitLap: null, compound: 'M', fuelToAddLiters: 0, tiresChanged: false },
+  ] };
+  const at = (fuelLiters) => render(React.createElement(NowView, {
+    data: { ...DATA, fuelLiters }, strategy: PLAN, planLabel: null, litersPerLap: 3, tireLife: 40,
+    frozen: false, onToggleFreeze: () => {}, label: 'MCG', lang: 'en',
+  }));
+
+  const ok = at(45);          // 15 laps of fuel for 10 left: +5
+  const okLine = $(ok.container, '.now-verdict');
+  assert('with fuel to spare the margin is still there', okLine !== null);
+  assert('quietly', okLine && okLine.className.includes('now-verdict--ok'), okLine?.className);
+  assert('as a plus number', /\+5 laps of fuel margin/.test(textOf(okLine)), textOf(okLine));
+  ok.unmount();
+
+  const short = at(24);       // 8 laps of fuel for 10 left: -2
+  const lift = $(short.container, '.now-verdict');
+  assert('short of the stop it turns into the warning', lift && lift.className.includes('now-verdict--lift'), lift?.className);
+  assert('saying lift and coast', /Lift and coast/i.test(textOf(lift)) && /-2 laps/.test(textOf(lift)), textOf(lift));
+  short.unmount();
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

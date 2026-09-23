@@ -1,5 +1,7 @@
-import { useMemo, useState, useEffect, Fragment } from 'react';
+import { useMemo, useState, useEffect, useLayoutEffect, useRef, Fragment } from 'react';
+import { createPortal } from 'react-dom';
 import { teamColor } from '../logic/teams';
+import { openPitAsks } from '../logic/pitWatch';
 import { liveInterval, formatInterval } from '../logic/gaps';
 import { rivalSummary } from '../logic/rivalIntel';
 import { splitByRole, isSafetyCar, toggleSafetyCar } from '../logic/carRoles';
@@ -37,8 +39,28 @@ function fuelBarColor(pct) {
 export default function TelemetryLeaderboard({
   teams, teamOrder = [], teamLabels, teamCompounds, pendingIps, selectedIp, onSelect, onCompoundChange,
   myTeamIp = '', onSetMyTeam, onRenameTeam, lapCrossings, fuelUse,
-  carRoles = {}, onRoleChange, pace, scDeployed = false, lang = DEFAULT_LANG,
+  carRoles = {}, onRoleChange, pace, scDeployed = false,
+  followed = null, onToggleFollow,
+  pitWatch = null, onPitPick, onPitDismiss, owed = null, lang = DEFAULT_LANG,
 }) {
+  // A followed rival's tyre is asked for BESIDE its row, over the map, while it
+  // is in the pits (pitWatch.js). It is drawn in a layer on top of the page,
+  // because the leaderboard column clips anything wider than itself, and put
+  // next to its row after every render — rows move as positions change.
+  const rowRefs = useRef(new Map());
+  const askRefs = useRef(new Map());
+  useLayoutEffect(() => {
+    for (const [ip, el] of askRefs.current) {
+      const row = rowRefs.current.get(ip);
+      if (!el || !row) continue;
+      const r = row.getBoundingClientRect();
+      const col = row.closest('.telem-3col-lb') ?? row.parentElement;
+      el.style.top = `${Math.round(r.top)}px`;
+      el.style.left = `${Math.round(col.getBoundingClientRect().right + 6)}px`;
+    }
+  });
+  // Following someone quiets the rest: it only means something once one is picked.
+  const anyFollowed = !!followed && followed.size > 0;
   const [pickerIp, setPickerIp] = useState(null);
   const [editingIp, setEditingIp] = useState(null);
 
@@ -162,13 +184,18 @@ export default function TelemetryLeaderboard({
         // same moment, which is a caution, not a field full of broken cars.
         const paceDrop   = d.onTrack && !scDeployed ? detectPaceDrop(pace?.get(ip)) : null;
         const isEditing  = editingIp === ip;
+        const isFollowedCar = !!followed?.has(ip);
+        // Once rivals are picked, the others step back so the ones I am racing
+        // stand out. Mine never does.
+        const isQuiet    = anyFollowed && !isFollowedCar && !isMine;
 
         const posClass = pos === 1 ? ' lbp-gold' : pos === 2 ? ' lbp-silver' : pos === 3 ? ' lbp-bronze' : '';
 
         return (
           <Fragment key={ip}>
             <div
-              className={`lb-row${isSelected ? ' lb-row-sel' : ''}${!d.onTrack ? ' lb-row-pit' : ''}${pickerOpen ? ' lb-row-expanded' : ''}${isMine ? ' lb-row-mine' : ''}`}
+              ref={(el) => { if (el) rowRefs.current.set(ip, el); else rowRefs.current.delete(ip); }}
+              className={`lb-row${isSelected ? ' lb-row-sel' : ''}${!d.onTrack ? ' lb-row-pit' : ''}${pickerOpen ? ' lb-row-expanded' : ''}${isMine ? ' lb-row-mine' : ''}${isFollowedCar ? ' lb-row-followed' : ''}${isQuiet ? ' lb-row-quiet' : ''}`}
               style={{ '--tc': color, '--tcr': hexRgb(color) }}
               onClick={() => { setPickerIp(null); onSelect?.(isSelected ? '' : ip); }}
             >
@@ -190,6 +217,27 @@ export default function TelemetryLeaderboard({
                     >
                       {isMine ? '★' : '☆'}
                     </button>
+                    {/* Follow a rival: its stops notify me and its tyre button
+                        flickers. With none followed, every car does. */}
+                    {!isMine && onToggleFollow && (
+                      <button
+                        className={`lb-follow-btn${isFollowedCar ? ' is-on' : ''}`}
+                        onClick={(e) => { e.stopPropagation(); onToggleFollow(ip); }}
+                        title={isFollowedCar ? t('lb_follow_unset', lang) : t('lb_follow_set', lang)}
+                        aria-pressed={isFollowedCar}
+                      >
+                        {/* A bell: this is "tell me when they stop". Outlined
+                            when off, filled when on. */}
+                        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                          <path
+                            d="M8 1.6a4 4 0 0 0-4 4v2.5L2.7 10.3a.6.6 0 0 0 .5.95h9.6a.6.6 0 0 0 .5-.95L12 8.1V5.6a4 4 0 0 0-4-4z"
+                            fill={isFollowedCar ? 'currentColor' : 'none'}
+                            stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"
+                          />
+                          <path d="M6.4 12.9a1.7 1.7 0 0 0 3.2 0" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                        </svg>
+                      </button>
+                    )}
                     {isEditing ? (
                       <input
                         className="lb-tname-input"
@@ -233,6 +281,24 @@ export default function TelemetryLeaderboard({
                         {t('lb_damaged', lang, { n: (paceDrop.lostMs / 1000).toFixed(1) })}
                       </span>
                     )}
+                    {/* The race's must-run tyres this car has not run yet. With
+                        stints whose tyre was never set it only MAY owe them. */}
+                    {(() => {
+                      const o = owed?.get(ip);
+                      if (!o) return null;
+                      return o.owed.map((id) => (
+                        <span
+                          key={id}
+                          className={`lb-owe-pill${o.unknownStints ? ' is-unsure' : ''}`}
+                          style={{ '--cc': COMPOUND_COLOR[id] }}
+                          title={o.unknownStints
+                            ? t('lb_owes_unsure_title', lang, { tyre: compoundShort(id, lang), n: o.unknownStints })
+                            : t('lb_owes_title', lang, { tyre: compoundShort(id, lang) })}
+                        >
+                          {t('lb_owes', lang, { tyre: id })}
+                        </span>
+                      ));
+                    })()}
                     {isMine && <span className="lb-mine-pill">{t('lb_me', lang)}</span>}
                     {!d.onTrack && <span className="lb-box-pill">{t('lb_box', lang)}</span>}
                   </div>
@@ -366,6 +432,46 @@ export default function TelemetryLeaderboard({
           </Fragment>
         );
       })}
+
+      {pitWatch && openPitAsks(pitWatch).length > 0 && typeof document !== 'undefined' && createPortal(
+        <div className="lb-pitask-layer">
+          {openPitAsks(pitWatch).filter(([ip]) => teams.has(ip)).map(([ip, w]) => (
+            <div
+              key={ip}
+              ref={(el) => { if (el) askRefs.current.set(ip, el); else askRefs.current.delete(ip); }}
+              className={`lb-pitask lb-pitask--${w.phase}`}
+              style={{ '--tc': teamColor(teamOrder.indexOf(ip)) }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="lb-pitask-head">
+                <span className="lb-pitask-name">{teamLabels?.[ip] || ip}</span>
+                <span className="lb-pitask-state">
+                  {w.phase === 'in'
+                    ? t('lb_pitask_in', lang)
+                    : w.prevCompound
+                      ? t('lb_pitask_out_prev', lang, { lap: (w.exitLap ?? 0) + 1, tyre: compoundShort(w.prevCompound, lang) })
+                      : t('lb_pitask_out', lang, { lap: (w.exitLap ?? 0) + 1 })}
+                </span>
+                <button className="lb-pitask-x" title={t('lb_pitask_dismiss', lang)} onClick={() => onPitDismiss?.(ip)}>×</button>
+              </div>
+              <div className="lb-pitask-grid">
+                {COMPOUND_ORDER.map((id) => (
+                  <button
+                    key={id}
+                    className="lb-cp"
+                    style={{ '--cc': COMPOUND_COLOR[id], '--ccbg': COMPOUND_BG[id] }}
+                    onClick={() => onPitPick?.(ip, id)}
+                  >
+                    <span className="lb-cp-letter">{id}</span>
+                    <span className="lb-cp-name">{compoundShort(id, lang)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>,
+        document.body,
+      )}
 
       {/* Below the race, not in it. Kept visible because the moment this moves
           is one of the most valuable things on the screen. */}

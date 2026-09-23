@@ -102,9 +102,10 @@ const tabButton = (container, label) =>
  * append a socket later, and grabbing that one sends every packet into a dead
  * component with no visible error.
  */
-async function bootApp() {
+async function bootApp(seed = {}) {
   globalThis.localStorage.clear();
   globalThis.localStorage.setItem('gt7-onboarded', '1');   // skip the first-run overlay
+  for (const [k, v] of Object.entries(seed)) globalThis.localStorage.setItem(k, v);
 
   const index = sockets.length;
   const view = render(React.createElement(App));
@@ -392,9 +393,11 @@ section('the lights go out, and the notices forget the lobby');
   click(tabButton(v.container, 'Course'));
   await settle(30);
 
+  // IPS[0] is not marked mine here (the key is written after the app read it),
+  // so this is a rival's stop, and a rival's notice comes as it goes IN.
   const boxOnLap = async (lap) => {
     await act(async () => {
-      v.relay().deliver(packet(IPS[0], 0, { currentLap: lap, pitExit: true, speedKmh: 80 }));
+      v.relay().deliver(packet(IPS[0], 0, { currentLap: lap, pitDetected: true, speedKmh: 0 }));
     });
     await settle(60);
   };
@@ -424,6 +427,143 @@ section('the lights go out, and the notices forget the lobby');
   v.unmount();
 }
 
+section('a plan picked in the lobby is the plan the race runs, from its first row');
+{
+  // Hards to the flag, 10 laps a stint, chosen before the race.
+  const v = await bootApp({
+    'gt7-manual-plan': JSON.stringify({ rows: [{ compoundId: 'H', stints: null, laps: 10 }], racing: true }),
+  });
+  await v.sendField();
+  click(tabButton(v.container, 'Course'));
+  await settle(30);
+  click($($$(v.container, '.lb-row')[4], '.lb-mine-btn'));
+  await settle(30);
+
+  // Practice in the lobby: my car stops once, so the stint log holds a stint.
+  await act(async () => { v.relay().deliver(packet(IPS[4], 4, { currentLap: 12, speedKmh: 0, pitDetected: true })); });
+  await settle();
+  await act(async () => { v.relay().deliver(packet(IPS[4], 4, { currentLap: 12, speedKmh: 80, pitExit: true })); });
+  await settle();
+  // A real console keeps streaming, so the last packet held is an ordinary
+  // lap, not the pit-exit edge.
+  await v.sendField(() => ({ currentLap: 14 }));
+
+  // The race starts; GT7's counter goes back to lap 1.
+  click($$(v.container, 'button').find((b) => /Start race|Démarrer la course/.test(b.textContent)));
+  await settle(30);
+  click($($(v.container, '.dlg-card'), '.dlg-btn--go'));
+  await act(async () => { await Promise.resolve(); });
+  await settle(60);
+
+  await v.sendField(() => ({ currentLap: 1 }));
+  // The first stint of the race began on lap 1, not on the lobby's lap 14.
+  const first = JSON.parse(globalThis.localStorage.getItem('gt7-stint-log') || '{}')[IPS[4]]?.current;
+  assert('the race’s first stint starts on its first lap, not the lobby’s last', first?.startLap === 1,
+    JSON.stringify(first?.startLap));
+  let box = null;
+  for (let i = 0; i < 60; i++) {
+    await v.sendField(() => ({ currentLap: 3 }));
+    box = $(v.container, '.now-box-lap');
+    if (box && /\b10\b/.test(box.textContent)) break;
+  }
+  const strip = $(v.container, '.race-strip')?.textContent ?? '';
+  assert('the race follows the plan picked in the lobby', /Votre stratégie/.test(strip), strip.slice(0, 120));
+  // The lobby stop was wiped with the stint log at the start, so row 1 is not
+  // skipped: its first 10-lap stint runs from lap 1 and boxes on lap 10.
+  assert('starting from its first stint, not after the practice one',
+    box && /\b10\b/.test(box.textContent), box?.textContent);
+  v.unmount();
+}
+
+section('nothing picked: the plan’s tyre and the same driver are assumed');
+{
+  // Hards for one 10-lap stint, then softs: the plan says what is on the car
+  // at every point, so nobody should have to tap it.
+  const v = await bootApp({
+    'gt7-manual-plan': JSON.stringify({
+      rows: [{ compoundId: 'H', stints: 1, laps: 10 }, { compoundId: 'S', stints: null, laps: 10 }],
+      racing: true,
+    }),
+  });
+  await v.sendField();
+  click(tabButton(v.container, 'Course'));
+  await settle(30);
+  click($($$(v.container, '.lb-row')[4], '.lb-mine-btn'));
+  let box = null;
+  for (let i = 0; i < 60 && !box; i++) {
+    await v.sendField();
+    box = $(v.container, '.now-box-lap');
+  }
+  const tyreOf = () => $(v.container, '.ld-compound-picker .active')?.textContent.trim() ?? null;
+  const driverOf = () => $(v.container, '.ld-driver-picker .active')?.textContent.trim() ?? null;
+  assert('on track with no tyre set, the car is on the plan’s tyre', tyreOf() === 'H', String(tyreOf()));
+  // The stint opened before the car was marked mine, so nobody is named yet —
+  // with nobody to carry over, asking would be right. Name them once.
+  click($$(v.container, '.ld-driver-picker .ld-cp-btn')[0]);
+  await settle(30);
+  const before = driverOf();
+
+  // In on lap 10, out on lap 11. Nothing was picked for the next stint.
+  await act(async () => { v.relay().deliver(packet(IPS[4], 4, { currentLap: 10, speedKmh: 0, pitDetected: true })); });
+  await settle();
+  await act(async () => { v.relay().deliver(packet(IPS[4], 4, { currentLap: 11, speedKmh: 80, pitExit: true })); });
+  await settle();
+
+  assert('after the stop it is on the plan’s next tyre', tyreOf() === 'S', String(tyreOf()));
+  assert('and the same driver stays in', before && driverOf() === before, `${before} → ${driverOf()}`);
+  assert('so nothing is left to confirm', $(v.container, '.ld-confirm-banner') === null);
+  const toast = $$(v.container, '.toast').map((n) => n.textContent).join(' ~ ');
+  assert('the notice says the tyre came from the plan', /selon la stratégie/.test(toast), toast);
+  v.unmount();
+}
+
+section('only the rivals I follow raise a notice when they stop');
+{
+  const v = await bootApp({ 'gt7-followed': JSON.stringify([IPS[7]]) });
+  await v.sendField();
+  click(tabButton(v.container, 'Course'));
+  await settle(30);
+  click($($$(v.container, '.lb-row')[4], '.lb-mine-btn'));
+  await settle(30);
+  const toasts = () => $$(v.container, '.toast').map((n) => n.textContent).join(' ~ ');
+
+  // The tyre question is drawn on top of the page, beside the row.
+  const asks = () => $$(globalThis.document.body, '.lb-pitask');
+  const tyreOfRow = (ip) => $$(v.container, '.lb-row').find((r) => r.textContent.includes(ip))
+    ?.querySelector('.lb-tyre')?.textContent.trim();
+  const inPits = (ip, i, lap) => act(async () => { v.relay().deliver(packet(ip, i, { currentLap: lap, speedKmh: 0, pitDetected: true })); });
+  const outOf = (ip, i, lap) => act(async () => { v.relay().deliver(packet(ip, i, { currentLap: lap, speedKmh: 80, pitExit: true })); });
+
+  // Told as it goes IN — after the exit, the game has already hidden the tyre.
+  await inPits(IPS[6], 6, 8); await settle();
+  assert('a rival I do not follow stops quietly', !toasts().includes(IPS[6]), toasts());
+  assert('and nobody asks for its tyre', asks().length === 0);
+
+  await inPits(IPS[7], 7, 8); await settle();
+  assert('a rival I follow is told as it goes in', toasts().includes(IPS[7]), toasts());
+  assert('and its tyre is asked for beside its row', asks().length === 1 && asks()[0].textContent.includes(IPS[7]),
+    asks().map((a) => a.textContent).join(' ~ '));
+  assert('nothing on the leaderboard blinks', $$(v.container, '.lb-tyre-pending').length === 0);
+
+  click($$(asks()[0], '.lb-cp').find((b) => b.textContent.startsWith('M')));
+  await settle();
+  assert('answering sets its tyre', tyreOfRow(IPS[7]) === 'M', String(tyreOfRow(IPS[7])));
+  assert('and closes the question', asks().length === 0);
+
+  // Next stop, unanswered: in on 12, out on 13, and a lap later it is put back
+  // on the tyre it had.
+  await inPits(IPS[7], 7, 12); await settle();
+  assert('the next stop asks again', asks().length === 1);
+  await outOf(IPS[7], 7, 13); await settle();
+  assert('still asked after the exit', asks().length === 1 && /13|14/.test(asks()[0].textContent),
+    asks()[0]?.textContent);
+  await act(async () => { v.relay().deliver(packet(IPS[7], 7, { currentLap: 14 })); });
+  await settle();
+  assert('a lap after the exit it stops asking', asks().length === 0);
+  assert('and puts it back on the tyre from its last stint', tyreOfRow(IPS[7]) === 'M', String(tyreOfRow(IPS[7])));
+  v.unmount();
+}
+
 section('all three tabs render with a full field');
 {
   const v = await bootApp();
@@ -435,6 +575,93 @@ section('all three tabs render with a full field');
       v.container.textContent.length > 0 && $(v.container, '.tab-content') !== null);
   }
   v.unmount();
+}
+
+section('what I picked for the next stint is what the car gets at the stop');
+{
+  // Picking the next driver and tyre before the stop and then confirming both
+  // again after it was the same question twice. At my car's pit exit the pick
+  // becomes the new stint's driver and tyre, and neither prompt is raised.
+  const v = await bootApp();
+  await v.sendField();
+  click(tabButton(v.container, 'Course'));
+  await settle(30);
+  click($($$(v.container, '.lb-row')[4], '.lb-mine-btn'));
+  await settle(30);
+
+  // The block needs a plan (it sizes the NEXT stint), and the engine is debounced.
+  let ns = null;
+  for (let i = 0; i < 60 && !ns; i++) {
+    await v.sendField();
+    ns = $(v.container, '.ns-block');
+  }
+  assert('the next-stint block is there for my car', ns !== null);
+
+  const rows = $$(v.container, '.ns-row');
+  const driverBtn = $$(rows[0], '.ld-cp-btn')[0];
+  const driverName = driverBtn?.textContent.trim();
+  click(driverBtn);
+  await settle(30);
+  click($$($$(v.container, '.ns-row')[1], '.ld-cp-btn').find((b) => b.textContent.trim() === 'W'));
+  await settle(30);
+
+  await act(async () => { v.relay().deliver(packet(IPS[4], 4, { pitExit: true, speedKmh: 80, currentLap: 9 })); });
+  await settle();
+
+  const tyre = $(v.container, '.ld-compound-picker .active');
+  assert('the car is on the wets I picked', tyre?.textContent.trim() === 'W', tyre?.textContent);
+  const driver = $(v.container, '.ld-driver-picker .active');
+  assert('and the driver I picked is driving', driver?.textContent.trim() === driverName,
+    `${driver?.textContent} vs ${driverName}`);
+  assert('so there is nothing left to confirm', $(v.container, '.ld-confirm-banner') === null);
+  assert('and the pick is cleared for the stint after',
+    $$(v.container, '.ns-row .ld-cp-btn.active').length === 0);
+  v.unmount();
+}
+
+section('racing a typed plan moves the race screen onto it');
+{
+  // Hards to the flag, 10 laps a stint. The engine would never pick 10-lap
+  // hard stints, so the first box lap on the strip says whose plan it is.
+  const seed = {
+    'gt7-manual-plan': JSON.stringify({ rows: [{ compoundId: 'H', stints: null, laps: 10 }], racing: true }),
+  };
+  const v = await bootApp(seed);
+  await v.sendField();
+  click(tabButton(v.container, 'Course'));
+  await settle(30);
+  click($($$(v.container, '.lb-row')[4], '.lb-mine-btn'));
+
+  let box = null;
+  for (let i = 0; i < 60 && !box; i++) {
+    await v.sendField();
+    box = $(v.container, '.now-box-lap');
+  }
+  const plan = $(v.container, '.now-plan-seq')?.textContent ?? '';
+  assert('the strip names the typed plan', /Votre stratégie/.test(plan), plan);
+  // No race clock is running, so the plan is laid from lap 1: 10 typed laps
+  // box on lap 10. The engine's own plan on these inputs boxes much later.
+  assert('and boxes where the typed laps say', box && /\b10\b/.test(box.textContent), box?.textContent);
+
+  // The same plan, not raced: the strip is the engine's again.
+  const seed2 = {
+    'gt7-manual-plan': JSON.stringify({ rows: [{ compoundId: 'H', stints: null, laps: 10 }], racing: false }),
+  };
+  v.unmount();
+  const w = await bootApp(seed2);
+  await w.sendField();
+  click(tabButton(w.container, 'Course'));
+  await settle(30);
+  click($($$(w.container, '.lb-row')[4], '.lb-mine-btn'));
+  let box2 = null;
+  for (let i = 0; i < 60 && !box2; i++) {
+    await w.sendField();
+    box2 = $(w.container, '.now-box-lap');
+  }
+  const strip = $(w.container, '.race-strip')?.textContent ?? '';
+  assert('not raced, the strip does not name it', box2 && !/Votre stratégie/.test(strip), strip.slice(0, 120));
+  assert('and boxes where the engine says', box2 && !/\b10\b/.test(box2.textContent), box2?.textContent);
+  w.unmount();
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

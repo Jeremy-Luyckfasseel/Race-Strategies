@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { emptyEntry, openStint, closeStint, reopenStint, recordLapIfClean, setCompound, assignDriver as assignDriverPure } from '../logic/stintLog';
+import { emptyEntry, openStint, closeStint, reopenStint, recordLapIfClean, setCompound, assignDriver as assignDriverPure, assignDriverAt as assignDriverAtPure, stintLapRange } from '../logic/stintLog';
 
 const STORAGE_KEY = 'gt7-stint-log';
 
@@ -69,6 +69,19 @@ export function useStintLog(teams, teamCompounds, drivers, ownIp = null) {
       // their pit history, but naming one of my drivers on them would be a lie.
       const isOwn = ip === ownIp;
 
+      // GT7's lap counter only goes backwards when a new session starts. After
+      // "Start race" clears the log, the car's last LOBBY packet is still held
+      // and the re-run this reset causes opened the race's first stint at the
+      // lobby's lap (25, say) — so the first stint never began at lap 1, and
+      // everything counted from it (laps on the set, a typed plan's running
+      // stint) was off by the whole lobby session. The first packet of the
+      // race puts it right: a first stint that "began" after the lap the car
+      // is on now began at a lap that belongs to the session before.
+      if (entry.current && entry.history.length === 0 && data.currentLap != null
+          && data.currentLap < entry.current.startLap) {
+        entry = { ...entry, current: null };
+      }
+
       if (!entry.current && entry.history.length === 0 && data.onTrack && (data.currentLap ?? 0) > 0) {
         entry = openStint(entry, {
           driverId: isOwn ? (drivers?.[0]?.id ?? null) : null,
@@ -128,6 +141,32 @@ export function useStintLog(teams, teamCompounds, drivers, ownIp = null) {
     if (pendingChanged) setPendingDriverIps(new Set(pendingRef.current));
   }, [teams, teamCompounds, drivers, ownIp, getEntry]);
 
+  /**
+   * Name a stint that has already happened.
+   *
+   * Returns the lap range that moved, so the caller can hand the same laps to
+   * the learner: relabelling the log alone would leave that driver's measured
+   * pace and fuel exactly as wrong as before, while the Pilotes table claimed
+   * otherwise.
+   */
+  const assignDriverAt = useCallback((ip, index, driverId, currentLap = null) => {
+    const entry = getEntry(ip);
+    const next = assignDriverAtPure(entry, index, driverId);
+    if (next === entry) return null;
+    storeRef.current.set(ip, next);
+    saveStore(storeRef.current);
+    setLogs(new Map(storeRef.current));
+    // Naming the stint that is RUNNING answers the "who is driving" prompt, so
+    // it has to clear it — otherwise the Course tab kept asking a question the
+    // Pilotes tab had just been used to answer, with no way to dismiss it.
+    // Naming an older stint answers nothing about the car on track and leaves
+    // the prompt where it is.
+    if (index === (entry?.history?.length ?? 0) && entry?.current) {
+      if (pendingRef.current.delete(ip)) setPendingDriverIps(new Set(pendingRef.current));
+    }
+    return stintLapRange(entry, index, currentLap);
+  }, [getEntry]);
+
   const assignDriver = useCallback((ip, driverId) => {
     storeRef.current.set(ip, assignDriverPure(getEntry(ip), driverId));
     pendingRef.current.delete(ip);
@@ -147,5 +186,5 @@ export function useStintLog(teams, teamCompounds, drivers, ownIp = null) {
     setLogs(new Map(storeRef.current));
   }, []);
 
-  return { logs, pendingDriverIps, assignDriver, resetAll };
+  return { logs, pendingDriverIps, assignDriver, assignDriverAt, resetAll };
 }

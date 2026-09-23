@@ -356,5 +356,59 @@ section('the confirmation banner asks for exactly what is missing');
   settled.unmount();
 }
 
+section('each driver carries the fuel rate measured off their own laps');
+{
+  const history = [{ ...stint(), endLap: 20, durationSecs: 1800, avgLapMs: 120_000 }];
+  const base = {
+    logs: logWith(history, null), drivers: DRIVERS, minDriverTimeSecs: 3600,
+    activeIp: MY_IP, onReset: () => {},
+  };
+
+  // Nothing measured yet: no line rather than a zero.
+  const none = render(React.createElement(DriversTab, base));
+  assert('no rate before anything is measured',
+    $$(none.container, '.driver-chip-fuel').length === 0);
+  none.unmount();
+
+  const v = render(React.createElement(DriversTab, {
+    ...base,
+    fuelByDriver: {
+      d1: { litersPerLap: 3.42, sampleCount: 31, confident: true },
+      d2: { litersPerLap: 3.66, sampleCount: 4, confident: false },
+    },
+  }));
+  const chips = $$(v.container, '.driver-chip');
+
+  const a = $(chips[0], '.driver-chip-fuel');
+  assert('a confident rate is shown plainly', textOf(a) === '3.42 L/tour', textOf(a));
+  assert('and is not marked thin', !a.className.includes('is-thin'), a.className);
+
+  // Short of the sample gate it is still worth seeing, but marked, with the
+  // lap count that says why to distrust it.
+  const b = $(chips[1], '.driver-chip-fuel');
+  assert('a thin rate names its sample', textOf(b) === '3.66 L/tour (4 tours)', textOf(b));
+  assert('and is marked thin', b.className.includes('is-thin'), b.className);
+  v.unmount();
+
+  // One driver measured must not put a figure on the other.
+  const oneOnly = render(React.createElement(DriversTab, {
+    ...base,
+    fuelByDriver: { d1: { litersPerLap: 3.42, sampleCount: 31, confident: true } },
+  }));
+  assert('an unmeasured driver gets no rate',
+    $$(oneOnly.container, '.driver-chip-fuel').length === 1,
+    String($$(oneOnly.container, '.driver-chip-fuel').length));
+  oneOnly.unmount();
+
+  // A row present but empty is the learner saying it cannot tell yet.
+  const nulled = render(React.createElement(DriversTab, {
+    ...base,
+    fuelByDriver: { d1: { litersPerLap: null, sampleCount: 0, confident: false } },
+  }));
+  assert('a null rate draws nothing',
+    $$(nulled.container, '.driver-chip-fuel').length === 0);
+  nulled.unmount();
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

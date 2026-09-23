@@ -225,3 +225,22 @@ export function dropStaleTeams(teams, nowMs, staleMs = TEAM_STALE_MS) {
   for (const ip of stale) next.delete(ip);
   return next;
 }
+
+/**
+ * Whether a car's stops should reach me — the pit toast and the flickering
+ * "which tyre?" button.
+ *
+ * A 15-car field has a handful of cars I am actually racing; the rest are laps
+ * up or down the road and their stops are noise. My own car always counts.
+ * With no rivals followed, every car does, which is how it behaved before
+ * there was a choice. Once any are followed, only those.
+ *
+ * @param {string} ip
+ * @param {string|null} myIp
+ * @param {Set<string>|null} followed
+ */
+export function isFollowed(ip, myIp, followed) {
+  if (ip === myIp) return true;
+  if (!followed || followed.size === 0) return true;
+  return followed.has(ip);
+}

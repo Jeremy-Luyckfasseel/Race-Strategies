@@ -44,8 +44,47 @@ function TrustLine({ trust, lang }) {
   );
 }
 
-export default function LearnerRecommendations({ recommendations, onAccept, onIgnore, lang = DEFAULT_LANG }) {
+/**
+ * One proposal on one line, for the car panel.
+ *
+ * The full cards were 135px for a single proposal, and the car panel has about
+ * a third of that left under the tyre temperatures — so on the pit wall they
+ * pushed the panel into a scroll, which is the one thing that screen must not
+ * do. Here it is the first proposal only, with how many are waiting: accepting
+ * or ignoring it brings up the next, so the slot is one row however many there
+ * are. The sample count stays on the line — it is how you judge the number —
+ * and the full cards are still on the Stratégie tab.
+ */
+function CompactRecs({ recommendations, onAccept, onIgnore, lang }) {
+  const rec = recommendations[0];
+  const n = recommendations.length;
+  const unit = rec.unit ? ` ${rec.unit}` : '';
+  const samples = rec.trust?.sampleCount;
+  return (
+    <div className="learner-recs learner-recs--compact">
+      <span className="learner-recs-dot" />
+      <span className="rec-c-label">{recLabel(rec, lang)}</span>
+      <span className="rec-c-values">
+        <span className="rec-measured">{fmtValue(rec, rec.measured)}{unit}</span>
+        <span className="rec-vs">{t('lr_vs', lang)}</span>
+        <span className="rec-current">{fmtValue(rec, rec.current)}{unit}</span>
+        {samples != null && <span className="rec-c-dim">{t('lr_laps', lang, { n: samples })}</span>}
+        {rec.trust?.highlyVolatile && <span className="rec-trust-badge">{t('lr_volatile', lang)}</span>}
+      </span>
+      {n > 1 && <span className="rec-c-dim rec-c-count">{t('lr_more', lang, { i: 1, n })}</span>}
+      <span className="rec-c-actions">
+        <button className="rec-accept" onClick={() => onAccept(rec)}>{t('lr_accept', lang)}</button>
+        <button className="rec-ignore" onClick={() => onIgnore(rec)}>{t('lr_ignore', lang)}</button>
+      </span>
+    </div>
+  );
+}
+
+export default function LearnerRecommendations({ recommendations, onAccept, onIgnore, compact = false, lang = DEFAULT_LANG }) {
   if (!recommendations || recommendations.length === 0) return null;
+  if (compact) {
+    return <CompactRecs recommendations={recommendations} onAccept={onAccept} onIgnore={onIgnore} lang={lang} />;
+  }
 
   return (
     <div className="learner-recs">

@@ -22,7 +22,7 @@ function formatDuration(secs) {
   return m > 0 ? `${m}m${String(s).padStart(2, '0')}s` : `${s}s`;
 }
 
-export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp, onReset, onGoToTelemetry, currentLap = null, lang = DEFAULT_LANG }) {
+export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp, onReset, onGoToTelemetry, onAssignDriver, fuelByDriver = null, currentLap = null, lang = DEFAULT_LANG }) {
   // Ticks once a second so the in-progress stint's elapsed time counts toward
   // its driver's total (and the "min not met" flag) instead of freezing at
   // zero for the whole stint. Date.now() is only ever read inside this effect,
@@ -70,6 +70,25 @@ export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp,
               <div key={d.id} className={`driver-chip${metMinimum ? '' : ' driver-chip-warn'}`}>
                 <span className="driver-chip-name">{d.name}</span>
                 <span className="driver-chip-time">{formatDriveTime(total)}</span>
+                {/* What this driver actually burns, measured off their own laps.
+                    It was already being learned and used to size their next
+                    fill, but only ever shown at the pit stop — and this tab is
+                    where you come to ask what a driver does, so a figure that
+                    exists and is not here is a figure you will not trust.
+                    Shown short of the sample gate too, marked, because "3.58
+                    from 4 laps" is worth seeing and is not worth acting on. */}
+                {(() => {
+                  const f = fuelByDriver?.[d.id];
+                  if (!f || f.litersPerLap == null) return null;
+                  return (
+                    <span className={`driver-chip-fuel${f.confident ? '' : ' is-thin'}`}>
+                      {t(f.confident ? 'dt_fuel_rate' : 'dt_fuel_rate_thin', lang, {
+                        n: f.litersPerLap.toFixed(2),
+                        laps: f.sampleCount,
+                      })}
+                    </span>
+                  );
+                })()}
                 {!metMinimum && <span className="driver-chip-flag">{t('rs_min_not_met', lang)}</span>}
               </div>
             );
@@ -168,7 +187,29 @@ export default function DriversTab({ logs, drivers, minDriverTimeSecs, activeIp,
                 {stints.map((st, i) => (
                   <tr key={i}>
                     <td className="stint-num">{i + 1}{st.live && t('dt_live', lang)}</td>
-                    <td className="driver-cell">{driverName(st.driverId)}</td>
+                    {/* A picker, not a label. The driver is named at the stop
+                        and at 3am that tap gets missed, which leaves a whole
+                        stint filed under nobody and its laps out of that
+                        driver's totals for the rest of the race. Changing it
+                        here moves the LAPS too, so the pace and fuel the app
+                        learned from that stint follow the correction. */}
+                    <td className="driver-cell">
+                      {onAssignDriver && drivers?.length ? (
+                        <select
+                          className={`stint-driver-pick${st.driverId ? '' : ' is-unset'}`}
+                          value={st.driverId ?? ''}
+                          title={t('st_reassign_title', lang)}
+                          onChange={(e) => onAssignDriver(i, e.target.value || null)}
+                        >
+                          <option value="">{t('st_unassigned', lang)}</option>
+                          {drivers.map((d) => (
+                            <option key={d.id} value={d.id}>{d.name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        driverName(st.driverId)
+                      )}
+                    </td>
                     <td>
                       {st.compound
                         ? (
