@@ -44,6 +44,9 @@ export const RACE_KEYS = [
   // What the learner measured during this race. It describes this car in these
   // conditions, so it belongs to the race and goes when the race does.
   'gt7-learner',
+  // A plan typed in by hand, and whether the race screen is following it. It
+  // is a plan for THIS race, so it goes when the race does.
+  'gt7-manual-plan',
 ];
 
 /**

@@ -5412,3 +5412,109 @@ input[type="range"]::-moz-range-thumb {
   .telem-3col-data .ns-block { margin-top: 6px; }
   .telem-3col-data .ns-row { margin-top: 3px; }
 }
+
+/* ---------------------------------------------------------------------------
+   Your own plan — a strategy typed in by hand (ManualPlan.jsx)
+   --------------------------------------------------------------------------- */
+.mp-card { margin-top: 20px; }
+.mp-intro { margin: 0 16px 10px; font-size: 0.74rem; color: var(--text-secondary); }
+.mp-rows { display: flex; flex-direction: column; gap: 6px; padding: 0 16px; }
+.mp-row {
+  display: grid;
+  grid-template-columns: 150px 190px 190px 28px;
+  /* Packed to the left: stretched across the card, the stints and laps sat a
+     screen-width away from the tyre they belong to. */
+  justify-content: start;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 6px 8px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-xs);
+}
+.mp-row--head {
+  background: none;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-family: var(--font-display);
+  font-size: 0.56rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+/* A row the race never gets to is still yours to edit, just visibly idle. */
+.mp-row.is-unreached > :not(.mp-note):not(.mp-remove) { opacity: 0.45; }
+.mp-tyres { display: flex; gap: 4px; }
+.mp-stints, .mp-laps { display: flex; align-items: center; gap: 6px; }
+.mp-input {
+  /* Fixed: the app-wide input rule makes fields fill their box. */
+  width: 58px;
+  flex: 0 0 58px;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  background: var(--bg-field);
+  border: 1px solid var(--rule-mid);
+  border-radius: var(--radius-xs);
+  color: var(--text-primary);
+  font-family: var(--font-data);
+  font-size: 0.8rem;
+}
+.mp-flag { font-size: 0.72rem; color: var(--text-secondary); font-style: italic; }
+.mp-flag-toggle { display: flex; align-items: center; gap: 4px; font-size: 0.66rem; color: var(--text-muted); cursor: pointer; }
+.mp-engine {
+  white-space: nowrap;
+  padding: 2px 7px;
+  border: 1px dashed var(--rule-bright);
+  border-radius: var(--radius-xs);
+  background: none;
+  color: var(--text-secondary);
+  font-family: var(--font-data);
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+.mp-engine:hover { border-color: var(--accent); color: var(--text-primary); }
+.mp-remove { background: none; border: none; color: var(--text-muted); font-size: 1rem; cursor: pointer; }
+.mp-remove:hover { color: var(--text-primary); }
+.mp-note { grid-column: 1 / -1; font-size: 0.7rem; color: var(--text-muted); }
+.mp-note.is-warn { color: var(--warning); }
+.mp-note.is-bad { color: var(--accent); }
+.mp-add {
+  margin: 10px 16px 0;
+  padding: 5px 10px;
+  background: none;
+  border: 1px dashed var(--rule-bright);
+  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+.mp-add:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+.mp-result { margin: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; }
+.mp-result > .mp-note { padding: 0; }
+.mp-summary { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; }
+.mp-total { font-family: var(--font-data); font-size: 1rem; font-weight: 700; color: var(--text-primary); }
+.mp-vs { font-size: 0.78rem; color: var(--text-secondary); }
+.mp-vs.is-good { color: var(--success); }
+.mp-vs.is-bad { color: var(--warning); }
+.mp-actions { display: flex; gap: 8px; }
+.mp-race, .mp-back {
+  padding: 6px 14px;
+  border-radius: var(--radius-xs);
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mp-race { background: var(--accent); border: 1px solid var(--accent); color: #fff; }
+.mp-back { background: none; border: 1px solid var(--rule-bright); color: var(--text-secondary); }
+.mp-back:hover { color: var(--text-primary); }
+.mp-racing-pill {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  background: rgba(228,0,43,0.14);
+  border: 1px solid var(--accent);
+  color: var(--text-primary);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}

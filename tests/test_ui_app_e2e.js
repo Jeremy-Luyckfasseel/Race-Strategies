@@ -102,9 +102,10 @@ const tabButton = (container, label) =>
  * append a socket later, and grabbing that one sends every packet into a dead
  * component with no visible error.
  */
-async function bootApp() {
+async function bootApp(seed = {}) {
   globalThis.localStorage.clear();
   globalThis.localStorage.setItem('gt7-onboarded', '1');   // skip the first-run overlay
+  for (const [k, v] of Object.entries(seed)) globalThis.localStorage.setItem(k, v);
 
   const index = sockets.length;
   const view = render(React.createElement(App));
@@ -477,6 +478,51 @@ section('what I picked for the next stint is what the car gets at the stop');
   assert('and the pick is cleared for the stint after',
     $$(v.container, '.ns-row .ld-cp-btn.active').length === 0);
   v.unmount();
+}
+
+section('racing a typed plan moves the race screen onto it');
+{
+  // Hards to the flag, 10 laps a stint. The engine would never pick 10-lap
+  // hard stints, so the first box lap on the strip says whose plan it is.
+  const seed = {
+    'gt7-manual-plan': JSON.stringify({ rows: [{ compoundId: 'H', stints: null, laps: 10 }], racing: true }),
+  };
+  const v = await bootApp(seed);
+  await v.sendField();
+  click(tabButton(v.container, 'Course'));
+  await settle(30);
+  click($($$(v.container, '.lb-row')[4], '.lb-mine-btn'));
+
+  let box = null;
+  for (let i = 0; i < 60 && !box; i++) {
+    await v.sendField();
+    box = $(v.container, '.now-box-lap');
+  }
+  const plan = $(v.container, '.now-plan-seq')?.textContent ?? '';
+  assert('the strip names the typed plan', /Votre stratégie/.test(plan), plan);
+  // No race clock is running, so the plan is laid from lap 1: 10 typed laps
+  // box on lap 10. The engine's own plan on these inputs boxes much later.
+  assert('and boxes where the typed laps say', box && /\b10\b/.test(box.textContent), box?.textContent);
+
+  // The same plan, not raced: the strip is the engine's again.
+  const seed2 = {
+    'gt7-manual-plan': JSON.stringify({ rows: [{ compoundId: 'H', stints: null, laps: 10 }], racing: false }),
+  };
+  v.unmount();
+  const w = await bootApp(seed2);
+  await w.sendField();
+  click(tabButton(w.container, 'Course'));
+  await settle(30);
+  click($($$(w.container, '.lb-row')[4], '.lb-mine-btn'));
+  let box2 = null;
+  for (let i = 0; i < 60 && !box2; i++) {
+    await w.sendField();
+    box2 = $(w.container, '.now-box-lap');
+  }
+  const strip = $(w.container, '.race-strip')?.textContent ?? '';
+  assert('not raced, the strip does not name it', box2 && !/Votre stratégie/.test(strip), strip.slice(0, 120));
+  assert('and boxes where the engine says', box2 && !/\b10\b/.test(box2.textContent), box2?.textContent);
+  w.unmount();
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

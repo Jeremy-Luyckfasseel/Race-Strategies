@@ -24,6 +24,8 @@ import LiveDashboard, { TrackMap } from "./components/LiveDashboard";
 import Dialog from "./components/Dialog";
 import Toasts from "./components/Toasts";
 import NextStintFuel from "./components/NextStintFuel";
+import ManualPlan from "./components/ManualPlan";
+import { findBestStrategies } from "./logic/strategy";
 import { useToasts } from "./hooks/useToasts";
 import { useDialog } from "./hooks/useDialog";
 import TelemetryLeaderboard from "./components/TelemetryLeaderboard";
@@ -631,6 +633,36 @@ export default function App() {
   const ranked = result?.ranked ?? [];
   const selectedStrategy = ranked[selectedIndex] ?? best;
 
+  // A plan typed in by hand (ManualPlan): rows of tyre / stints / laps, and
+  // whether the race screen is following it instead of the engine's best.
+  const [manual, setManual] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("gt7-manual-plan"));
+      if (saved && Array.isArray(saved.rows)) return { rows: saved.rows, racing: !!saved.racing };
+    } catch { /* nothing saved, or unreadable — start empty */ }
+    return { rows: [], racing: false };
+  });
+  const saveManual = useCallback((next) => {
+    setManual(next);
+    try { localStorage.setItem("gt7-manual-plan", JSON.stringify(next)); } catch { /* storage full or off */ }
+  }, []);
+  // Run through the same engine inputs as the engine's own search: race clock,
+  // my car's lap, fuel and tyre. Mid-race the stints already in my stint log
+  // are skipped, so row 1 is not restarted at lap 150. Only when the engine
+  // itself accepted the inputs — its validation is the gate for both.
+  const manualResult = useMemo(() => {
+    if (!best || manual.rows.length === 0) return null;
+    const log = strategyIp ? stintLog.logs.get(strategyIp) : null;
+    return findBestStrategies({
+      ...engineInputs,
+      manualPlan: manual.rows,
+      manualStintsDone: log?.history?.length ?? 0,
+      manualLapsIntoStint: log?.current && myLap != null ? Math.max(0, myLap - log.current.startLap) : 0,
+    })[0] ?? null;
+  }, [best, manual.rows, engineInputs, stintLog.logs, strategyIp, myLap]);
+  const racingManual = manual.racing && !!manualResult?.strategy;
+  const planBase = racingManual ? manualResult : best;
+
 
   // --- "Now" view live state (Phase 2) ---
   // Freeze-plan toggle (DECISION 2): hold the plan steady so nothing shifts
@@ -639,10 +671,10 @@ export default function App() {
   const [planFrozen, setPlanFrozen] = useState(false);
   const [frozenBest, setFrozenBest] = useState(null);
   const toggleFreeze = useCallback(() => {
-    if (!planFrozen) setFrozenBest(best); // about to freeze → snapshot current best
+    if (!planFrozen) setFrozenBest(planBase); // about to freeze → snapshot the plan being raced
     setPlanFrozen((f) => !f);
-  }, [planFrozen, best]);
-  const nowBest = planFrozen ? frozenBest : best;
+  }, [planFrozen, planBase]);
+  const nowBest = planFrozen ? frozenBest : planBase;
 
   // Best available fuel/lap: the learner's confident estimate, else derived from
   // the active (accepted/manual) inputs. The plan source stays the active inputs.
@@ -1217,7 +1249,11 @@ export default function App() {
               <NowView
                 data={strategyIp ? telem.teams.get(strategyIp) : null}
                 strategy={nowBest?.strategy ?? null}
-                planLabel={nowBest?.sequenceIds ? compoundSequence(nowBest.sequenceIds, lang) : (nowBest?.label ?? null)}
+                planLabel={(() => {
+                  const seq = nowBest?.sequenceIds ? compoundSequence(nowBest.sequenceIds, lang) : (nowBest?.label ?? null);
+                  // Say whose plan the race screen is following.
+                  return nowBest?.manual && seq ? `${t("mp_tag", lang)} \u00B7 ${seq}` : seq;
+                })()}
                 litersPerLap={nowLitersPerLap}
                 tireLife={nowTireLife}
                 frozen={planFrozen}
@@ -1449,6 +1485,17 @@ export default function App() {
                   />
                   <StintTable stints={selectedStrategy.strategy.stints} lang={lang} />
                 </>
+              )}
+              {best && (
+                <ManualPlan
+                  rows={manual.rows}
+                  onRows={(rows) => saveManual({ ...manual, rows })}
+                  result={manualResult}
+                  best={best}
+                  racing={racingManual}
+                  onRacing={(racing) => saveManual({ ...manual, racing })}
+                  lang={lang}
+                />
               )}
             </div>
           )}
