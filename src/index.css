@@ -266,6 +266,10 @@ body {
 .app-main {
   display: grid;
   grid-template-columns: var(--sidebar-width) 1fr;
+  /* The row is main's own height, not its tallest child's. Sized by content,
+     the sidebar's `100vh - header` made it 33px taller than main — the
+     footer's height — so the bottom of every tab sat under the footer. */
+  grid-template-rows: minmax(0, 1fr);
   flex: 1;
   min-height: 0;
   align-items: stretch;
@@ -282,7 +286,8 @@ body {
 .sidebar {
   background: var(--bg-surface);
   border-right: 1px solid var(--rule-mid);
-  height: calc(100vh - var(--header-height));
+  /* Its grid row's height. `100vh - header` forgot the footer. */
+  min-height: 0;
   overflow-y: auto;
   position: sticky;
   top: var(--header-height);
@@ -315,6 +320,13 @@ body {
   margin-bottom: 0;
   padding: 0 20px;
 }
+
+/* The scrolling tabs grow with their content. Held to the scroller's height
+   (flex 1 1 0) their content spilled out of them, and spilled content is not
+   counted to the end: the scroller stopped with the last card flush on the
+   footer and its bottom padding never reached. The race tab keeps its fixed
+   height — it is laid out to fit the screen and never scrolls. */
+.tab-content:not(.tab-content--race) { flex: 1 0 auto; }
 
 .results-calculating {
   opacity: 0.5;

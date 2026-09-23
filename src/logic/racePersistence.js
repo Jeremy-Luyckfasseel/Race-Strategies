@@ -44,10 +44,17 @@ export const RACE_KEYS = [
   // What the learner measured during this race. It describes this car in these
   // conditions, so it belongs to the race and goes when the race does.
   'gt7-learner',
-  // A plan typed in by hand, and whether the race screen is following it. It
-  // is a plan for THIS race, so it goes when the race does.
-  'gt7-manual-plan',
 ];
+
+/**
+ * A plan typed in by hand, and whether the race screen is following it.
+ *
+ * NOT a race key, although it is a plan for a race: it is typed in before the
+ * race starts, and "New race" is exactly how the lobby's practice is cleared
+ * away before the real one. Wiping it there threw away the plan chosen for the
+ * race about to begin. It is carried in a snapshot, like the circuit.
+ */
+export const MANUAL_PLAN_KEY = 'gt7-manual-plan';
 
 /**
  * Keys written into an exported snapshot. A snapshot is meant to restore a
@@ -55,7 +62,7 @@ export const RACE_KEYS = [
  * addresses. Car presets and the onboarding flag are app preferences rather
  * than race state and stay out.
  */
-export const SNAPSHOT_KEYS = [...RACE_KEYS, 'gt7_track_map_v1', 'gt7-ps5-ips'];
+export const SNAPSHOT_KEYS = [...RACE_KEYS, 'gt7_track_map_v1', 'gt7-ps5-ips', MANUAL_PLAN_KEY];
 
 /**
  * Build a snapshot from storage. `readKey` returns the raw stored string (or

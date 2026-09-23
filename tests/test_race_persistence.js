@@ -61,6 +61,10 @@ section('what belongs to a race, and what does not');
   assert('but it IS carried in a snapshot, so a restore is complete',
     SNAPSHOT_KEYS.includes('gt7_track_map_v1'));
   assert('PS5 addresses travel with a snapshot too', SNAPSHOT_KEYS.includes('gt7-ps5-ips'));
+  // Typed in before the race, and "New race" is how the lobby is cleared away
+  // before it starts: wiping the plan there lost the plan for the race ahead.
+  assert('a typed plan survives a new race', !RACE_KEYS.includes('gt7-manual-plan'));
+  assert('and travels with a snapshot', SNAPSHOT_KEYS.includes('gt7-manual-plan'));
   assert('car presets are app preferences, not race data',
     !SNAPSHOT_KEYS.includes('gt7-presets') && !RACE_KEYS.includes('gt7-presets'));
 }

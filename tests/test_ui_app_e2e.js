@@ -425,6 +425,54 @@ section('the lights go out, and the notices forget the lobby');
   v.unmount();
 }
 
+section('a plan picked in the lobby is the plan the race runs, from its first row');
+{
+  // Hards to the flag, 10 laps a stint, chosen before the race.
+  const v = await bootApp({
+    'gt7-manual-plan': JSON.stringify({ rows: [{ compoundId: 'H', stints: null, laps: 10 }], racing: true }),
+  });
+  await v.sendField();
+  click(tabButton(v.container, 'Course'));
+  await settle(30);
+  click($($$(v.container, '.lb-row')[4], '.lb-mine-btn'));
+  await settle(30);
+
+  // Practice in the lobby: my car stops once, so the stint log holds a stint.
+  await act(async () => { v.relay().deliver(packet(IPS[4], 4, { currentLap: 12, speedKmh: 0, pitDetected: true })); });
+  await settle();
+  await act(async () => { v.relay().deliver(packet(IPS[4], 4, { currentLap: 12, speedKmh: 80, pitExit: true })); });
+  await settle();
+  // A real console keeps streaming, so the last packet held is an ordinary
+  // lap, not the pit-exit edge.
+  await v.sendField(() => ({ currentLap: 14 }));
+
+  // The race starts; GT7's counter goes back to lap 1.
+  click($$(v.container, 'button').find((b) => /Start race|Démarrer la course/.test(b.textContent)));
+  await settle(30);
+  click($($(v.container, '.dlg-card'), '.dlg-btn--go'));
+  await act(async () => { await Promise.resolve(); });
+  await settle(60);
+
+  await v.sendField(() => ({ currentLap: 1 }));
+  // The first stint of the race began on lap 1, not on the lobby's lap 14.
+  const first = JSON.parse(globalThis.localStorage.getItem('gt7-stint-log') || '{}')[IPS[4]]?.current;
+  assert('the race’s first stint starts on its first lap, not the lobby’s last', first?.startLap === 1,
+    JSON.stringify(first?.startLap));
+  let box = null;
+  for (let i = 0; i < 60; i++) {
+    await v.sendField(() => ({ currentLap: 3 }));
+    box = $(v.container, '.now-box-lap');
+    if (box && /\b10\b/.test(box.textContent)) break;
+  }
+  const strip = $(v.container, '.race-strip')?.textContent ?? '';
+  assert('the race follows the plan picked in the lobby', /Votre stratégie/.test(strip), strip.slice(0, 120));
+  // The lobby stop was wiped with the stint log at the start, so row 1 is not
+  // skipped: its first 10-lap stint runs from lap 1 and boxes on lap 10.
+  assert('starting from its first stint, not after the practice one',
+    box && /\b10\b/.test(box.textContent), box?.textContent);
+  v.unmount();
+}
+
 section('all three tabs render with a full field');
 {
   const v = await bootApp();

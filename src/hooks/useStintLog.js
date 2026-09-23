@@ -69,6 +69,19 @@ export function useStintLog(teams, teamCompounds, drivers, ownIp = null) {
       // their pit history, but naming one of my drivers on them would be a lie.
       const isOwn = ip === ownIp;
 
+      // GT7's lap counter only goes backwards when a new session starts. After
+      // "Start race" clears the log, the car's last LOBBY packet is still held
+      // and the re-run this reset causes opened the race's first stint at the
+      // lobby's lap (25, say) — so the first stint never began at lap 1, and
+      // everything counted from it (laps on the set, a typed plan's running
+      // stint) was off by the whole lobby session. The first packet of the
+      // race puts it right: a first stint that "began" after the lap the car
+      // is on now began at a lap that belongs to the session before.
+      if (entry.current && entry.history.length === 0 && data.currentLap != null
+          && data.currentLap < entry.current.startLap) {
+        entry = { ...entry, current: null };
+      }
+
       if (!entry.current && entry.history.length === 0 && data.onTrack && (data.currentLap ?? 0) > 0) {
         entry = openStint(entry, {
           driverId: isOwn ? (drivers?.[0]?.id ?? null) : null,
