@@ -393,9 +393,11 @@ section('the lights go out, and the notices forget the lobby');
   click(tabButton(v.container, 'Course'));
   await settle(30);
 
+  // IPS[0] is not marked mine here (the key is written after the app read it),
+  // so this is a rival's stop, and a rival's notice comes as it goes IN.
   const boxOnLap = async (lap) => {
     await act(async () => {
-      v.relay().deliver(packet(IPS[0], 0, { currentLap: lap, pitExit: true, speedKmh: 80 }));
+      v.relay().deliver(packet(IPS[0], 0, { currentLap: lap, pitDetected: true, speedKmh: 0 }));
     });
     await settle(60);
   };
@@ -525,16 +527,40 @@ section('only the rivals I follow raise a notice when they stop');
   await settle(30);
   const toasts = () => $$(v.container, '.toast').map((n) => n.textContent).join(' ~ ');
 
-  await act(async () => { v.relay().deliver(packet(IPS[6], 6, { pitExit: true, speedKmh: 80 })); });
-  await settle();
-  assert('a rival I do not follow stops quietly', !toasts().includes(IPS[6]), toasts());
-  assert('and its tyre button does not flicker', $$(v.container, '.lb-tyre-pending').length === 0);
+  // The tyre question is drawn on top of the page, beside the row.
+  const asks = () => $$(globalThis.document.body, '.lb-pitask');
+  const tyreOfRow = (ip) => $$(v.container, '.lb-row').find((r) => r.textContent.includes(ip))
+    ?.querySelector('.lb-tyre')?.textContent.trim();
+  const inPits = (ip, i, lap) => act(async () => { v.relay().deliver(packet(ip, i, { currentLap: lap, speedKmh: 0, pitDetected: true })); });
+  const outOf = (ip, i, lap) => act(async () => { v.relay().deliver(packet(ip, i, { currentLap: lap, speedKmh: 80, pitExit: true })); });
 
-  await act(async () => { v.relay().deliver(packet(IPS[7], 7, { pitExit: true, speedKmh: 80 })); });
+  // Told as it goes IN — after the exit, the game has already hidden the tyre.
+  await inPits(IPS[6], 6, 8); await settle();
+  assert('a rival I do not follow stops quietly', !toasts().includes(IPS[6]), toasts());
+  assert('and nobody asks for its tyre', asks().length === 0);
+
+  await inPits(IPS[7], 7, 8); await settle();
+  assert('a rival I follow is told as it goes in', toasts().includes(IPS[7]), toasts());
+  assert('and its tyre is asked for beside its row', asks().length === 1 && asks()[0].textContent.includes(IPS[7]),
+    asks().map((a) => a.textContent).join(' ~ '));
+  assert('nothing on the leaderboard blinks', $$(v.container, '.lb-tyre-pending').length === 0);
+
+  click($$(asks()[0], '.lb-cp').find((b) => b.textContent.startsWith('M')));
   await settle();
-  assert('a rival I follow still raises one', toasts().includes(IPS[7]), toasts());
-  assert('and its tyre button flickers', $$(v.container, '.lb-tyre-pending').length === 1,
-    String($$(v.container, '.lb-tyre-pending').length));
+  assert('answering sets its tyre', tyreOfRow(IPS[7]) === 'M', String(tyreOfRow(IPS[7])));
+  assert('and closes the question', asks().length === 0);
+
+  // Next stop, unanswered: in on 12, out on 13, and a lap later it is put back
+  // on the tyre it had.
+  await inPits(IPS[7], 7, 12); await settle();
+  assert('the next stop asks again', asks().length === 1);
+  await outOf(IPS[7], 7, 13); await settle();
+  assert('still asked after the exit', asks().length === 1 && /13|14/.test(asks()[0].textContent),
+    asks()[0]?.textContent);
+  await act(async () => { v.relay().deliver(packet(IPS[7], 7, { currentLap: 14 })); });
+  await settle();
+  assert('a lap after the exit it stops asking', asks().length === 0);
+  assert('and puts it back on the tyre from its last stint', tyreOfRow(IPS[7]) === 'M', String(tyreOfRow(IPS[7])));
   v.unmount();
 }
 

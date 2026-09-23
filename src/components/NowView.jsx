@@ -67,10 +67,12 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
   const tyreLap = tireLife && cs ? cs.stint.startLap + tireLife - 1 : null;
   const box = pitNowTrigger({ plannedPitLap: na?.pitLap, fuelExhaustionLap: dryLap, tyreWearLap: tyreLap });
 
-  // Only the warning is worth screen space. "On target" and "you can push" are
-  // both "carry on", and a team that pushes flat out all race never acts on
-  // either — a line that never changes what you do is noise on a pit wall.
+  // The WORDS are only worth screen space as a warning: "on target" and "you
+  // can push" both mean carry on. But the NUMBER is shown always, quietly —
+  // shown only when short, a missing warning could not be told from a missing
+  // feature ("is it even there?"). Red, with "lift and coast", when short.
   const showVerdict = verdict === 'lift';
+  const showMargin = verdict !== 'unknown';
 
   return (
     <div className="now-view">
@@ -211,13 +213,12 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
                 repeating, so the reason is a tooltip on the lap itself. */}
           </div>
 
-          {/* Shown only when the fuel will not reach the stop at this pace. */}
-          {showVerdict && (
-            <div className="now-verdict now-verdict--lift">
-              <span className="now-verdict-text">{t('now_lift', lang)}</span>
-              {margin != null && Number.isFinite(margin) && (
-                <span className="now-verdict-margin">{t('now_margin', lang, { n: round1(margin) })}</span>
-              )}
+          {showMargin && (
+            <div className={`now-verdict ${showVerdict ? 'now-verdict--lift' : 'now-verdict--ok'}`}>
+              <span className="now-verdict-text">{t(showVerdict ? 'now_lift' : 'now_fuel', lang)}</span>
+              <span className="now-verdict-margin">
+                {t('now_margin', lang, { n: (margin > 0 ? '+' : '') + round1(margin) })}
+              </span>
             </div>
           )}
 

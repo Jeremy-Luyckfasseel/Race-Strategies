@@ -7,6 +7,8 @@ import { useStrategy } from "./hooks/useStrategy";
 import { useTelemetry } from "./hooks/useTelemetry";
 import { useCompoundDetector } from "./hooks/useCompoundDetector";
 import { stintAfterStop, planTyreNow } from "./logic/stintDefaults";
+import { stepPitWatch, resolvePitWatch } from "./logic/pitWatch";
+import { tyresOwed } from "./logic/mandatoryTyres";
 import { useStintLog } from "./hooks/useStintLog";
 import { useTrackMap } from "./hooks/useTrackMap";
 import { useTelemetryLearner } from "./hooks/useTelemetryLearner";
@@ -677,6 +679,67 @@ export default function App() {
       return next;
     });
   }, []);
+
+  // A followed rival in the pits: its tyre is asked for beside its row from
+  // the pit entry until I answer, or one lap after its exit — then it is put
+  // back on the tyre it had (pitWatch.js). Only cars with a bell.
+  const pitWatchRef = useRef(new Map());
+  const [pitWatch, setPitWatch] = useState(() => new Map());
+  const resolvePit = useCallback((ip) => {
+    pitWatchRef.current = resolvePitWatch(pitWatchRef.current, ip);
+    setPitWatch(pitWatchRef.current);
+  }, []);
+
+  // Step the pit watch on every packet. Declared after useStintLog and
+  // updateTeamCompound; what it read as "the tyre before the stop" is the
+  // render before the entry cleared it.
+  useEffect(() => {
+    const r = stepPitWatch(pitWatchRef.current, racingTeams, {
+      isWatched: (ip) => ip !== strategyIp && followed.has(ip),
+      compoundOf: (ip) => teamCompounds[ip] ?? stintLog.logs.get(ip)?.history?.at(-1)?.compound ?? null,
+    });
+    if (!r.changed) return;
+    pitWatchRef.current = r.state;
+    for (const e of r.expired) if (e.compound) updateTeamCompound(e.ip, e.compound);
+    setPitWatch(r.state);
+  }, [racingTeams, followed, strategyIp, teamCompounds, stintLog.logs, updateTeamCompound]);
+
+  // A rival's notice comes as it goes IN: its tyre shows in the game for a few
+  // seconds in the pit box and is hidden for the rest of the stint, so after
+  // the exit is too late to be told. My own car is told at its exit, where
+  // there is something to confirm.
+  const pitEntrySeen = useRef(new Map());
+  useEffect(() => {
+    for (const [ip, d] of telem.teams) {
+      if (!d?.pitDetected || ip === strategyIp || isSafetyCar(carRoles, ip)) continue;
+      const lap = d.currentLap ?? 0;
+      if (pitEntrySeen.current.get(ip) === lap) continue;
+      pitEntrySeen.current.set(ip, lap);
+      if (!isFollowed(ip, strategyIp, followed)) continue;
+      toasts.push({
+        key: `pitin:${ip}:${lap}`,
+        kind: 'info',
+        title: t("toast_pit_rival_in", lang, { who: getTeamLabel(ip) }),
+        detail: t(followed.has(ip) ? "toast_pit_rival_in_detail" : "toast_pit_rival_detail", lang),
+        action: {
+          label: t("toast_go_car", lang),
+          run: () => { setActiveTab("race"); setTelemSelectedIp(ip); },
+        },
+      });
+    }
+  }, [telem.teams, strategyIp, carRoles, followed, toasts, lang, getTeamLabel]);
+
+  // Which of the race's must-run tyres each car has not run yet.
+  const owedByIp = useMemo(() => {
+    const mandatory = inputs.compounds.filter((c) => c.mandatory).map((c) => c.id);
+    const out = new Map();
+    if (mandatory.length === 0) return out;
+    for (const [ip, entry] of stintLog.logs) {
+      const o = tyresOwed(entry, mandatory);
+      if (o && o.owed.length) out.set(ip, o);
+    }
+    return out;
+  }, [inputs.compounds, stintLog.logs]);
   const planBase = racingManual ? manualResult : best;
 
 
@@ -869,6 +932,7 @@ export default function App() {
    */
   useEffect(() => {
     pitExitSeen.current.clear();
+    pitEntrySeen.current.clear();
     recSeen.current.clear();
   }, [raceStartedAt, strategyIp]);
   useEffect(() => {
@@ -879,8 +943,8 @@ export default function App() {
       pitExitSeen.current.set(ip, lap);
 
       const mine = ip === strategyIp;
-      // A rival I am not racing: its stop is not news.
-      if (!isFollowed(ip, strategyIp, followed)) continue;
+      // Rivals were told as they went in (the pit-entry effect above).
+      if (!mine) continue;
 
       // Apply the pre-stop pick to the stint that just opened. This effect is
       // declared after useCompoundDetector and useStintLog, so in the same
@@ -1272,13 +1336,19 @@ export default function App() {
               teamOrder: telem.teamOrder,
               teamLabels,
               teamCompounds,
-              // The flickering "which tyre?" only for cars I follow.
-              pendingIps: new Set([...detector.pendingIps].filter((ip) => isFollowed(ip, strategyIp, followed))),
+              // Rivals are asked beside the leaderboard (pitWatch), not by a
+              // flickering button; only my own car's row still marks a stop.
+              pendingIps: new Set(detector.pendingIps.has(strategyIp) ? [strategyIp] : []),
               followed,
               onToggleFollow: toggleFollow,
               selectedIp: displayIp,
               onSelect: setTelemSelectedIp,
-              onCompoundChange: (ip, c) => updateTeamCompound(ip, c),
+              // Setting a tyre by hand answers the pit question for that car.
+              onCompoundChange: (ip, c) => { updateTeamCompound(ip, c); resolvePit(ip); },
+              pitWatch,
+              onPitPick: (ip, c) => { updateTeamCompound(ip, c); resolvePit(ip); },
+              onPitDismiss: resolvePit,
+              owed: owedByIp,
               myTeamIp,
               onSetMyTeam: setMyTeam,
               onRenameTeam: updateTeamLabel,

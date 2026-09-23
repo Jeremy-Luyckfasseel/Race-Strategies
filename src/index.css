@@ -2967,13 +2967,53 @@ input[type="range"]::-moz-range-thumb {
 .lb-tyre:hover        { border-color: rgba(255,255,255,0.15); }
 .lb-tyre.lb-tyre-open { border-color: rgba(255,255,255,0.22); }
 
+/* A stop to confirm on my own row: marked, not blinking. Each row's blink
+   started at its own moment, so several at once flickered out of step. */
 .lb-tyre.lb-tyre-pending {
-  animation: lb-tyre-pulse 0.75s ease-in-out infinite;
+  border-color: var(--warning);
+  box-shadow: 0 0 0 1px var(--warning);
 }
-@keyframes lb-tyre-pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.35; box-shadow: 0 0 8px var(--cc, var(--warning)); }
+
+/* ── A followed rival's tyre, asked for beside its row ── */
+.lb-pitask-layer { position: fixed; inset: 0; pointer-events: none; z-index: 850; }
+.lb-pitask {
+  position: fixed;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 7px 8px 8px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--rule-bright);
+  border-left: 3px solid var(--tc, var(--accent));
+  border-radius: var(--radius-xs);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.65);
+  animation: toast-in 0.18s ease-out;
 }
+.lb-pitask--in { border-color: var(--accent); border-left-color: var(--tc, var(--accent)); }
+.lb-pitask-head { display: flex; align-items: baseline; gap: 8px; }
+.lb-pitask-name { font-family: var(--font-display); font-size: 0.72rem; font-weight: 700; color: var(--text-primary); }
+.lb-pitask-state { font-size: 0.66rem; color: var(--text-secondary); }
+.lb-pitask--in .lb-pitask-state { color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.lb-pitask-x { margin-left: auto; background: none; border: none; color: var(--text-muted); font-size: 0.95rem; cursor: pointer; }
+.lb-pitask-x:hover { color: var(--text-primary); }
+.lb-pitask-grid { display: grid; grid-template-columns: repeat(5, 52px); gap: 5px; }
+
+/* The must-run tyres a car still owes. Unsure (stints with no tyre set) is
+   dashed: it may already have run it. */
+.lb-owe-pill {
+  margin-left: 4px;
+  padding: 0 4px;
+  border: 1px solid var(--cc, var(--rule-bright));
+  border-radius: var(--radius-xs);
+  color: var(--cc, var(--text-secondary));
+  font-family: var(--font-display);
+  font-size: 0.56rem;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.lb-owe-pill.is-unsure { border-style: dashed; opacity: 0.8; }
 
 /* ── Fuel ── */
 .lbc-fuel { padding: 5px 8px; }
@@ -5235,6 +5275,13 @@ input[type="range"]::-moz-range-thumb {
   background: rgba(228, 0, 43, 0.08);
 }
 .race-strip .now-verdict-text { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; }
+/* Enough fuel: the number, quietly. Only the warning is red. */
+.race-strip .now-verdict--ok {
+  border-color: var(--rule-mid);
+  background: none;
+}
+.race-strip .now-verdict--ok .now-verdict-text { color: var(--text-muted); }
+.race-strip .now-verdict--ok .now-verdict-margin { color: var(--text-secondary); }
 .race-strip .now-verdict-margin { font-size: 0.62rem; }
 
 /* The clock's own labels were 0.52rem of --text-ghost on a dark panel: present
