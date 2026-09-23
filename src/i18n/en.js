@@ -129,7 +129,7 @@ export default {
   cond_title: 'Track conditions — switches the plan between slicks and wets',
   cond_no_wets: 'No wet tyre is set up — still planning on slicks',
   cond_no_dry: 'No slick is set up — still planning on wets',
-  cond_crossover: 'Stopping for the other tyre pays off above {n}s/lap lost',
+  cond_crossover: 'Other compound worth a stop if ≥{n}s/lap faster · {stop}s stop ÷ {laps} laps left',
   now_freeze: 'Freeze plan',
   now_frozen: 'Plan frozen',
 

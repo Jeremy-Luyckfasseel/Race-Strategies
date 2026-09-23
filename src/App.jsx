@@ -1240,11 +1240,13 @@ export default function App() {
                 scGreenPitLoss={tyreOnlyPitLoss(inputs)}
                 scSlowdown={scSlowdown}
                 racecraft={racecraft}
-                crossoverSecs={crossoverSecsPerLap(
-                  tyreOnlyPitLoss(inputs),
-                  (nowBest?.strategy?.totalLaps ?? 0)
-                    - (strategyIp ? (telem.teams.get(strategyIp)?.currentLap ?? 0) : 0),
-                )}
+                crossover={(() => {
+                  const stopSecs = tyreOnlyPitLoss(inputs);
+                  const laps = (nowBest?.strategy?.totalLaps ?? 0)
+                    - (strategyIp ? (telem.teams.get(strategyIp)?.currentLap ?? 0) : 0);
+                  const perLap = crossoverSecsPerLap(stopSecs, laps);
+                  return perLap == null ? null : { perLap, stopSecs, laps: Math.floor(laps) };
+                })()}
                 lang={lang}
               />
               </div>

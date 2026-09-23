@@ -216,5 +216,29 @@ section('all three at once');
   all.unmount();
 }
 
+section('the tyre crossover shows its working');
+{
+  // It read "pays off above 0.3s/lap lost" with nothing to say where 0.3 came
+  // from, and in the background's own colour. It is the tyre-only stop divided
+  // by the laps left, so it says both.
+  const v = render(React.createElement(NowView, {
+    data: DATA, strategy: null, planLabel: null, litersPerLap: 3, tireLife: 30,
+    frozen: false, onToggleFreeze: () => {}, label: 'MCG', lang: 'en',
+    crossover: { perLap: 52 / 235, stopSecs: 52, laps: 235 },
+  }));
+  const txt = textOf($(v.container, '.now-crossover'));
+  assert('the threshold, to two places when under a second', /0\.22s\/lap/.test(txt), txt);
+  assert('the stop it is made of', /52s stop/.test(txt), txt);
+  assert('and the laps it is spread over', /235 laps left/.test(txt), txt);
+  v.unmount();
+
+  const none = render(React.createElement(NowView, {
+    data: DATA, strategy: null, planLabel: null, litersPerLap: 3, tireLife: 30,
+    frozen: false, onToggleFreeze: () => {}, label: 'MCG', lang: 'en', crossover: null,
+  }));
+  assert('nothing to decide, no line', $(none.container, '.now-crossover') === null);
+  none.unmount();
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

@@ -1422,7 +1422,7 @@ input[type="range"]::-moz-range-thumb {
    thing this chip is actually about. `is-thin` is short of the sample gate
    — still worth seeing, not worth fuelling to. */
 .driver-chip-fuel { font-family: var(--font-data); color: var(--text-muted); font-size: 0.7rem; }
-.driver-chip-fuel.is-thin { color: var(--text-ghost, var(--text-muted)); font-style: italic; }
+.driver-chip-fuel.is-thin { color: var(--text-muted); font-style: italic; }
 .driver-chip-flag { color: var(--danger); font-size: 0.68rem; font-family: var(--font-display); letter-spacing: 0.05em; text-transform: uppercase; }
 
 /* ============================================================
@@ -2253,6 +2253,10 @@ input[type="range"]::-moz-range-thumb {
   display: flex;
   align-items: baseline;
   gap: 7px;
+  /* The full-screen view's 24px of padding and its two rules came along into
+     the strip, making its first row 87px for 45px of content. */
+  padding: 0;
+  border: none;
 }
 .race-strip .now-countdown-num {
   font-size: 1.75rem;
@@ -2291,7 +2295,9 @@ input[type="range"]::-moz-range-thumb {
   justify-self: end;
   align-self: center;
   font-size: 0.7rem;
-  color: var(--text-ghost, var(--text-muted));
+  /* It is a number you act on when the weather turns, so it has to be
+     readable — it was drawn in the background's own colour. */
+  color: var(--text-secondary);
   padding-top: 4px;
 }
 
@@ -2329,7 +2335,7 @@ input[type="range"]::-moz-range-thumb {
 .race-strip .now-clock-k {
   font-size: 0.52rem;
   letter-spacing: 0.1em;
-  color: var(--text-ghost, var(--text-muted));
+  color: var(--text-muted);
 }
 .race-strip .now-clock-v { font-size: 0.86rem; }
 .race-strip .now-clock-clear {
@@ -2337,7 +2343,7 @@ input[type="range"]::-moz-range-thumb {
   margin-left: 2px;
   padding: 0 4px;
   line-height: 1;
-  color: var(--text-ghost, var(--text-muted));
+  color: var(--text-muted);
 }
 .race-strip .now-clock-clear:hover { color: var(--text-primary); }
 .race-strip .cond-switch { display: flex; align-items: stretch; }
@@ -3578,7 +3584,11 @@ input[type="range"]::-moz-range-thumb {
 }
 /* 0.44rem measured 7.04px in the running app — too small to read. */
 .telem-3col-lb .lb-hcol  { font-size: 0.58rem; padding: 4px 6px; }
-.telem-3col-lb .lbc      { padding: 6px 6px; }
+/* 3px, not 6px, and the name and its lap/fuel line closer together: a row
+   was 47px, so a 15-car field needed 116px more than the column had. */
+.telem-3col-lb .lbc      { padding: 3px 6px; }
+.telem-3col-lb .lb-team-inner { gap: 1px; }
+.telem-3col-lb .lb-meta  { margin-top: 0; }
 /* The tyre button is min-width 34px. In a 38px column with 6px of padding
    either side it had 26px to live in, so it was clipped by 8px and the panel
    hid the overflow. The column carries it now, and the button gives a little. */
@@ -5060,15 +5070,15 @@ input[type="range"]::-moz-range-thumb {
 /* ---------------------------------------------------------------------------
    Toasts — what happened while you were looking somewhere else
 
-   Bottom right, because the top of this screen is the plan and the left is the
-   field: both are read continuously, and a notice covering either is worse
-   than no notice. Bottom right holds nothing you steer by.
+   Top left, over the app's title — asked for there. It is the one corner with
+   nothing live under it; the tabs below the title stay reachable because the
+   stack is only as tall as its toasts.
    --------------------------------------------------------------------------- */
 
 .toasts {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  left: 16px;
+  top: 8px;
   z-index: 900;
   display: flex;
   flex-direction: column;
@@ -5094,7 +5104,7 @@ input[type="range"]::-moz-range-thumb {
 .toast--act { border-left-color: var(--accent); }
 
 @keyframes toast-in {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(-8px); }
   to   { opacity: 1; transform: none; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -5133,7 +5143,7 @@ input[type="range"]::-moz-range-thumb {
   padding: 2px 6px;
   border: none;
   background: none;
-  color: var(--text-ghost, var(--text-muted));
+  color: var(--text-muted);
   font-size: 1rem;
   line-height: 1;
   cursor: pointer;
@@ -5288,7 +5298,7 @@ input[type="range"]::-moz-range-thumb {
 }
 .stint-driver-pick:hover,
 .stint-driver-pick:focus { border-color: var(--rule-bright, var(--text-muted)); }
-.stint-driver-pick.is-unset { color: var(--text-ghost, var(--text-muted)); font-style: italic; }
+.stint-driver-pick.is-unset { color: var(--text-muted); font-style: italic; }
 
 /* ── Next stint: who is getting in, on what, and how many litres ──
    Asked before the stop, in the same group as the pickers that record it

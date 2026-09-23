@@ -52,7 +52,7 @@ function CompoundChip({ id, lang }) {
   return <span className={`now-compound compound-${id}`}>{compoundName(id, lang) || id}</span>;
 }
 
-export default function NowView({ data, strategy, planLabel, litersPerLap, tireLife, frozen, onToggleFreeze, label, needsTeam, onGoToTelemetry, clock, onStartRace, onClearRace, conditions = 'dry', onConditionsChange, conditionsWarning = null, crossoverSecs = null, scDeployed = false, scPitLoss = null, scGreenPitLoss = null, scSlowdown = null, racecraft = null, lang }) {
+export default function NowView({ data, strategy, planLabel, litersPerLap, tireLife, frozen, onToggleFreeze, label, needsTeam, onGoToTelemetry, clock, onStartRace, onClearRace, conditions = 'dry', onConditionsChange, conditionsWarning = null, crossover = null, scDeployed = false, scPitLoss = null, scGreenPitLoss = null, scSlowdown = null, racecraft = null, lang }) {
   const hasData = !!data && Number.isFinite(Number(data.currentLap));
   const currentLap = hasData ? Number(data.currentLap) : strategy?.stints?.[0]?.startLap ?? null;
 
@@ -277,9 +277,15 @@ export default function NowView({ data, strategy, planLabel, litersPerLap, tireL
         </div>
       )}
 
-      {crossoverSecs != null && (
+      {/* Shows its working — the stop and the laps left — so it reads as the
+          calculation it is rather than a number from nowhere. */}
+      {crossover && (
         <div className="now-crossover">
-          {t('cond_crossover', lang, { n: crossoverSecs.toFixed(1) })}
+          {t('cond_crossover', lang, {
+            n: crossover.perLap.toFixed(crossover.perLap < 1 ? 2 : 1),
+            stop: Math.round(crossover.stopSecs),
+            laps: crossover.laps,
+          })}
         </div>
       )}
     </div>

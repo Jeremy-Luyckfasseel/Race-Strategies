@@ -191,7 +191,7 @@ The UI suites add a small DOM harness (`tests/helpers/`): jsdom, React's own `ac
 | `test_teams.js` | 45 assertions. `src/logic/teams.js` — the 16-colour palette, `teamColor` fallbacks, append-only `withTeamOrder`, `isStalePacket`/`dropStaleTeams` (same-reference returns when nothing changed), and the key multi-car invariant: a car keeps its colour when another car drops out. |
 | `test_stint_log.js` | 29 assertions. `src/logic/stintLog.js` — the Drivers-tab stint-log state machine: stint open/close, per-lap average/best/worst folding without retaining individual lap times, compound sync, driver (re)assignment, `reopenStint`'s defensive archive-before-overwrite (a missed pit-entry packet must not lose the prior stint), `recordLapIfClean`'s out-lap/paused/off-track exclusion. |
 
-`npm test` runs all **45 suites** in sequence — **~3 096 assertions**, all
+`npm test` runs all **45 suites** in sequence — **~3 100 assertions**, all
 pure node, printing `✓/✗` and exiting non-zero on failure. **These are the
 guardrail — keep every assertion green, and judge a run by its EXIT CODE, not
 by reading the output.** Roughly 1 350 are hand-written; 1 643 are the bulk
@@ -513,7 +513,7 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
 npm run dev          # Vite dev server :5173
 npm run build        # production build → /dist
 npm run lint         # ESLint flat config — zero errors, 3 deliberate warnings
-npm test             # all 45 suites (~3 096 assertions). Judge by EXIT CODE.
+npm test             # all 45 suites (~3 100 assertions). Judge by EXIT CODE.
 npm run test:smoke   # quick 1h race test
 npm run telemetry    # the UDP→WS relay (separate process)
 npm run demo         # ten fake PS5s, for testing with no hardware in the room

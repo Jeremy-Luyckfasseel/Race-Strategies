@@ -15,7 +15,7 @@ npm run dev          # Start dev server at http://localhost:5173
 npm run build        # Production build to /dist
 npm run lint         # ESLint (flat config)
 npm run preview      # Preview production build locally
-npm test             # All 45 suites (~3 096 assertions). Judge by EXIT CODE, not output.
+npm test             # All 45 suites (~3 100 assertions). Judge by EXIT CODE, not output.
 npm run test:smoke   # Quick 1-hour race smoke test
 npm run telemetry    # Start UDP→WebSocket relay server (separate process)
 

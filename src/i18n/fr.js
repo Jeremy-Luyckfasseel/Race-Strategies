@@ -123,7 +123,7 @@ export default {
   cond_title: 'Conditions de piste — bascule le plan entre slicks et pluie',
   cond_no_wets: 'Aucun pneu pluie configuré — le plan reste sur slicks',
   cond_no_dry: 'Aucun slick configuré — le plan reste sur pneus pluie',
-  cond_crossover: "Changer de pneus devient rentable au-delà de {n}s/tour perdues",
+  cond_crossover: "L'autre gomme vaut un arrêt si ≥{n}s/tour plus rapide · arrêt {stop}s ÷ {laps} tours restants",
   now_freeze: 'Geler le plan',
   now_frozen: 'Plan gelé',
 
