@@ -1337,6 +1337,7 @@ export default function App() {
                         to show everything, to say one sentence. The toast is
                         what finds you; this is where you decide. */}
                     <LearnerRecommendations
+                      compact
                       recommendations={learner.recommendations}
                       onAccept={acceptRecommendation}
                       onIgnore={learner.ignore}

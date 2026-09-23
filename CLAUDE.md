@@ -15,7 +15,7 @@ npm run dev          # Start dev server at http://localhost:5173
 npm run build        # Production build to /dist
 npm run lint         # ESLint (flat config)
 npm run preview      # Preview production build locally
-npm test             # All 44 suites (~3 077 assertions). Judge by EXIT CODE, not output.
+npm test             # All 45 suites (~3 090 assertions). Judge by EXIT CODE, not output.
 npm run test:smoke   # Quick 1-hour race smoke test
 npm run telemetry    # Start UDP→WebSocket relay server (separate process)
 
@@ -156,7 +156,7 @@ instead.
 | `src/index.css` | The whole theme, as CSS vars on `:root`. Accent is **racing red `#E4002B`**, not gold — the app moved off purple-and-gold long ago and this line said otherwise for months. The intent behind the look, and the rules that came from getting it wrong, are in `docs/DESIGN.md`; read the live `--accent` / `--bg-*` values here before styling anything |
 | `server/telemetry-server.js` | Node.js UDP relay: receives Salsa20-encrypted GT7 packets on port 33740, relays to browser via WebSocket on port 20777; supports LAN scan for PS5s and DNS hostname resolution |
 | `tests/test.js` | Smoke test (1h race) |
-| `tests/test_comprehensive.js` | The engine's own suite (~142 assertions). The full list of all 44 suites, and what each one guards, is in `docs/CURRENT_STATE.md` §2 |
+| `tests/test_comprehensive.js` | The engine's own suite (~142 assertions). The full list of all 45 suites, and what each one guards, is in `docs/CURRENT_STATE.md` §2 |
 
 ## Telemetry server
 

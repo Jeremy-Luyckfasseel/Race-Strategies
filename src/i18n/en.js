@@ -484,4 +484,5 @@ export default {
   lr_current: 'current',
   lr_accept: 'Accept',
   lr_ignore: 'Ignore',
+  lr_more: '{i} of {n}',
 };

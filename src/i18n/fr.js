@@ -478,4 +478,5 @@ export default {
   lr_current: 'actuel',
   lr_accept: 'Accepter',
   lr_ignore: 'Ignorer',
+  lr_more: '{i} sur {n}',
 };

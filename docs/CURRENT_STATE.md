@@ -191,7 +191,7 @@ The UI suites add a small DOM harness (`tests/helpers/`): jsdom, React's own `ac
 | `test_teams.js` | 45 assertions. `src/logic/teams.js` — the 16-colour palette, `teamColor` fallbacks, append-only `withTeamOrder`, `isStalePacket`/`dropStaleTeams` (same-reference returns when nothing changed), and the key multi-car invariant: a car keeps its colour when another car drops out. |
 | `test_stint_log.js` | 29 assertions. `src/logic/stintLog.js` — the Drivers-tab stint-log state machine: stint open/close, per-lap average/best/worst folding without retaining individual lap times, compound sync, driver (re)assignment, `reopenStint`'s defensive archive-before-overwrite (a missed pit-entry packet must not lose the prior stint), `recordLapIfClean`'s out-lap/paused/off-track exclusion. |
 
-`npm test` runs all **44 suites** in sequence — **~3 077 assertions**, all
+`npm test` runs all **45 suites** in sequence — **~3 090 assertions**, all
 pure node, printing `✓/✗` and exiting non-zero on failure. **These are the
 guardrail — keep every assertion green, and judge a run by its EXIT CODE, not
 by reading the output.** Roughly 1 350 are hand-written; 1 643 are the bulk
@@ -208,6 +208,7 @@ engine behaviour changes. That is expected.)
 | `test_conditions.js` | Dry/wet as a compound filter, the fallback when no wet tyre is configured, and the crossover figure. |
 | `test_car_roles.js` / `test_ui_safety_car.js` | A safety car out of the standings and the gap chain, renumbering behind it without a hole, deployment detection, and the reduced pit loss. |
 | `test_rival_intel.js` | Burn rate from a car's own trace, the predicted box lap, and the refusal to guess before enough clean laps. |
+| `test_ui_learner_recs.js` | The proposals in the car panel are ONE row — the first proposal, "1 of N", its sample count and volatility badge, buttons acting on the one on screen — while the Strategy tab keeps the full cards. The cards were 135px and pushed the car panel into a scroll. |
 | `test_stint_fuel.js` / `test_ui_next_stint.js` | The burn-rate fallback chain and the litres, then the same on screen: a tank target rather than a netted amount, the brimmed case counted in laps rather than naming a race lap it cannot know, only tyres that are set up, and silence on the final stint. |
 | `test_tyre_history.js` | Per-compound history, median-of-finished-sets outlook, silence on a first set. |
 | `test_incident.js` / `test_pit_now.js` | The measured loss, and box-now vs wait run through the real engine. Includes the guard that an unknown fuel reading is **not** an empty tank. |
@@ -512,7 +513,7 @@ this same 3-point-per-compound shape, or the strategy engine can't consume it.
 npm run dev          # Vite dev server :5173
 npm run build        # production build → /dist
 npm run lint         # ESLint flat config — zero errors, 3 deliberate warnings
-npm test             # all 44 suites (~3 077 assertions). Judge by EXIT CODE.
+npm test             # all 45 suites (~3 090 assertions). Judge by EXIT CODE.
 npm run test:smoke   # quick 1h race test
 npm run telemetry    # the UDP→WS relay (separate process)
 npm run demo         # ten fake PS5s, for testing with no hardware in the room

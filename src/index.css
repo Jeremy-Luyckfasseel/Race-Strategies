@@ -2468,7 +2468,9 @@ input[type="range"]::-moz-range-thumb {
   border-radius: 0;
   background: none;
   padding: 12px;
-  height: 100%;
+  /* Its own height, not 100%. At 100% it filled the column however little it
+     held, so the proposals row mounted after it always started below the fold
+     — with ~130px of empty panel sitting above it. */
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -5215,13 +5217,33 @@ input[type="range"]::-moz-range-thumb {
   text-align: left;
 }
 
-/* The recommendation cards, now under the car instead of across the top. */
-.telem-3col-data .rec-panel,
-.telem-3col-data .learner-recs {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--rule);
+/* The recommendations, under the tyre temperatures, as ONE row. As cards they
+   were 135px in a panel with ~45px left, so they put the car panel into a
+   scroll. The row wraps its values under the label if the column is narrow,
+   rather than overflowing sideways. */
+.telem-3col-data .rec-panel { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.learner-recs--compact {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 8px 12px 0;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
 }
+.learner-recs--compact .learner-recs-dot { width: 6px; height: 6px; flex: 0 0 auto; }
+.rec-c-label { font-size: 0.74rem; font-weight: 600; color: var(--text-primary); }
+.rec-c-values {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+}
+.rec-c-dim { font-size: 0.64rem; color: var(--text-muted); }
+.rec-c-actions { display: flex; gap: 5px; margin-left: auto; }
+.learner-recs--compact .rec-accept,
+.learner-recs--compact .rec-ignore { padding: 2px 8px; font-size: 0.68rem; }
 
 /* The driver on a logged stint is editable, because the tap that names it at
    the stop is the one most likely to be missed. It reads as text until you
