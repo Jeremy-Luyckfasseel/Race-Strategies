@@ -351,5 +351,29 @@ section('a twelve-car field renders without incident');
   v.unmount();
 }
 
+section('following the rivals I race');
+{
+  const toggled = [];
+  // Rows are in race order; the row for a car is found by its name cell.
+  const rowFor = (v, ip) => $$(v.container, '.lb-row').find((r) => r.textContent.includes(ip));
+
+  const none = mount({ myTeamIp: IPS[0], followed: new Set(), onToggleFollow: (ip) => toggled.push(ip) });
+  assert('every rival has a follow button', $$(none.container, '.lb-follow-btn').length === 3,
+    String($$(none.container, '.lb-follow-btn').length));
+  assert('but my own car does not', !rowFor(none, IPS[0]).querySelector('.lb-follow-btn'));
+  assert('with nobody followed, nobody is dimmed', $$(none.container, '.lb-row-quiet').length === 0);
+  click(rowFor(none, IPS[2]).querySelector('.lb-follow-btn'));
+  assert('clicking it follows that car', toggled.join() === IPS[2], toggled.join());
+  assert('without selecting the row', none.calls.select.length === 0, none.calls.select.join());
+  none.unmount();
+
+  const some = mount({ myTeamIp: IPS[0], followed: new Set([IPS[2]]), onToggleFollow: () => {} });
+  assert('a followed car shows it', rowFor(some, IPS[2]).querySelector('.lb-follow-btn.is-on') !== null);
+  assert('the cars not followed step back', $$(some.container, '.lb-row-quiet').length === 2,
+    String($$(some.container, '.lb-row-quiet').length));
+  assert('mine never does', !rowFor(some, IPS[0]).className.includes('lb-row-quiet'));
+  some.unmount();
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

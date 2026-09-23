@@ -473,6 +473,71 @@ section('a plan picked in the lobby is the plan the race runs, from its first ro
   v.unmount();
 }
 
+section('nothing picked: the plan’s tyre and the same driver are assumed');
+{
+  // Hards for one 10-lap stint, then softs: the plan says what is on the car
+  // at every point, so nobody should have to tap it.
+  const v = await bootApp({
+    'gt7-manual-plan': JSON.stringify({
+      rows: [{ compoundId: 'H', stints: 1, laps: 10 }, { compoundId: 'S', stints: null, laps: 10 }],
+      racing: true,
+    }),
+  });
+  await v.sendField();
+  click(tabButton(v.container, 'Course'));
+  await settle(30);
+  click($($$(v.container, '.lb-row')[4], '.lb-mine-btn'));
+  let box = null;
+  for (let i = 0; i < 60 && !box; i++) {
+    await v.sendField();
+    box = $(v.container, '.now-box-lap');
+  }
+  const tyreOf = () => $(v.container, '.ld-compound-picker .active')?.textContent.trim() ?? null;
+  const driverOf = () => $(v.container, '.ld-driver-picker .active')?.textContent.trim() ?? null;
+  assert('on track with no tyre set, the car is on the plan’s tyre', tyreOf() === 'H', String(tyreOf()));
+  // The stint opened before the car was marked mine, so nobody is named yet —
+  // with nobody to carry over, asking would be right. Name them once.
+  click($$(v.container, '.ld-driver-picker .ld-cp-btn')[0]);
+  await settle(30);
+  const before = driverOf();
+
+  // In on lap 10, out on lap 11. Nothing was picked for the next stint.
+  await act(async () => { v.relay().deliver(packet(IPS[4], 4, { currentLap: 10, speedKmh: 0, pitDetected: true })); });
+  await settle();
+  await act(async () => { v.relay().deliver(packet(IPS[4], 4, { currentLap: 11, speedKmh: 80, pitExit: true })); });
+  await settle();
+
+  assert('after the stop it is on the plan’s next tyre', tyreOf() === 'S', String(tyreOf()));
+  assert('and the same driver stays in', before && driverOf() === before, `${before} → ${driverOf()}`);
+  assert('so nothing is left to confirm', $(v.container, '.ld-confirm-banner') === null);
+  const toast = $$(v.container, '.toast').map((n) => n.textContent).join(' ~ ');
+  assert('the notice says the tyre came from the plan', /selon la stratégie/.test(toast), toast);
+  v.unmount();
+}
+
+section('only the rivals I follow raise a notice when they stop');
+{
+  const v = await bootApp({ 'gt7-followed': JSON.stringify([IPS[7]]) });
+  await v.sendField();
+  click(tabButton(v.container, 'Course'));
+  await settle(30);
+  click($($$(v.container, '.lb-row')[4], '.lb-mine-btn'));
+  await settle(30);
+  const toasts = () => $$(v.container, '.toast').map((n) => n.textContent).join(' ~ ');
+
+  await act(async () => { v.relay().deliver(packet(IPS[6], 6, { pitExit: true, speedKmh: 80 })); });
+  await settle();
+  assert('a rival I do not follow stops quietly', !toasts().includes(IPS[6]), toasts());
+  assert('and its tyre button does not flicker', $$(v.container, '.lb-tyre-pending').length === 0);
+
+  await act(async () => { v.relay().deliver(packet(IPS[7], 7, { pitExit: true, speedKmh: 80 })); });
+  await settle();
+  assert('a rival I follow still raises one', toasts().includes(IPS[7]), toasts());
+  assert('and its tyre button flickers', $$(v.container, '.lb-tyre-pending').length === 1,
+    String($$(v.container, '.lb-tyre-pending').length));
+  v.unmount();
+}
+
 section('all three tabs render with a full field');
 {
   const v = await bootApp();

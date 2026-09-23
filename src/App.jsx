@@ -6,6 +6,7 @@ import StrategyTimeline from "./components/StrategyTimeline";
 import { useStrategy } from "./hooks/useStrategy";
 import { useTelemetry } from "./hooks/useTelemetry";
 import { useCompoundDetector } from "./hooks/useCompoundDetector";
+import { stintAfterStop, planTyreNow } from "./logic/stintDefaults";
 import { useStintLog } from "./hooks/useStintLog";
 import { useTrackMap } from "./hooks/useTrackMap";
 import { useTelemetryLearner } from "./hooks/useTelemetryLearner";
@@ -37,7 +38,7 @@ import TeamPanel from "./components/TeamPanel";
 import DriversTab from "./components/DriversTab";
 import { CAR_PRESETS, parseLapTime } from "./logic/strategy";
 import { mergeAnalysisIntoInputs, mergeDriverSessions } from "./logic/sessionAnalysis";
-import { teamColor, resolveActiveCars } from "./logic/teams";
+import { teamColor, resolveActiveCars, isFollowed } from "./logic/teams";
 import {
   INPUTS_KEY, buildSnapshot, validateSnapshot, applySnapshot, clearRace,
   loadInputs, snapshotFilename,
@@ -661,6 +662,21 @@ export default function App() {
     })[0] ?? null;
   }, [best, manual.rows, engineInputs, stintLog.logs, strategyIp, myLap]);
   const racingManual = manual.racing && !!manualResult?.strategy;
+
+  // The rivals I am actually racing. Their stops raise a notice and a
+  // flickering tyre button; the rest of a big field stays quiet. Empty means
+  // everyone, as before there was a choice (isFollowed in teams.js).
+  const [followed, setFollowed] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("gt7-followed")) || []); } catch { return new Set(); }
+  });
+  const toggleFollow = useCallback((ip) => {
+    setFollowed((prev) => {
+      const next = new Set(prev);
+      if (next.has(ip)) next.delete(ip); else next.add(ip);
+      try { localStorage.setItem("gt7-followed", JSON.stringify([...next])); } catch { /* storage off */ }
+      return next;
+    });
+  }, []);
   const planBase = racingManual ? manualResult : best;
 
 
@@ -863,25 +879,42 @@ export default function App() {
       pitExitSeen.current.set(ip, lap);
 
       const mine = ip === strategyIp;
+      // A rival I am not racing: its stop is not news.
+      if (!isFollowed(ip, strategyIp, followed)) continue;
 
       // Apply the pre-stop pick to the stint that just opened. This effect is
       // declared after useCompoundDetector and useStintLog, so in the same
       // commit their effects have already run: the new stint is open and both
       // prompts are raised, and answering them here clears them.
+      // What was not picked is assumed: the plan's tyre for the stint now
+      // starting, and the same driver as before (stintDefaults.js). The toast
+      // says which parts were assumed, and both pickers can still change them.
       const applied = [];
+      let done = false;
       if (mine) {
-        if (nextPick.compoundId) {
-          updateTeamCompound(ip, nextPick.compoundId);
-          applied.push(compoundName(nextPick.compoundId, lang));
+        const log = stintLog.logs.get(ip);
+        const set = stintAfterStop({
+          pick: nextPick,
+          strategy: nowBest?.strategy,
+          exitLap: lap,
+          // The render before this one: the stint just ended is still `current`
+          // if its pit entry was missed, else the last in history.
+          previousDriverId: log?.current?.driverId ?? log?.history?.at(-1)?.driverId ?? null,
+        });
+        if (set.compoundId) {
+          updateTeamCompound(ip, set.compoundId);
+          const name = compoundName(set.compoundId, lang);
+          applied.push(set.compoundFrom === 'plan' ? t("toast_tag_plan", lang, { x: name }) : name);
         }
-        if (nextPick.driverId) {
-          stintLog.assignDriver(ip, nextPick.driverId);
-          applied.push(inputs.drivers.find((d) => d.id === nextPick.driverId)?.name ?? '');
+        if (set.driverId && inputs.drivers.length > 0) {
+          stintLog.assignDriver(ip, set.driverId);
+          const name = inputs.drivers.find((d) => d.id === set.driverId)?.name ?? '';
+          applied.push(set.driverFrom === 'same' ? t("toast_tag_same", lang, { x: name }) : name);
         }
-        if (applied.length) setNextPick({ driverId: null, compoundId: null });
+        if (nextPick.compoundId || nextPick.driverId) setNextPick({ driverId: null, compoundId: null });
+        // Both known: nothing left to do, so it is news rather than a task.
+        done = !!set.compoundId && (!!set.driverId || inputs.drivers.length === 0);
       }
-      // Both known: nothing left to do, so it is news rather than a task.
-      const done = mine && nextPick.compoundId && nextPick.driverId;
 
       toasts.push({
         key: `pit:${ip}:${lap}`,
@@ -897,7 +930,20 @@ export default function App() {
         },
       });
     }
-  }, [telem.teams, carRoles, strategyIp, lang, getTeamLabel, toasts, nextPick, updateTeamCompound, stintLog, inputs.drivers]);
+  }, [telem.teams, carRoles, strategyIp, lang, getTeamLabel, toasts, nextPick, updateTeamCompound, stintLog, inputs.drivers, nowBest, followed]);
+
+  // My car on track with no tyre set — the race has just started, or a stop's
+  // tyre was cleared — is on whatever the plan has for this stint. Only while
+  // a stint is open: in the pit lane (stint closed at entry) the stop decides,
+  // via the block above. Declared after it, so in the commit where a stop is
+  // seen, the stint is still closed here and cannot overwrite what the stop set.
+  useEffect(() => {
+    if (!strategyIp || myLap == null || teamCompounds[strategyIp]) return;
+    if (!stintLog.logs.get(strategyIp)?.current) return;
+    if (detector.pendingIps.has(strategyIp)) return;
+    const tyre = planTyreNow(nowBest?.strategy, myLap);
+    if (tyre) updateTeamCompound(strategyIp, tyre);
+  }, [strategyIp, myLap, teamCompounds, stintLog.logs, detector.pendingIps, nowBest, updateTeamCompound]);
 
   const scDeployedIp = useMemo(
     () => safetyCarDeployed(telem.teams, carRoles),
@@ -1226,7 +1272,10 @@ export default function App() {
               teamOrder: telem.teamOrder,
               teamLabels,
               teamCompounds,
-              pendingIps: detector.pendingIps,
+              // The flickering "which tyre?" only for cars I follow.
+              pendingIps: new Set([...detector.pendingIps].filter((ip) => isFollowed(ip, strategyIp, followed))),
+              followed,
+              onToggleFollow: toggleFollow,
               selectedIp: displayIp,
               onSelect: setTelemSelectedIp,
               onCompoundChange: (ip, c) => updateTeamCompound(ip, c),

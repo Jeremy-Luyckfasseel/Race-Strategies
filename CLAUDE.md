@@ -15,7 +15,7 @@ npm run dev          # Start dev server at http://localhost:5173
 npm run build        # Production build to /dist
 npm run lint         # ESLint (flat config)
 npm run preview      # Preview production build locally
-npm test             # All 47 suites (~3 155 assertions). Judge by EXIT CODE, not output.
+npm test             # All 48 suites (~3 190 assertions). Judge by EXIT CODE, not output.
 npm run test:smoke   # Quick 1-hour race smoke test
 npm run telemetry    # Start UDP→WebSocket relay server (separate process)
 
@@ -99,6 +99,11 @@ them silently repoints the strategy at a rival. `resolveActiveCars`
 - **`displayIp`** — the car the dashboard widget is inspecting; follows a
   leaderboard click so you can look at anyone.
 
+Rivals I **follow** (◉ beside the star in the leaderboard, `gt7-followed`,
+kept across "New race" like the typed plan) are the only ones whose stops raise
+a toast and a flickering tyre button; the rest dim. With none followed, every
+car does, as before (`isFollowed`, `teams.js`).
+
 Every car gets a stint log (a rival's pit history is useful), but only mine
 carries driver names or raises a driver prompt — otherwise a 10-car field
 would pop a confirmation every time anyone pitted. With no team marked and
@@ -131,6 +136,7 @@ instead.
 | `src/logic/strategy.js` | Pure-JS strategy engine — also takes `pacePenaltySecs` + `pacePenaltyLaps`: a flat cost on every lap for a bounded number of laps. **Bounded because damage does not last the race — the car is repaired at the next stop.** Applied per lap in the simulation rather than folded into the compound constants, which could not express a penalty that ends; it deliberately does not move `avgLapTimeSecs`, a planning estimate, since over the handful of laps damage usually lasts that beats pretending the whole race is slower (~700 lines); exports `findBestStrategies`, `TIRE_COMPOUNDS`, `CAR_PRESETS`, `formatLapTime`, `formatRaceTime`, `parseLapTime`, `isValidLapTimeStr`, `calcPitStopTime` |
 | `src/components/ManualPlan.jsx` + `runManualPlan` (strategy.js) | **A strategy typed in by hand**, on the Strategy tab. Rows of tyre / stints (or "until the flag" on the last row) / laps per stint, so ten medium stints are one row. `findBestStrategies({ ...inputs, manualPlan })` expands the rows into the engine's own compound plan (hold-last) and runs it through the same `evaluate` as the engine's plans — same simulation, same two driver assignments; drivers are deliberately not part of the typed plan. Typed laps reach `simulateStrategy` as `forcedStintLaps`, still capped by fuel and tyre life (a cut stint is reported), and the stop before a typed stint fuels for THAT stint and changes a set that could not last it. Each row reports what the engine would run on it (the "engine: N" chip that fills the field), rows the race never reaches, and `beyondPlan` when the rows run out before the flag. Mid-race it skips the stints in my stint log. "Race this plan" makes it `planBase`, which the race screen and the freeze follow instead of `best`; persisted as `gt7-manual-plan` — deliberately NOT a RACE_KEY, because it is typed in the lobby and "New race" is how the lobby is cleared before the real one; it is in SNAPSHOT_KEYS so a save carries it |
 | `src/logic/stintFuel.js` | How many litres for the stint about to start, given who is getting in and what is being fitted — the two things the plan's per-stop figure could not know. `burnRateFor` goes driver → car → configured and reports which it used, because the same litres from a driver's own 41 laps and from a number typed in last week are not the same claim. `stintFuel` answers with a **tank target**, capped at the tank: it must not net against live fuel, since the stop it describes can be 25 laps away and the car arrives near empty — netting there read "nothing to add" for a stint that would start on fumes. Deliberately not an engine re-run per driver: stint length is set by fuel range, and per-driver fuel would make fuel range depend on who is driving while the driver is picked FROM the stint length |
+| `src/logic/stintDefaults.js` | What my car is on and who drives it when nobody has said. At my pit exit: the next-stint pick, else **the plan's tyre for the stint now starting** (`planTyreAfterStop`: the stint after the one containing `exitLap - 1`, so an early stop still takes the next planned tyre, and mid-race the plan's second stint) and **the same driver as before**. On track with no tyre set (race start, a cleared tyre), App applies `planTyreNow`. The plan is the one being raced (engine or typed). The pit toast marks assumed parts "(from the plan)" / "(still driving)"; the pickers still override |
 | `src/logic/tyreHistory.js` | Reads the stint log back as per-compound history: sets run, laps each, best/avg, and measured fall-off. `currentSetOutlook` says how long previous sets of the compound you are on lasted and how many laps that leaves. The **median** of previous sets, so one stint cut short by a spin does not become the expectation, and completed stints only — the one being driven would drag it down. Silent on a first set |
 | `src/logic/conditions.js` | Dry/wet as a **filter over which compounds the engine may pick**, not a second simulation — nothing about the car changes because it started raining. Falls back to whatever is active rather than refusing to plan when no wet tyre is set up. Also `crossoverSecsPerLap`: a stop costs X and you have N laps to win it back, so the per-lap loss that justifies changing tyres is X/N |
 | `src/logic/paceTrack.js` | A ten-lap rolling window of completed lap times per car — the stint log keeps aggregates on purpose, which is useless for "what was this car doing just before X". Powers incident measurement and `detectPaceDrop`, which finds a **step** in a rival's pace rather than a slope (tyres going off is a slope) and requires the step to be **sustained across every one of the last three laps**, so a pit stop's slow in-lap and out-lap followed by a normal one does not read as damage |
@@ -157,7 +163,7 @@ instead.
 | `src/index.css` | The whole theme, as CSS vars on `:root`. Accent is **racing red `#E4002B`**, not gold — the app moved off purple-and-gold long ago and this line said otherwise for months. The intent behind the look, and the rules that came from getting it wrong, are in `docs/DESIGN.md`; read the live `--accent` / `--bg-*` values here before styling anything |
 | `server/telemetry-server.js` | Node.js UDP relay: receives Salsa20-encrypted GT7 packets on port 33740, relays to browser via WebSocket on port 20777; supports LAN scan for PS5s and DNS hostname resolution |
 | `tests/test.js` | Smoke test (1h race) |
-| `tests/test_comprehensive.js` | The engine's own suite (~142 assertions). The full list of all 47 suites, and what each one guards, is in `docs/CURRENT_STATE.md` §2 |
+| `tests/test_comprehensive.js` | The engine's own suite (~142 assertions). The full list of all 48 suites, and what each one guards, is in `docs/CURRENT_STATE.md` §2 |
 
 ## Telemetry server
 

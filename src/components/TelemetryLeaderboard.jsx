@@ -37,8 +37,11 @@ function fuelBarColor(pct) {
 export default function TelemetryLeaderboard({
   teams, teamOrder = [], teamLabels, teamCompounds, pendingIps, selectedIp, onSelect, onCompoundChange,
   myTeamIp = '', onSetMyTeam, onRenameTeam, lapCrossings, fuelUse,
-  carRoles = {}, onRoleChange, pace, scDeployed = false, lang = DEFAULT_LANG,
+  carRoles = {}, onRoleChange, pace, scDeployed = false,
+  followed = null, onToggleFollow, lang = DEFAULT_LANG,
 }) {
+  // Following someone quiets the rest: it only means something once one is picked.
+  const anyFollowed = !!followed && followed.size > 0;
   const [pickerIp, setPickerIp] = useState(null);
   const [editingIp, setEditingIp] = useState(null);
 
@@ -162,13 +165,17 @@ export default function TelemetryLeaderboard({
         // same moment, which is a caution, not a field full of broken cars.
         const paceDrop   = d.onTrack && !scDeployed ? detectPaceDrop(pace?.get(ip)) : null;
         const isEditing  = editingIp === ip;
+        const isFollowedCar = !!followed?.has(ip);
+        // Once rivals are picked, the others step back so the ones I am racing
+        // stand out. Mine never does.
+        const isQuiet    = anyFollowed && !isFollowedCar && !isMine;
 
         const posClass = pos === 1 ? ' lbp-gold' : pos === 2 ? ' lbp-silver' : pos === 3 ? ' lbp-bronze' : '';
 
         return (
           <Fragment key={ip}>
             <div
-              className={`lb-row${isSelected ? ' lb-row-sel' : ''}${!d.onTrack ? ' lb-row-pit' : ''}${pickerOpen ? ' lb-row-expanded' : ''}${isMine ? ' lb-row-mine' : ''}`}
+              className={`lb-row${isSelected ? ' lb-row-sel' : ''}${!d.onTrack ? ' lb-row-pit' : ''}${pickerOpen ? ' lb-row-expanded' : ''}${isMine ? ' lb-row-mine' : ''}${isFollowedCar ? ' lb-row-followed' : ''}${isQuiet ? ' lb-row-quiet' : ''}`}
               style={{ '--tc': color, '--tcr': hexRgb(color) }}
               onClick={() => { setPickerIp(null); onSelect?.(isSelected ? '' : ip); }}
             >
@@ -190,6 +197,18 @@ export default function TelemetryLeaderboard({
                     >
                       {isMine ? '★' : '☆'}
                     </button>
+                    {/* Follow a rival: its stops notify me and its tyre button
+                        flickers. With none followed, every car does. */}
+                    {!isMine && onToggleFollow && (
+                      <button
+                        className={`lb-follow-btn${isFollowedCar ? ' is-on' : ''}`}
+                        onClick={(e) => { e.stopPropagation(); onToggleFollow(ip); }}
+                        title={isFollowedCar ? t('lb_follow_unset', lang) : t('lb_follow_set', lang)}
+                        aria-pressed={isFollowedCar}
+                      >
+                        {isFollowedCar ? '◉' : '○'}
+                      </button>
+                    )}
                     {isEditing ? (
                       <input
                         className="lb-tname-input"

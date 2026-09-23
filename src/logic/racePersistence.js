@@ -62,7 +62,10 @@ export const MANUAL_PLAN_KEY = 'gt7-manual-plan';
  * addresses. Car presets and the onboarding flag are app preferences rather
  * than race state and stay out.
  */
-export const SNAPSHOT_KEYS = [...RACE_KEYS, 'gt7_track_map_v1', 'gt7-ps5-ips', MANUAL_PLAN_KEY];
+/** The rivals I follow — picked in the lobby, so kept across "New race" too. */
+export const FOLLOWED_KEY = 'gt7-followed';
+
+export const SNAPSHOT_KEYS = [...RACE_KEYS, 'gt7_track_map_v1', 'gt7-ps5-ips', MANUAL_PLAN_KEY, FOLLOWED_KEY];
 
 /**
  * Build a snapshot from storage. `readKey` returns the raw stored string (or

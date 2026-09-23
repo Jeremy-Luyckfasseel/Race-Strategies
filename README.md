@@ -332,7 +332,7 @@ map. Do it before travelling to an event, not after.
 | `npm run dev` | Dev server at `http://localhost:5173` |
 | `npm run build` | Production build → `/dist` |
 | `npm run preview` | Preview the production build |
-| `npm test` | All 47 suites — ~3 155 assertions. Judge it by the **exit code**. |
+| `npm test` | All 48 suites — ~3 190 assertions. Judge it by the **exit code**. |
 | `npm run test:smoke` | Quick 1-hour race smoke test |
 | `npm run telemetry` | Start the UDP → WebSocket relay server |
 | `npm run demo` | Ten simulated PS5s, for testing with no console attached |
