@@ -1,472 +1,191 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&amp;color=0:0d1117,30:1c0d00,60:2e1a00,100:0d1117&amp;height=270&amp;text=GT7%20RACE%20STRATEGY&amp;desc=Fuel%20%E2%80%A2%20Tyres%20%E2%80%A2%20Pit%20Windows%20%E2%80%A2%20Live%20PS5%20Telemetry&amp;fontColor=FFD700&amp;fontSize=58&amp;fontAlignY=42&amp;descAlignY=64&amp;descSize=18&amp;descColor=c9a227&amp;animation=fadeIn" width="100%"/>
+# Race Strategies
+
+**Endurance race strategy for Gran Turismo 7 — planned before the race, kept right during it.**
+
+[![CI](https://img.shields.io/github/actions/workflow/status/Jeremy-Luyckfasseel/Race-Strategies/ci.yml?branch=main&style=flat-square&label=tests)](https://github.com/Jeremy-Luyckfasseel/Race-Strategies/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Jeremy-Luyckfasseel/Race-Strategies?style=flat-square&color=E4002B)](https://github.com/Jeremy-Luyckfasseel/Race-Strategies/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-E4002B?style=flat-square)](LICENSE)
+![Platform](https://img.shields.io/badge/platform-Windows%20%C2%B7%20PS5-1f2937?style=flat-square)
+
+[Download](#download) · [Features](#features) · [How it works](#how-it-works) · [Getting started](#getting-started) · [FAQ](#faq) · [Development](#development)
 
 <br>
 
-![React](https://img.shields.io/badge/React_19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
-![Vite](https://img.shields.io/badge/Vite_7-646CFF?style=for-the-badge&logo=vite&logoColor=white)
-![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
-![JavaScript](https://img.shields.io/badge/JavaScript_ES2022-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
-![WebSocket](https://img.shields.io/badge/WebSocket-010101?style=for-the-badge&logo=socket.io&logoColor=white)
-![PlayStation](https://img.shields.io/badge/PS5_Telemetry-003087?style=for-the-badge&logo=playstation&logoColor=white)
-
-<br>
-
-> **Endurance race strategy calculator for Gran Turismo 7.**
-> Enumerates every valid tyre-compound sequence, simulates each race lap‑by‑lap,
-> and surfaces the plan that maximises your lap count — optionally driven by
-> live PS5 telemetry for real-time mid-race recalculation.
-
-<br>
-
-![Tests](https://img.shields.io/badge/tests-2419%20assertions%20passing-FFD700?style=flat-square&logoColor=black)
-![Engine](https://img.shields.io/badge/strategy%20engine-pure%20JS%20%C2%B7%20zero%20React-c9a227?style=flat-square)
-![Patterns](https://img.shields.io/badge/compound%20patterns-~4%20000%20enumerated-c9a227?style=flat-square)
+<img src="docs/media/telemetry-multicar.png" alt="The Race tab with ten cars connected: the plan strip across the top, leaderboard on the left, live track map in the centre, the selected car's dashboard on the right" width="100%"/>
 
 </div>
 
 <br>
 
----
+Race Strategies tests every tyre and pit-stop combination for your race and tells you which one finishes the most laps. Then it follows the race with you. It reads live telemetry from every PS5 on your network, so the plan keeps up with your real fuel, tyres and race clock, and it shows the whole field on one screen.
 
-<a id="table-of-contents"></a>
-<img src="https://capsule-render.vercel.app/api?type=rect&amp;color=0:0d1117,100:2e1a00&amp;height=40&amp;text=◈%20TABLE%20OF%20CONTENTS&amp;fontColor=FFD700&amp;fontSize=16&amp;fontAlign=14&amp;fontAlignY=62" width="100%"/>
+It is made for long GT7 races: team events, league endurance rounds and 24-hour attempts, where the pit wall matters as much as the driver.
 
-<br>
+## Features
 
-- [Race Specifications](#race-specifications)
-- [Under the Hood — Strategy Engine](#under-the-hood)
-- [Pit Wall — Live PS5 Telemetry](#pit-wall)
-- [Pole Position Setup](#pole-position-setup)
-- [Pre-Race Briefing](#pre-race-briefing)
-- [Quality Control — Tests](#quality-control)
-- [Technical Regulations — Architecture](#technical-regulations)
-- [Power Unit — Tech Stack](#power-unit)
+### Plan the race
 
-<br><br>
+<img src="docs/media/strategy-tab.png" alt="Strategy tab: setup on the left, the best plan's key numbers, ranked alternatives and the race drawn as one bar" width="100%"/>
 
-<a id="race-specifications"></a>
-<img src="https://capsule-render.vercel.app/api?type=soft&amp;color=0:2e1a00,100:0d1117&amp;height=50&amp;text=◈%20RACE%20SPECIFICATIONS&amp;fontColor=FFD700&amp;fontSize=18&amp;fontAlign=15&amp;fontAlignY=62" width="100%"/>
+- **Every strategy, ranked.** Thousands of tyre sequences are simulated lap by lap and ranked by laps completed, then by race time. If running Softs all race beats Hards, it will find that.
+- **Real car behaviour.** The car gets faster as fuel burns off and slower as the tyres wear. Every pit stop costs what it really costs: the stop itself, the tyre change and the refuelling time.
+- **Drivers and rules.** Several drivers with a minimum drive time each, compounds that must be used, and a required number of stops.
+- **Your own plan.** Type a strategy in as a few rows ("2 stints on Soft, then Medium to the flag"). The same engine runs it and shows how it compares to the best plan.
 
-<br>
+<img src="docs/media/manual-plan.png" alt="Your own plan: a strategy typed in as rows, compared against the engine's best" width="100%"/>
 
-| Feature | What it means at race pace |
-| :--- | :--- |
-| **Full strategy enumeration** | Every valid pit + compound sequence tested — up to 5-element patterns, ~4 000 combinations for 5 compounds, each tried both as a repeating cycle (H,S → H,S,H,S…) and holding the last compound (H,S → H,S,S,S…). Covers single-compound, alternating, and "soft start then settle on a hard for the rest of the race" strategies alike. If spamming Softs beats running Hards, it finds that. On top of that, the winning plan is also checked for a "banzai" finish — swapping just the true final stint to a different compound, for races with more stops than the pattern language alone can express a one-off ending for. |
-| **Fuel weight model** | Corrects per-lap time for a progressively lighter car as fuel burns. Enter your times at full tank — the engine handles the conversion every lap. |
-| **Exact fuel carry-over** | Leftover fuel from a stint is rolled into the next refuel calculation, so you never top up more than necessary. |
-| **Pit window bands** | Visualised on the strategy timeline. Always see the absolute latest lap you can pit without running dry or destroying tyres. |
-| **Multi-driver support** | Per-driver lap times per compound, configurable minimum drive time. Two stint-assignment strategies run per plan — one picks stint-by-stint by who owes the most, the other allocates the longest stints first and then refines the split by swapping stints between drivers — and the engine keeps whichever leaves every driver furthest from falling short. Works reliably with reasonable slack (minimums comfortably under an even split of the race); a minimum set right at the theoretical maximum a driver could get can still leave them a little short — that's the race's stint lengths not dividing evenly, not the assignment. |
-| **Mid-race recalculation** | Enter current lap + fuel for an updated strategy on the fly. Connects directly to live PS5 telemetry for automatic updates. |
-| **Live PS5 telemetry** | Full Télémétrie tab: dedicated live dashboard per team with speed, gear, RPM/throttle/brake bars, tyre temperature per corner, tyre life in laps-on-set, last/best lap times, and fuel level. |
-| **Multi-team leaderboard** | Every PS5 on the LAN on one table — position, interval to the car ahead (measured from start/finish crossings), last lap, compound, fuel bar and litres, pit/on-track status. Name each team inline, and mark one as yours with ★. |
-| **GPS track map** | SVG circuit drawn live from PS5 position data at 60 Hz. Pit lane auto-detected. All tracked cars shown as colour-coded dots. |
-| **Compound tracking** | Pit exit detected from telemetry — app prompts to confirm which compound was fitted. Tracks each team's current tyre independently. |
-| **LAN PS5 scan** | One click scans the local network for active GT7 PS5s and adds them automatically, with DNS hostname resolution. |
-| **Print export** | Full stint plan printed via browser print dialog — hand it to your co-driver. |
+### Run the race
 
-<br><br>
+<img src="docs/media/multi-car-live.gif" alt="Ten cars running round the live track map while the leaderboard keeps their gaps" width="100%"/>
 
-<a id="under-the-hood"></a>
-<img src="https://capsule-render.vercel.app/api?type=rect&amp;color=0:0d1117,100:1a3300&amp;height=40&amp;text=◈%20UNDER%20THE%20HOOD%20%E2%80%94%20STRATEGY%20ENGINE&amp;fontColor=FFD700&amp;fontSize=16&amp;fontAlign=19&amp;fontAlignY=62" width="100%"/>
+- **The plan strip.** Current stint, laps left, the lap to box on and how much fuel to add. It also shows where you would rejoin if you boxed this lap.
+- **A plan that follows the race.** Press *Start race* and the plan is recalculated from the race clock and your car's live lap, fuel and tyres. Nothing has to be typed in mid-race.
+- **The whole field.** Every PS5 on the network in one leaderboard with real gaps, and a track map drawn from the cars' own GPS.
+- **Rivals you follow.** You get a notice when they stop, a prompt for their tyre while the game still shows it, and a note of who still owes a mandatory compound.
+- **Decisions, not just data.** *Box now or wait?* and *repair now or at the next stop?* are both answered by running the real strategy engine, not a rule of thumb. There is also a safety-car mode.
+- **It learns your car.** Fuel burn and tyre fall-off are measured from telemetry and offered as updates to your setup.
 
-<br>
+<img src="docs/media/now-view.png" alt="The plan strip: stint, laps left, the next stop and what boxing this lap would do" width="100%"/>
 
-`src/logic/strategy.js` is pure JavaScript with **zero React dependency** — it runs in the browser and directly in Node.js for testing. The entry point is `findBestStrategies(inputs)`.
+### Manage the drivers
+
+<img src="docs/media/drivers-tab.png" alt="Drivers tab: drive time per driver against the minimum, tyre history and the stint log" width="100%"/>
+
+Each driver's time against the minimum, every stint with its tyre and lap times, and how long each compound has really lasted.
+
+**Also:** English and French, a printable stint plan to hand to your co-driver, and one-click save/restore to move a whole session to another PC.
+
+## How it works
 
 ```mermaid
 flowchart LR
-    subgraph IN["Input"]
-        CAR["Car data\nfuel · tyres · drivers"]
-        MID["Mid-race\ncurrentLap · currentFuel"]
-    end
-
-    subgraph CORE["Strategy Engine  —  src/logic/strategy.js"]
-        direction TB
-        PAT["1  Build + generate\n~4 000 compound patterns"]
-        SIM["2  Simulate each plan\nlap-by-lap"]
-        FILT["3  Filter + deduplicate"]
-        SORT["4  Sort\nmax laps · min time"]
-        PAT --> SIM --> FILT --> SORT
-    end
-
-    subgraph VIS["React UI"]
-        KPI["KPI Strip"]
-        CARDS["Strategy Cards"]
-        CHART["Stint Timeline"]
-        TABLE["Lap Table"]
-    end
-
-    CAR --> CORE
-    MID --> CORE
-    CORE --> KPI & CARDS & CHART & TABLE
+    PS5["PS5s running GT7<br/>(one or many)"] -- "telemetry over your network" --> RELAY["Relay<br/>decrypts and forwards"]
+    RELAY -- "live data" --> APP["Race Strategies<br/>plan · race · drivers"]
+    SETUP["Your lap times<br/>fuel · tyre life · pit times"] --> APP
 ```
 
-<br>
+1. **You describe your car.** Enter lap times on each compound, how far a tank lasts and how long a pit stop takes. Or let the app measure them from a practice session.
+2. **The engine simulates the race.** Every sensible tyre sequence is driven lap by lap, with fuel, weight, tyre wear and pit time all counted, and the plans are ranked.
+3. **Telemetry keeps it honest.** GT7 streams encrypted telemetry to any PC on the same network. A small relay decrypts it and passes it to the app. From then on, the plan follows the car rather than your guesses.
 
-Each simulated plan runs the following per lap:
+The strategy engine is plain JavaScript with no UI attached, so it is tested on its own: 49 test suites run on every push. For the details, see [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md) (how the parts fit together) and [`docs/DECISIONS.md`](docs/DECISIONS.md) (why it was built this way).
 
-| Step | What the engine computes |
-| :--- | :--- |
-| Tyre degradation | Piecewise curve: `start → half` over 0–50% tyre life, `half → end` over 50–100% |
-| Fuel weight | `dynamicLapTime = base + (fuelNow − tankSize) × penalty` — car gets faster every lap as fuel burns |
-| Fuel carry-over | Leftover fuel rolls into the next stint's refuel calculation |
-| Tyre change decision | Forced when compound differs or the current set is at zero life; otherwise a real cost/benefit comparison (ageing tyres vs. fresh + pit cost) over the upcoming stint |
-| Mandatory stop capping | Stint length shortened to guarantee the required number of pit stops |
-| Multi-driver assignment | Two strategies tried per plan — pick stint-by-stint by who owes the most, or allocate the longest stints first then refine by swapping — keeping whichever leaves every driver furthest from falling short |
+## Getting started
 
-<br>
+### Download
 
-<details>
-<summary><b>Fuel-weight correction model</b></summary>
-<br>
+Grab the Windows installer from the **[latest release](https://github.com/Jeremy-Luyckfasseel/Race-Strategies/releases/latest)**. It includes the relay, so there is nothing else to install. The newest features land in the source first (see below) before they reach a release.
 
-The user observes lap times at full tank. Because fuel weight slows the car, the engine first converts those observed times to **full-tank equivalents** by adding back the weight penalty that was already burned off:
+### Run from source
 
-```
-t_fullTank(mid) = t_observed(mid) + (tankSize − fuelAtMid) × penalty
-t_fullTank(end) = t_observed(end) + (tankSize − fuelAtEnd) × penalty
-```
-
-During simulation, each lap's time is adjusted for the actual live fuel level:
-
-```
-dynamicLapTime = baseLapTime + (fuelAtStartOfLap − tankSize) × penalty
-```
-
-At 0.03 s/L on a 100 L tank: **3 s difference** between a full tank and empty.
-
-</details>
-
-<details>
-<summary><b>Tyre degradation model</b></summary>
-<br>
-
-Each compound has three user-supplied lap times: `startLapTime`, `halfLapTime`, `endLapTime`. The engine uses a **piecewise linear** curve:
-
-| Phase | Tyre age | Interpolation |
-| :--- | :--- | :--- |
-| Fresh | 0 → 50% of tireLife | `start` → `half` |
-| Worn | 50 → 100% of tireLife | `half` → `end` |
-
-This captures the typical GT7 pattern where grip drops faster in the second half of a stint. Both fuel-weight correction and tyre degradation are applied simultaneously each lap.
-
-</details>
-
-<br><br>
-
-<a id="pit-wall"></a>
-<img src="https://capsule-render.vercel.app/api?type=soft&amp;color=0:0d1117,100:1a3300&amp;height=50&amp;text=◈%20PIT%20WALL%20%E2%80%94%20LIVE%20PS5%20TELEMETRY&amp;fontColor=FFD700&amp;fontSize=18&amp;fontAlign=18&amp;fontAlignY=62" width="100%"/>
-
-<br>
-
-### Ten cars, one screen
-
-<img src="docs/media/telemetry-multicar.png" alt="Télémétrie tab with ten cars connected: colour-coded leaderboard on the left, live GPS track map with ten car dots in the centre, single-car dashboard on the right" width="100%"/>
-
-A full LAN field running at once. Every car gets its own colour, **held for the whole session** — so the stripe on a leaderboard row and its dot on the circuit are always the same car, no matter how the order changes. The starred row (★ / **MOI**) is your team: it owns your drivers, your stint log and your strategy, while clicking any other row just inspects it.
-
-The circuit draws itself from live GPS as cars lap. On the right, per-corner **tyre temperature** and tyre life counted in laps-on-set — GT7 reports no tyre wear, so nothing here pretends otherwise.
-
-Each row carries position, team, interval, last lap, fuel and compound. The column is too narrow for DERNIER / MEILLEUR / CARBU as separate columns, so the last lap and the fuel litres sit under the name instead of costing width the team name needs.
-
-<img src="docs/media/multi-car-live.gif" alt="The same view in motion: ten coloured car dots running round the circuit while the leaderboard holds its gaps" width="100%"/>
-
-Moving, it looks like this. The dots are rendered a fraction of a second behind the newest packet and interpolated between samples, so the field glides instead of stuttering at the relay's update rate — the same trick game netcode uses. The **ÉCART** column is a real interval, measured from when each car last crossed the line, not a subtraction of lap times.
-
-<br>
-
-<table>
-<tr>
-<td width="50%"><img src="docs/media/now-view.png" alt="Course tab — the glanceable in-race view" width="100%"/></td>
-<td width="50%"><img src="docs/media/drivers-tab.png" alt="Pilotes tab — per-driver drive time and the stint log" width="100%"/></td>
-</tr>
-<tr>
-<td align="center"><b>Course</b> — the glanceable in-race view</td>
-<td align="center"><b>Pilotes</b> — driver totals and the stint log</td>
-</tr>
-</table>
-
-> The screenshots above are the packaged app fed by `scripts/fake-field.mjs`, which drives simulated cars into the relay with real encrypted packets. Handy for demoing or exercising the UI with no PS5 in the room — **launch the app first**, then from the repo:
-> ```bash
-> npm run demo        # ten cars, strung out round the lap, each pitting once
-> ```
-> The app's own relay is already listening, so do not start `npm run telemetry`
-> as well. Ctrl-C ends the demo. Only one copy can run at a time — two feed the
-> same ten addresses from different start times and every car appears to
-> teleport between two points on the circuit.
->
-> `node scripts/fake-field.mjs [cars] [seconds] [spread]` if you want other
-> numbers: `spread` is the fraction of a lap the field is strung out over.
-
-<br>
-
-GT7 streams live **Salsa20-encrypted UDP packets** from the PS5 to any machine on the same LAN. The relay server decrypts and forwards them to the browser in real time over WebSocket.
-
-```mermaid
-flowchart LR
-    subgraph LAN["Local Network  —  same router / switch"]
-        P1["PS5 #1\n192.168.x.1"]
-        P2["PS5 #2\n192.168.x.2"]
-        PN["PS5 #N\n..."]
-    end
-
-    subgraph RELAY["server/telemetry-server.js  —  Node.js"]
-        HB["Heartbeat sender\nUDP :33739 · 100 ms"]
-        UDP["UDP listener\n:33740"]
-        DEC["Salsa20 decrypt"]
-        WSS["WebSocket server\n:20777"]
-    end
-
-    subgraph APP["Browser  —  React  (Télémétrie tab)"]
-        HOOK["useTelemetry hook\nteams Map — scan support"]
-        DET["useCompoundDetector\npit exit → confirm prompt"]
-        LB["TelemetryLeaderboard\npos · lap · gap · times · fuel"]
-        DASH["LiveDashboard\nspeed · RPM · pedals · tyres · track map"]
-        CTRL["TelemetryControls\nURL · IPs · LAN scan"]
-        FILL["Auto-fill\ncurrentLap · currentFuel"]
-    end
-
-    HB -->|heartbeat| P1 & P2 & PN
-    P1 & P2 & PN -->|encrypted UDP| UDP
-    UDP --> DEC --> WSS
-    WSS -->|WebSocket| HOOK
-    HOOK --> DET & LB & DASH & CTRL & FILL
-```
-
-<br>
-
-<details open>
-<summary><b>Network requirements</b></summary>
-<br>
-
-| Requirement | Detail |
-| :--- | :--- |
-| **Same LAN** | PS5 and laptop on the same router or switch |
-| **Laptop firewall** | Allow UDP inbound `:33740`, outbound `:33739` |
-| **PS5** | Nothing to install — GT7 streams natively |
-| **Wi-Fi vs wired** | Both work; wired is more reliable at events |
-| **Online lobbies** | Telemetry is local — works in private online races regardless of session routing |
-
-</details>
-
-<br>
-
-### Setup
-
-**1. Start the relay server**
-
-```bash
-npm run telemetry
-# or: node server/telemetry-server.js
-```
-
-**2. Open the app → Télémétrie tab**
-
-Leave the server URL as `ws://localhost:20777`, click **Connecter**. Then add each PS5's IP manually — or click **⟳ Scanner Réseau** to auto-detect every active GT7 PS5 on the LAN.
-
-> Find a PS5's IP: **Settings → Network → View Connection Status → IP Address**
-
-**3. Track tyres**
-
-After each pit stop the app detects the pit exit and shows a confirmation prompt. Click the compound the driver fitted (H / M / S / IM / W) to start tracking tyre wear for that team.
-
-**4. Enable auto-fill (optional)**
-
-Enable **Mid-Race Recalculation** in the sidebar, then click a team row in the leaderboard to pin it. Current lap and fuel update automatically every telemetry packet — strategy recalculates in real time.
-
-> **All 10 PS5s in one room?** One laptop, one relay server instance. It handles all of them simultaneously.
-
-<br><br>
-
-<a id="pole-position-setup"></a>
-<img src="https://capsule-render.vercel.app/api?type=rect&amp;color=0:1a3300,50:0d1117,100:1a3300&amp;height=40&amp;text=◈%20POLE%20POSITION%20SETUP&amp;fontColor=FFD700&amp;fontSize=16&amp;fontAlign=13&amp;fontAlignY=62" width="100%"/>
-
-<br>
-
-### Prerequisites
-
-![Node.js](https://img.shields.io/badge/Node.js_18%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white)
-
-### Install & run
+Requires [Node.js](https://nodejs.org) 20.19+ or 22.12+.
 
 ```bash
 git clone https://github.com/Jeremy-Luyckfasseel/Race-Strategies.git
 cd Race-Strategies
 npm install
-npm run dev        # → http://localhost:5173
+
+npm run telemetry   # terminal 1: the relay that talks to the PS5s
+npm run dev         # terminal 2: the app, at http://localhost:5173
 ```
 
-A full pit wall is **three terminals**:
+### Connect your PS5
+
+1. Put the PS5 and the PC on the **same network**. Wired is best at events.
+2. Open the app. It connects to the relay and scans for PS5s by itself. On Windows, click **Allow** when asked for network access.
+3. On the **Race** tab, mark your car with ★. Press **Start race** when the lights go out.
+
+To add a PS5 by hand, open **Connections → Show** in the header. You can find the PS5's IP under *Settings → Network → View Connection Status*. One PC and one relay handle a whole room of consoles.
+
+### No PS5? Try the demo
 
 ```bash
-npm run telemetry   # 1 — the UDP → WebSocket relay (talks to the PS5s)
-npm run dev         # 2 — the app
-npm run demo        # 3 — ten fake PS5s, when there is no hardware in the room
+npm run demo        # ten simulated cars, sending real encrypted telemetry
 ```
 
-All three can stay running while `npm test` does: the relay suite uses its own
-ports and its own loopback addresses so it never collides with a live session.
+Run it next to the relay and the app. The simulated cars lap, burn fuel and pit, so every screen has something real to show. If you are using the installed app instead, skip `npm run telemetry`, because the app starts its own relay.
 
-### Moving to another machine
+### Before your race
 
-The **code** travels through git. Your **setup does not** — team names, PS5
-addresses, the starred car, the stint log, the recorded track map and everything
-the learner has measured all live in that browser's `localStorage`, on that
-computer.
+The plan is only as good as the numbers you give it. In practice, measure:
 
-Use the app's own buttons:
-
-1. **SAVE** in the header writes a `.json` snapshot of the whole session.
-2. Copy it across, then **RESTORE** on the other machine.
-
-That covers the setup, the race clock, the team names and colours, the tyre
-selections, the stint log, the safety-car roles, the PS5 list and the circuit
-map. Do it before travelling to an event, not after.
-
-### All commands
-
-| Command | Description |
+| What | How |
 | :--- | :--- |
-| `npm run dev` | Dev server at `http://localhost:5173` |
-| `npm run build` | Production build → `/dist` |
-| `npm run preview` | Preview the production build |
-| `npm test` | All 49 suites — ~3 226 assertions. Judge it by the **exit code**. |
-| `npm run test:smoke` | Quick 1-hour race smoke test |
-| `npm run telemetry` | Start the UDP → WebSocket relay server |
-| `npm run demo` | Ten simulated PS5s, for testing with no console attached |
+| **Laps per tank** | Start on a full tank and count laps until the fuel warning, on the fuel map you will race on. |
+| **Lap times per compound** | First lap on fresh tyres with a **full tank**, a lap at half tyre life, and the last lap before you would box. All from one uninterrupted stint. |
+| **Tyre life** | Laps until the car handles noticeably worse. |
+| **Pit times** | From a replay: a stop with no service, then the extra time a tyre change adds. |
 
-<br><br>
+Presets for a few cars are built in. Once telemetry is running, the app measures fuel burn and tyre fall-off itself and suggests corrections.
 
-<a id="pre-race-briefing"></a>
-<img src="https://capsule-render.vercel.app/api?type=soft&amp;color=0:0d1117,100:2e1a00&amp;height=50&amp;text=◈%20PRE-RACE%20BRIEFING&amp;fontColor=FFD700&amp;fontSize=18&amp;fontAlign=12&amp;fontAlignY=62" width="100%"/>
+## FAQ
 
+<details>
+<summary><b>Why does it ask me which tyre a car is on?</b></summary>
 <br>
+GT7's telemetry does not include the tyre compound. After your own stops, the app assumes the plan's next tyre, and you can correct it with one click. For rivals you follow, it asks while the car sits in the pit box, which is when the game still shows its tyres.
+</details>
 
-**Data to collect in GT7 before entering values into the calculator:**
-
-| Input | How to measure in GT7 | Tip |
-| :--- | :--- | :--- |
-| `lapsPerFullTank` | Free practice, full tank, fuel map 1 — count laps until low-fuel warning | Repeat on the fuel map you will race on |
-| `startLapTime` | Lap 1 on fresh tyres, tank topped all the way to full | Use a consistent pace, not your personal best |
-| `halfLapTime` | Lap ≈ `tireLife / 2` on the **same uninterrupted stint** as `startLapTime` | Same fuel map, same pace style |
-| `endLapTime` | Last safe lap on that **same stint** before pitting | When you'd normally box — not when the tyre explodes |
-| `tireLife` | Free practice — push the set until handling degrades significantly | Count laps from new |
-| `pitBaseSecs` | Time from pit entry to exit with no refuel and no tyre change | Measure from replay |
-| `tireChangeSecs` | Extra time added when tyres are changed | `pitWithTyres − pitWithoutTyres` from replay |
-| `fuelWeightPenalty` | Lap 1 time (full tank) vs final lap time (near empty) divided by litres burned | 0.030 s/L is a safe GT7 default |
-
-> ⚠️ **`startLapTime` must be a genuine full-tank lap.** The engine assumes it and applies zero fuel-weight correction to it — every other number derives from that assumption, and a lap measured after a partial refuel will silently bias the whole strategy with no error or warning shown. This only applies to hand-typed compound times; the **recorded-session import** (Télémétrie → Team Panel) measures the fuel-weight penalty directly from your car's actual fuel telemetry and isn't affected by this.
->
-> ⚠️ **Intermediate and Wet have no weather model behind them.** The engine has no way to know the track is wet — a compound is only ever as fast as the lap times *you* measure and type in for it, exactly like Hard/Medium/Soft. If you're prepping a wet-race strategy, go out in those conditions and measure IM/W the same way you would any dry compound; the app won't detect rain or switch compounds for you.
-
-<br><br>
-
-<a id="quality-control"></a>
-<img src="https://capsule-render.vercel.app/api?type=rect&amp;color=0:0d1117,100:2e1a00&amp;height=40&amp;text=◈%20QUALITY%20CONTROL%20%E2%80%94%20TESTS&amp;fontColor=FFD700&amp;fontSize=16&amp;fontAlign=15&amp;fontAlignY=62" width="100%"/>
-
+<details>
+<summary><b>Why is there no tyre wear percentage?</b></summary>
 <br>
+GT7 does not report tyre wear either. Tyre life is counted in laps on the current set and compared with how long your previous sets lasted. Tyre temperatures are shown per corner.
+</details>
 
-The strategy engine has no React dependency and runs directly in Node:
-
-```bash
-npm test              # 2 407 assertions across twenty-three suites
-npm run test:smoke    # 1-hour race smoke test
-```
-
-380 of those are hand-written unit tests; the other 1 640 are bulk-generated invariant sweeps (structural checks — no overfill, no tyre overrun, ranking correctness — repeated across many randomised inputs). Counted together because they all assert something real, but worth knowing which is which:
-
-| Suite | File | Tests | Covers |
-| :--- | :--- | :---: | :--- |
-| **Comprehensive** | `tests/test_comprehensive.js` | 142 | Helpers, degradation curve, fuel tracking, pit timing, tyre-change economics, mandatory compound filter, mid-race mode, fuel weight penalty |
-| **Invariants** *(generated sweeps)* | `tests/test_invariants.js` | 1 640 | Structural invariants on every result, ranking correctness, multi-compound enumeration, multi-driver minimums, race time boundary, known-answer scenarios, bulk no-overfill / no-tyre-overrun sweeps |
-| **Telemetry learner** | `tests/test_telemetry_learner.js` | 37 | Recovers a known fuel/lap, fuel-weight penalty, and degradation curve from synthetic live telemetry |
-| **Recommendations** | `tests/test_recommendations.js` | 20 | Propose-and-accept rules for live-measured car-model updates |
-| **Race state** | `tests/test_race_state.js` | 29 | Live next-action, stint countdown, fuel margin / lift-and-coast, pit-now trigger |
-| **Connection** | `tests/test_connection.js` | 18 | Telemetry reconnect backoff, session-active detection, auto-connect IP pick |
-| **Engine validation** | `tests/test_engine_validation.js` | 27 | The recorded-session measurement library recovers fuel/weight/degradation from a synthetic capture |
-| **Session analysis** | `tests/test_session_analysis.js` | 42 | Recorded-session → strategy-input derivation, single- and multi-driver merge |
-| **Groups** | `tests/test_groups.js` | 18 | Team Groups → Races → Sessions state (pure, local) |
-| **Sync store** | `tests/test_sync_store.js` | 17 | Self-hosted sync server's filesystem store, path-traversal rejection |
-| **Sync client** | `tests/test_sync_client.js` | 11 | syncClient ↔ sync-server round trip over real HTTP |
-| **UI · leaderboard** | `tests/test_ui_leaderboard.js` | 55 | The rendered board — rename via ✎/double-click/blur/Escape, ★ my-team, colour stability when the order changes, real gap column, team names surviving a crowded row, the narrow column's lap-time and fuel line, 12-car field |
-| **UI · track map** | `tests/test_ui_trackmap.js` | 36 | The rendered SVG with its rAF loop stepped by hand — a dot per car, own-car halo in team colour, dimmed pit cars, 3-char outlined tags, smooth motion between packets |
-| **UI · drivers** | `tests/test_ui_drivers.js` | 35 | Pilotes tab totals and stint rows, the live stint counting once the clock ticks, and the pit banner asking only for what is missing |
-| **UI · reconnect** | `tests/test_ui_reconnect.js` | 19 | What survives a PS5 going quiet, the relay dropping, and a browser reload — and what deliberately does not |
-| **UI · whole app** | `tests/test_ui_app_e2e.js` | 26 | The entire App mounted against a fake relay with 10 cars — ★ and renames reaching the map, the Pilotes tab following the star not the selection, all four tabs |
-| **Relay end-to-end** | `tests/test_relay_e2e.js` | 20 | Spawns the real relay and fires real encrypted GT7 packets from 10 distinct loopback IPs — crypto, byte offsets, per-console keying, pit edges, throughput |
-| **Multi-car pipeline** | `tests/test_multicar_integration.js` | 36 | A simulated 12-car race through the real `applyFlush` — batching ratio, colour stability across a dropout, pit edges surviving the buffer, gaps, car identity, stint log |
-| **Gaps** | `tests/test_gaps.js` | 20 | Leaderboard intervals from line crossings — the 30 s gap the old last-lap-time subtraction could not see |
-| **Pit detection** | `tests/test_pit_detect.js` | 20 | Relay pit entry/exit edges — a spin must fire nothing, a real stop exactly one entry + one exit, standing start ignored |
-| **Teams** | `tests/test_teams.js` | 45 | Multi-car display — stable per-team colour across pruning, first-seen ordering, staleness dropout |
-| **Stint log** | `tests/test_stint_log.js` | 29 | Drivers-tab bookkeeping — stint open/close, per-lap average/best/worst folding, compound sync, driver (re)assignment, defensive pit-exit reopen, out-lap/paused/off-track lap exclusion |
-
-<br><br>
-
-<a id="technical-regulations"></a>
-<img src="https://capsule-render.vercel.app/api?type=soft&amp;color=0:2e1a00,100:0d1117&amp;height=50&amp;text=◈%20TECHNICAL%20REGULATIONS%20%E2%80%94%20ARCHITECTURE&amp;fontColor=FFD700&amp;fontSize=18&amp;fontAlign=22&amp;fontAlignY=62" width="100%"/>
-
+<details>
+<summary><b>The app can't find my PS5.</b></summary>
 <br>
+Check that both devices are on the same network and subnet, and that the router's "AP/client isolation" is off. The PC's firewall must allow UDP in on port <code>33740</code> and out on <code>33739</code>. GT7 has to be running: the console only streams while the game is open.
+</details>
+
+<details>
+<summary><b>Does it know when it rains?</b></summary>
+<br>
+No. The <b>Dry / Wet</b> switch on the Race tab only limits which compounds the plan may use. Intermediate and Wet are as fast as the lap times you measure for them.
+</details>
+
+<details>
+<summary><b>Does it work in online lobbies?</b></summary>
+<br>
+Yes. Telemetry travels from each console to your PC over your own network, however the race itself is hosted. Every car you want to see must be on that network.
+</details>
+
+## Development
+
+| Command | What it does |
+| :--- | :--- |
+| `npm run dev` | Start the app with hot reload |
+| `npm run telemetry` | Start the UDP → WebSocket relay |
+| `npm run demo` | Ten simulated PS5s for testing without hardware |
+| `npm test` | Run all 49 test suites. Judge it by the **exit code**. |
+| `npm run lint` | ESLint; kept at zero errors |
+| `npm run build` | Production build to `dist/` |
+| `npm run dist` | Build the Windows installer |
 
 ```text
-📦 Race-Strategies/
- ┣ 📂 src/
- ┃ ┣ 📂 components/
- ┃ ┃ ┣ 📄 InputPanel.jsx          sidebar form — car presets, compounds, drivers, telemetry
- ┃ ┃ ┣ 📄 ResultsSummary.jsx      KPI strip + top-6 strategy comparison cards
- ┃ ┃ ┣ 📄 StrategyTimeline.jsx    The race as one bar — stints, pit marks, windows
- ┃ ┃ ┣ 📄 StintTable.jsx          lap-by-lap stint detail table
- ┃ ┃ ┣ 📄 LiveDashboard.jsx       ⭐ single-team widget — speed/gear, RPM/pedals, tyre temps/wear, GPS track map
- ┃ ┃ ┣ 📄 TelemetryControls.jsx   connection panel — server URL, PS5 IPs, LAN scan
- ┃ ┃ ┣ 📄 TelemetryLeaderboard.jsx multi-team table — pos, lap gap, times, compound, fuel, status
- ┃ ┃ ┗ 📄 DriversTab.jsx          driver time totals + per-stint log (duration, tyre, avg/best/worst lap)
- ┃ ┣ 📂 hooks/
- ┃ ┃ ┣ 📄 useStrategy.js          debounced wrapper around findBestStrategies() (600 ms)
- ┃ ┃ ┣ 📄 useTelemetry.js         WebSocket hook — multi-team Map, scan support
- ┃ ┃ ┣ 📄 useCompoundDetector.js  pit-exit detection → compound confirmation prompt
- ┃ ┃ ┗ 📄 useStintLog.js          pit-exit/entry → stint log, driver-assignment prompt
- ┃ ┣ 📂 logic/
- ┃ ┃ ┣ 📄 strategy.js             ⭐ pure-JS engine · zero React · testable with node
- ┃ ┃ ┣ 📄 stintLog.js             pure stint-log state machine backing useStintLog
- ┃ ┃ ┗ 📄 compoundDetector.js     note: GT7 UDP has no compound ID — tracking is user-driven
- ┃ ┣ 📄 App.jsx                   root component — owns all state, two-tab UI
- ┃ ┗ 📄 index.css                 dark racing theme (gold #FFD700)
- ┣ 📂 server/
- ┃ ┗ 📄 telemetry-server.js       Node.js UDP relay — Salsa20 decrypt → WebSocket + LAN scan
- ┣ 📂 tests/
- ┃ ┣ 📄 test.js                   smoke test
- ┃ ┣ 📄 test_comprehensive.js     142 unit tests
- ┃ ┣ 📄 test_invariants.js        1 640 generated invariant sweeps
- ┃ ┗ 📄 (+ 10 more suites — see Quality Control ↑ for the full breakdown)
- ┗ 📄 package.json
+src/logic/       the strategy engine and race logic: plain JavaScript, no React, runs under node
+src/components/  the React screens
+src/hooks/       telemetry connection, stint log, strategy runner
+src/i18n/        English and French strings
+server/          the telemetry relay
+electron/        the desktop app wrapper
+tests/           engine, relay and UI tests (no test runner, plain node)
 ```
 
-<br>
+The look and the rules behind it are in [`docs/DESIGN.md`](docs/DESIGN.md), and planned work is in [`docs/BACKLOG.md`](docs/BACKLOG.md).
 
-State lives exclusively in `App.jsx` — no Redux, no Context. The app is split into two tabs: **Stratégie** (plan calculator) and **Télémétrie** (live PS5 data). The strategy engine is intentionally decoupled from React so it can be tested with plain `node` and stays portable to any environment.
+## Contributing
 
-<br><br>
+Issues and pull requests are welcome. Before you open a PR:
 
-<a id="power-unit"></a>
-<img src="https://capsule-render.vercel.app/api?type=rect&amp;color=0:0d1117,50:1c0d00,100:0d1117&amp;height=40&amp;text=◈%20POWER%20UNIT%20%E2%80%94%20TECH%20STACK&amp;fontColor=FFD700&amp;fontSize=16&amp;fontAlign=14&amp;fontAlignY=62" width="100%"/>
+- run `npm test` and `npm run lint`, and keep both green;
+- give UI changes a test in `tests/test_ui_*.js`;
+- put every visible string in `src/i18n/`, in both languages.
 
-<br>
+## License
 
-<div align="center">
+[MIT](LICENSE) © Jeremy Luyckfasseel
 
-![React](https://img.shields.io/badge/React_19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
-![Vite](https://img.shields.io/badge/Vite_7-646CFF?style=for-the-badge&logo=vite&logoColor=white)
-![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
-![JavaScript](https://img.shields.io/badge/JavaScript_ES2022-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
-![ws](https://img.shields.io/badge/ws_8.18-010101?style=for-the-badge&logo=socket.io&logoColor=white)
-
-</div>
-
-<br><br>
-
-<div align="center">
-
-<img src="https://capsule-render.vercel.app/api?type=waving&amp;color=0:0d1117,35:2e1a00,65:1c0d00,100:0d1117&amp;height=150&amp;section=footer&amp;text=LIGHTS%20OUT.%20AND%20AWAY%20WE%20GO.&amp;fontColor=FFD700&amp;fontSize=26&amp;fontAlignY=65&amp;animation=fadeIn" width="100%"/>
-
-</div>
+*Gran Turismo is a trademark of Sony Interactive Entertainment. This project is not affiliated with, or endorsed by, Sony Interactive Entertainment or Polyphony Digital.*
